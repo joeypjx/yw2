@@ -7,3 +7,6 @@
 [submodule "third_party/libpqxx"]
 	path = third_party/libpqxx
 	url = https://github.com/jtv/libpqxx.git
+[submodule "third_party/postgres"]
+	path = third_party/postgres
+	url = https://gh-proxy.com/https://github.com/postgres/postgres.git
