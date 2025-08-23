@@ -1,0 +1,240 @@
+openapi: 3.0.3
+info:
+  title: 心跳接口 API
+  description: 系统心跳状态上报接口
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:8081
+    description: 开发环境服务器
+
+paths:
+  /heartbeat:
+    post:
+      summary: 上报系统心跳状态
+      description: 向服务器上报当前系统的硬件信息和运行状态
+      operationId: sendHeartbeat
+      tags:
+        - 心跳监控
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HeartbeatRequest'
+            example:
+              api_version: 1
+              data:
+                box_id: 1
+                slot_id: 1
+                cpu_id: 1
+                srio_id: 0
+                host_ip: "192.168.10.29"
+                hostname: "localhost.localdomain"
+                service_port: 23980
+                box_type: "计算I型"
+                board_type: "GPU"
+                cpu_type: "Phytium,D2000/8"
+                os_type: "Kylin Linux Advanced Server V10"
+                resource_type: "GPU I"
+                cpu_arch: "aarch64"
+                gpu:
+                  - index: 0
+                    name: "NVIDIA GeForce RTX 3080"
+                  - index: 1
+                    name: "NVIDIA GeForce RTX 3080"
+      responses:
+        '200':
+          description: 心跳上报成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HeartbeatResponse'
+              example:
+                code: 0
+                message: "success"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 400
+                message: "Invalid request parameters"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 500
+                message: "Internal server error"
+
+components:
+  schemas:
+    HeartbeatRequest:
+      type: object
+      required:
+        - api_version
+        - data
+      properties:
+        api_version:
+          type: integer
+          description: API版本号
+          example: 1
+          minimum: 1
+        data:
+          $ref: '#/components/schemas/SystemInfo'
+    
+    SystemInfo:
+      type: object
+      required:
+        - box_id
+        - slot_id
+        - cpu_id
+        - srio_id
+        - host_ip
+        - hostname
+        - service_port
+        - box_type
+        - board_type
+        - cpu_type
+        - os_type
+        - resource_type
+        - cpu_arch
+      properties:
+        box_id:
+          type: integer
+          description: 机箱号
+          example: 1
+          minimum: 0
+        slot_id:
+          type: integer
+          description: 槽位号
+          example: 1
+          minimum: 0
+        cpu_id:
+          type: integer
+          description: CPU号
+          example: 1
+          minimum: 0
+        srio_id:
+          type: integer
+          description: SRIO号
+          example: 0
+          minimum: 0
+        host_ip:
+          type: string
+          format: ipv4
+          description: 主机IP地址（点分十进制）
+          example: "192.168.10.29"
+          pattern: '^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$'
+        hostname:
+          type: string
+          description: 主机名
+          example: "localhost.localdomain"
+          maxLength: 255
+        service_port:
+          type: integer
+          format: uint16
+          description: 命令响应服务端口
+          example: 23980
+          minimum: 1
+          maximum: 65535
+        box_type:
+          type: string
+          description: 机箱类型
+          example: "计算I型"
+          maxLength: 100
+        board_type:
+          type: string
+          description: 板卡类型
+          example: "GPU"
+          maxLength: 100
+        cpu_type:
+          type: string
+          description: CPU类型
+          example: "Phytium,D2000/8"
+          maxLength: 100
+        os_type:
+          type: string
+          description: 操作系统类型
+          example: "Kylin Linux Advanced Server V10"
+          maxLength: 200
+        resource_type:
+          type: string
+          description: 资源类型
+          example: "GPU I"
+          maxLength: 100
+        cpu_arch:
+          type: string
+          description: CPU架构
+          example: "aarch64"
+          enum: ["x86_64", "aarch64", "arm", "mips", "riscv"]
+        gpu:
+          type: array
+          description: GPU设备列表
+          items:
+            $ref: '#/components/schemas/GpuDevice'
+          minItems: 0
+          maxItems: 16
+    
+    GpuDevice:
+      type: object
+      required:
+        - index
+        - name
+      properties:
+        index:
+          type: integer
+          description: GPU设备序号
+          example: 0
+          minimum: 0
+        name:
+          type: string
+          description: GPU设备名称
+          example: "NVIDIA GeForce RTX 3080"
+          maxLength: 200
+    
+    HeartbeatResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          description: 响应状态码（0表示成功）
+          example: 0
+        message:
+          type: string
+          description: 响应消息
+          example: "success"
+        data:
+          type: object
+          description: 可选的响应数据
+          additionalProperties: true
+    
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          description: 错误状态码
+          example: 400
+        message:
+          type: string
+          description: 错误消息
+          example: "Invalid request parameters"
+
+tags:
+  - name: 心跳监控
+    description: 系统心跳状态监控相关接口

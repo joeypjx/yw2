@@ -1,10 +1,11 @@
 # 创建核心库
 add_library(yw_core STATIC
     utils.cpp
+    app_context.cpp
 )
 
-# 链接第三方库
-target_link_libraries(yw_core PRIVATE spdlog::spdlog)
+# 链接第三方库 - 使用PUBLIC实现传递链接
+target_link_libraries(yw_core PUBLIC spdlog::spdlog hv_static)
 
 # 公开头文件目录 - 其他链接此库的目标会自动包含
 target_include_directories(yw_core PUBLIC
