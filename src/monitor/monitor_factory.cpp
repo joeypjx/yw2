@@ -1,18 +1,21 @@
-// 组装资源监控器
+#include "../../include/yw/monitor.h"
+#include "monitor_manager.h"
+#include <mutex>
+#include <hv/HttpService.h>
 
-class monitor_factory
-{
-private:
-    /* data */
-public:
-    monitor_factory(/* args */);
-    ~monitor_factory();
-};
+namespace yw {
+namespace monitor {
 
-monitor_factory::monitor_factory(/* args */)
-{
+std::shared_ptr<IMonitorModule> MonitorFactory::getMonitorModule(std::shared_ptr<hv::HttpService> service) {
+    static std::shared_ptr<IMonitorModule> instance;
+    static std::mutex mtx;
+    std::lock_guard<std::mutex> lock(mtx);
+    if (!instance) {
+        instance = std::make_shared<MonitorManager>(service);
+    }
+    return instance;
 }
 
-monitor_factory::~monitor_factory()
-{
-}
+} // namespace monitor
+} // namespace yw
+

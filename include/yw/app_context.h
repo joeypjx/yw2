@@ -3,11 +3,10 @@
 #include <memory>
 #include <string>
 #include <mutex>
+#include <thread>
 
-// 前向声明
-namespace hv {
-    class HttpServer;
-}
+#include <hv/HttpServer.h>
+#include <hv/HttpService.h>
 
 namespace yw {
 namespace core {
@@ -27,7 +26,7 @@ public:
     /**
      * @brief 析构函数
      */
-    ~AppContext() = default;
+    ~AppContext();
 
     // 禁止拷贝和赋值
     AppContext(const AppContext&) = delete;
@@ -41,10 +40,9 @@ public:
     bool initialize();
 
     /**
-     * @brief 获取HTTP服务器实例
-     * @return HTTP服务器智能指针，未初始化则返回nullptr
+     * @brief 获取共享的HttpService（用于直接注册路由）
      */
-    std::shared_ptr<hv::HttpServer> getHttpServer() const;
+    std::shared_ptr<hv::HttpService> getHttpService() const;
 
     /**
      * @brief 运行HTTP服务器
@@ -60,7 +58,9 @@ private:
     mutable std::mutex mutex_;                              // 全局锁
     
     // HTTP服务器相关
-    std::shared_ptr<hv::HttpServer> http_server_;           // HTTP服务器实例
+    std::unique_ptr<hv::HttpServer> http_server_;           // HTTP服务器（独占）
+    std::shared_ptr<hv::HttpService> http_service_;         // 共享的路由服务
+    std::thread                 http_thread_;               // HTTP服务器线程
 };
 
 } // namespace core

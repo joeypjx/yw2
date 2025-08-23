@@ -29,7 +29,7 @@ bool NodeCache::addOrUpdateNode(const Node& node) {
     return true;
 }
 
-std::optional<Node> NodeCache::getNode(const std::string& ip) const {
+std::optional<NodeExt> NodeCache::getNode(const std::string& ip) const {
     if (ip.empty()) {
         return std::nullopt;
     }
@@ -37,32 +37,24 @@ std::optional<Node> NodeCache::getNode(const std::string& ip) const {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = nodes_.find(ip);
     if (it != nodes_.end()) {
-        return it->second.node;
+        const auto& rec = it->second;
+        return NodeExt(rec.node, rec.last_update_ms);
     }
     return std::nullopt;
 }
 
-std::vector<Node> NodeCache::getAllNodes() const {
+std::vector<NodeExt> NodeCache::getAllNodes() const {
     std::lock_guard<std::mutex> lock(mutex_);
-    std::vector<Node> result;
+    std::vector<NodeExt> result;
     result.reserve(nodes_.size());
     for (const auto& pair : nodes_) {
-        result.push_back(pair.second.node);
+        const auto& rec = pair.second;
+        result.emplace_back(rec.node, rec.last_update_ms);
     }
     return result;
 }
 
-std::optional<std::int64_t> NodeCache::getLastUpdateMs(const std::string& ip) const {
-    if (ip.empty()) {
-        return std::nullopt;
-    }
-    std::lock_guard<std::mutex> lock(mutex_);
-    auto it = nodes_.find(ip);
-    if (it == nodes_.end()) {
-        return std::nullopt;
-    }
-    return it->second.last_update_ms;
-}
+// getLastUpdateMs 已不再需要，更新时间通过 NodeExt.updated_at 暴露
 
 } // namespace node
 } // namespace yw

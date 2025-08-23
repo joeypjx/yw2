@@ -1,0 +1,250 @@
+openapi: 3.0.3
+info:
+  title: 资源上报接口 API
+  description: 节点周期性上报资源使用情况
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+    description: 开发环境服务器
+
+paths:
+  /resource:
+    post:
+      summary: 上报节点资源使用数据
+      operationId: reportResource
+      tags:
+        - 资源监控
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceReportRequest'
+            example:
+              api_version: 1
+              data:
+                host_ip: "192.168.10.29"
+                resource:
+                  cpu:
+                    usage_percent: 23.5
+                    load_avg_1m: 0.75
+                    load_avg_5m: 0.61
+                    load_avg_15m: 0.52
+                    core_count: 16
+                    core_allocated: 8
+                    temperature: 58.2
+                    voltage: 1.1
+                    current: 2.3
+                    power: 25.6
+                  memory:
+                    total: 34359738368
+                    used: 17179869184
+                    free: 17179869184
+                    usage_percent: 50.0
+                  network:
+                    - interface: "eth0"
+                      rx_bytes: 123456
+                      tx_bytes: 654321
+                      rx_packets: 1000
+                      tx_packets: 900
+                      rx_errors: 0
+                      tx_errors: 0
+                      rx_rate: 2048
+                      tx_rate: 4096
+                  disk:
+                    - device: "/dev/sda1"
+                      mount_point: "/"
+                      total: 536870912000
+                      used: 268435456000
+                      free: 268435456000
+                      usage_percent: 50.0
+                  gpu:
+                    - index: 0
+                      name: "NVIDIA RTX 3080"
+                      compute_usage: 45.0
+                      mem_usage: 30.0
+                      mem_used: 3221225472
+                      mem_total: 10737418240
+                      temperature: 65.0
+                      power: 120.5
+                  gpu_allocated: 1
+                  gpu_num: 2
+                component:
+                  - instance_id: "biz-001"
+                    uuid: "comp-abc"
+                    index: 0
+                    config:
+                      name: "container-0"
+                      id: "abcd1234"
+                    state: "RUNNING"
+                    resource:
+                      cpu:
+                        load: 10.5
+                      memory:
+                        mem_used: 134217728
+                        mem_limit: 268435456
+                      network:
+                        tx: 10240
+                        rx: 20480
+      responses:
+        '200':
+          description: 上报成功
+        '400':
+          description: 参数不合法
+        '500':
+          description: 服务器内部错误
+
+components:
+  schemas:
+    ResourceReportRequest:
+      type: object
+      required: [api_version, data]
+      properties:
+        api_version:
+          type: integer
+          minimum: 1
+        data:
+          $ref: '#/components/schemas/ResourcePayload'
+
+    ResourcePayload:
+      type: object
+      required: [host_ip, resource]
+      properties:
+        host_ip:
+          type: string
+          format: ipv4
+        resource:
+          $ref: '#/components/schemas/NodeResource'
+        component:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComponentResource'
+
+    NodeResource:
+      type: object
+      required: [cpu, memory, network, disk, gpu, gpu_allocated, gpu_num]
+      properties:
+        cpu:
+          $ref: '#/components/schemas/CpuResource'
+        memory:
+          $ref: '#/components/schemas/MemoryResource'
+        network:
+          type: array
+          items:
+            $ref: '#/components/schemas/NetworkInterface'
+        disk:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiskPartition'
+        gpu:
+          type: array
+          items:
+            $ref: '#/components/schemas/GpuResource'
+        gpu_allocated:
+          type: integer
+          minimum: 0
+        gpu_num:
+          type: integer
+          minimum: 0
+
+    CpuResource:
+      type: object
+      required: [usage_percent, load_avg_1m, load_avg_5m, load_avg_15m, core_count, core_allocated, temperature, voltage, current, power]
+      properties:
+        usage_percent: { type: number, format: double, minimum: 0 }
+        load_avg_1m:   { type: number, format: double, minimum: 0 }
+        load_avg_5m:   { type: number, format: double, minimum: 0 }
+        load_avg_15m:  { type: number, format: double, minimum: 0 }
+        core_count:    { type: integer, minimum: 1 }
+        core_allocated: { type: integer, minimum: 0 }
+        temperature:   { type: number, format: double }
+        voltage:       { type: number, format: double }
+        current:       { type: number, format: double }
+        power:         { type: number, format: double }
+
+    MemoryResource:
+      type: object
+      required: [total, used, free, usage_percent]
+      properties:
+        total:          { type: integer, format: int64, minimum: 0 }
+        used:           { type: integer, format: int64, minimum: 0 }
+        free:           { type: integer, format: int64, minimum: 0 }
+        usage_percent:  { type: number, format: double, minimum: 0, maximum: 100 }
+
+    NetworkInterface:
+      type: object
+      required: [interface, rx_bytes, tx_bytes, rx_packets, tx_packets, rx_errors, tx_errors, rx_rate, tx_rate]
+      properties:
+        interface: { type: string }
+        rx_bytes:  { type: integer, format: int64, minimum: 0 }
+        tx_bytes:  { type: integer, format: int64, minimum: 0 }
+        rx_packets: { type: integer, format: int64, minimum: 0 }
+        tx_packets: { type: integer, format: int64, minimum: 0 }
+        rx_errors: { type: integer, format: int64, minimum: 0 }
+        tx_errors: { type: integer, format: int64, minimum: 0 }
+        rx_rate:   { type: integer, format: int64, minimum: 0 }
+        tx_rate:   { type: integer, format: int64, minimum: 0 }
+
+    DiskPartition:
+      type: object
+      required: [device, mount_point, total, used, free, usage_percent]
+      properties:
+        device:         { type: string }
+        mount_point:    { type: string }
+        total:          { type: integer, format: int64, minimum: 0 }
+        used:           { type: integer, format: int64, minimum: 0 }
+        free:           { type: integer, format: int64, minimum: 0 }
+        usage_percent:  { type: number, format: double, minimum: 0, maximum: 100 }
+
+    GpuResource:
+      type: object
+      required: [index, name, compute_usage, mem_usage, mem_used, mem_total, temperature, power]
+      properties:
+        index:         { type: integer, minimum: 0 }
+        name:          { type: string }
+        compute_usage: { type: number, format: double, minimum: 0, maximum: 100 }
+        mem_usage:     { type: number, format: double, minimum: 0, maximum: 100 }
+        mem_used:      { type: integer, format: int64, minimum: 0 }
+        mem_total:     { type: integer, format: int64, minimum: 0 }
+        temperature:   { type: number, format: double }
+        power:         { type: number, format: double }
+
+    ComponentResource:
+      type: object
+      required: [instance_id, uuid, index, config, state, resource]
+      properties:
+        instance_id: { type: string }
+        uuid:        { type: string }
+        index:       { type: integer }
+        config:
+          type: object
+          required: [name, id]
+          properties:
+            name: { type: string }
+            id:   { type: string }
+        state:
+          type: string
+          enum: [PENDING, RUNNING, FAILED, STOPPED, SLEEPING]
+        resource:
+          type: object
+          required: [cpu, memory, network]
+          properties:
+            cpu:
+              type: object
+              required: [load]
+              properties:
+                load: { type: number, format: double, minimum: 0 }
+            memory:
+              type: object
+              required: [mem_used, mem_limit]
+              properties:
+                mem_used:  { type: integer, format: int64, minimum: 0 }
+                mem_limit: { type: integer, format: int64, minimum: 0 }
+            network:
+              type: object
+              required: [tx, rx]
+              properties:
+                tx: { type: integer, format: int64, minimum: 0 }
+                rx: { type: integer, format: int64, minimum: 0 }
+

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "node.h"
+#include "yw/node_model.h"
 #include <unordered_map>
 #include <vector>
 #include <string>
@@ -41,21 +41,16 @@ public:
      * @param ip IP地址
      * @return 存在返回节点信息，不存在返回nullopt
      */
-    std::optional<Node> getNode(const std::string& ip) const;
+    std::optional<NodeExt> getNode(const std::string& ip) const;
 
     // 批量操作
     /**
      * @brief 获取所有节点
      * @return 所有节点的副本
      */
-    std::vector<Node> getAllNodes() const;
+    std::vector<NodeExt> getAllNodes() const;
 
-    /**
-     * @brief 获取指定IP节点的最后更新时间（毫秒时间戳，Epoch）
-     * @param ip IP地址
-     * @return 存在返回时间戳，不存在返回nullopt
-     */
-    std::optional<std::int64_t> getLastUpdateMs(const std::string& ip) const;
+    // 获取最后更新时间接口已由 NodeExt.updated_at 覆盖，不再单独提供
 
     // 查询操作（保留必要接口）
 

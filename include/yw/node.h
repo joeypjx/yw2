@@ -2,10 +2,13 @@
 
 #include <memory>
 #include <string>
+#include <vector>
+#include "yw/node_model.h"
 
 // 前向声明
 namespace hv {
     class HttpServer;
+    class HttpService;
 }
 
 namespace yw {
@@ -19,6 +22,9 @@ namespace node {
     class INodeModule {
     public:
         virtual ~INodeModule() = default;
+
+        // 获取所有节点（含元数据）
+        virtual std::vector<NodeExt> getAllNodes() const = 0;
     };
 
     /**
@@ -33,7 +39,7 @@ namespace node {
          * @param server HTTP服务器实例
          * @return 节点管理模块智能指针
          */
-        static std::shared_ptr<INodeModule> createNodeModule(std::shared_ptr<hv::HttpServer> server);
+        static std::shared_ptr<INodeModule> getNodeModule(std::shared_ptr<hv::HttpService> service);
     };
 
 } // namespace node
