@@ -45,6 +45,16 @@ std::vector<NodeExt> NodeManager::getAllNodes() const {
     return list;
 }
 
+std::optional<NodeExt> NodeManager::getNodeByIP(const std::string& ip) const {
+    auto ext = node_cache_->getNode(ip);
+    if (!ext) return std::nullopt;
+    const auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now()
+    ).time_since_epoch().count();
+    ext->status = (now_ms - ext->updated_at) <= 10000 ? "online" : "offline";
+    return ext;
+}
+
 void NodeManager::setupRoutes() {
     if (!service_) {
         std::cerr << "HttpService not available for route setup" << std::endl;

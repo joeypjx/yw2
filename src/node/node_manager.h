@@ -35,6 +35,7 @@ public:
     ~NodeManager();
     // INodeModule 接口实现
     std::vector<NodeExt> getAllNodes() const override;
+    std::optional<NodeExt> getNodeByIP(const std::string& ip) const override;
 
     // 禁止拷贝和赋值
     NodeManager(const NodeManager&) = delete;

@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <optional>
 #include "yw/node_model.h"
 
 // 前向声明
@@ -25,6 +26,9 @@ namespace node {
 
         // 获取所有节点（含元数据）
         virtual std::vector<NodeExt> getAllNodes() const = 0;
+
+        // 根据IP获取单个节点（含元数据）
+        virtual std::optional<NodeExt> getNodeByIP(const std::string& ip) const = 0;
     };
 
     /**

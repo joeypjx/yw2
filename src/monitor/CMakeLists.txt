@@ -2,6 +2,7 @@ add_library(yw_monitor STATIC
     monitor_manager.cpp
     monitor_factory.cpp
     resource_repository.cpp
+    monitor_cache.cpp
 )
 
 target_include_directories(yw_monitor PUBLIC

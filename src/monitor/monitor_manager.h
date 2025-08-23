@@ -3,6 +3,7 @@
 #include <memory>
 #include "yw/monitor.h"
 #include "resource_repository.h"
+#include "monitor_cache.h"
 
 // 前向声明，避免在头文件中引入平台相关头
 namespace hv {
@@ -22,6 +23,9 @@ public:
                    std::shared_ptr<node::INodeModule> node_module);
     ~MonitorManager();
 
+    // IMonitorModule 接口
+    std::shared_ptr<Resource> getNodeResource(const std::string& host_ip) const override;
+
 private:
     void setupRoutes();
 
@@ -30,6 +34,7 @@ private:
     std::unique_ptr<yw::utils::MulticastScanner> scanner_; // 通用组播扫描器
     std::unique_ptr<ResourceRepository> repository_;        // TimescaleDB 写入
     std::shared_ptr<node::INodeModule> node_module_;        // 共享的节点模块
+    std::unique_ptr<MonitorCache> monitor_cache_;           // 资源最新快照缓存
 };
 
 } // namespace monitor
