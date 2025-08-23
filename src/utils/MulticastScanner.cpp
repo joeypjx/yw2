@@ -99,13 +99,9 @@ bool MulticastScanner::openSocket() {
     }
 
     if (!manager_ip_.empty()) {
-        sockaddr_in src{};
-        src.sin_family = AF_INET;
-        src.sin_port = htons(0);
-        src.sin_addr.s_addr = inet_addr(manager_ip_.c_str());
-        if (bind(sock_, reinterpret_cast<sockaddr*>(&src), sizeof(src)) < 0) {
-            spdlog::warn("MulticastScanner bind({}) failed: {}", manager_ip_, strerror(errno));
-        }
+        in_addr ifaddr{};
+        ifaddr.s_addr = inet_addr(manager_ip_.c_str());
+        setsockopt(sock_, IPPROTO_IP, IP_MULTICAST_IF, &ifaddr, sizeof(ifaddr));
     }
 
     int ttl = 1;

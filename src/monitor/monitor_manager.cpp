@@ -11,8 +11,9 @@ namespace monitor {
 
 using json = nlohmann::json;
 
-MonitorManager::MonitorManager(std::shared_ptr<hv::HttpService> service)
-    : service_(std::move(service)) {
+MonitorManager::MonitorManager(std::shared_ptr<hv::HttpService> service,
+                               std::shared_ptr<node::INodeModule> node_module)
+    : service_(std::move(service)), node_module_(std::move(node_module)) {
     service_->AllowCORS();
     
     // 启动资源扫描器（示例 manager_ip 与端口与 NodeManager 保持一致，路由改为 /resource）
@@ -22,6 +23,11 @@ MonitorManager::MonitorManager(std::shared_ptr<hv::HttpService> service)
         "/resource"
     );
     scanner_->start();
+
+    // 初始化仓库（连接串可改为配置项）
+    repository_ = std::make_unique<ResourceRepository>(
+        "postgres://postgres:HZ715Net@localhost:5432/resource"
+    );
 
     setupRoutes();
 }
@@ -39,7 +45,14 @@ void MonitorManager::setupRoutes() {
         const auto j = json::parse(ctx->body());
         if (j.contains("data")) {
             const Resource res = j["data"].get<Resource>();
-            (void)res; // TODO: 交给后续监控处理逻辑
+            if (repository_) {
+                try {
+                    repository_->save(res);
+                } catch (const std::exception& e) {
+                    std::cerr << "save resource failed: " << e.what() << std::endl;
+                    return 500;
+                }
+            }
         }
         return 200;
     });

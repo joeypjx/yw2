@@ -1,6 +1,7 @@
 add_library(yw_monitor STATIC
     monitor_manager.cpp
     monitor_factory.cpp
+    resource_repository.cpp
 )
 
 target_include_directories(yw_monitor PUBLIC
@@ -14,5 +15,6 @@ target_include_directories(yw_monitor PRIVATE
 
 target_link_libraries(yw_monitor PRIVATE
     yw_core
+    pqxx
 )
 

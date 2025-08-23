@@ -5,6 +5,7 @@
 
 // 前向声明
 namespace hv { class HttpService; }
+namespace yw { namespace node { class INodeModule; } }
 
 namespace yw {
 namespace monitor {
@@ -16,7 +17,9 @@ public:
 
 class MonitorFactory {
 public:
-    static std::shared_ptr<IMonitorModule> getMonitorModule(std::shared_ptr<hv::HttpService> service);
+    static std::shared_ptr<IMonitorModule> getMonitorModule(
+        std::shared_ptr<hv::HttpService> service,
+        std::shared_ptr<node::INodeModule> node_module);
 };
 
 } // namespace monitor

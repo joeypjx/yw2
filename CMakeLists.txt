@@ -56,7 +56,13 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 
 # 设置libpqxx构建选项
 set(PostgreSQL_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/third_party/postgres/src/interfaces/libpq;${CMAKE_SOURCE_DIR}/third_party/postgres/src/include")
-set(PostgreSQL_LIBRARY "${CMAKE_SOURCE_DIR}/third_party/postgres/src/interfaces/libpq/libpq.a")
+
+# 静态链接libpq时，还需要libpgcommon和libpgport，否则会有pg_*符号未定义
+set(PostgreSQL_LIBRARY
+    "${CMAKE_SOURCE_DIR}/third_party/postgres/src/interfaces/libpq/libpq.a"
+    "${CMAKE_SOURCE_DIR}/third_party/postgres/src/common/libpgcommon.a"
+    "${CMAKE_SOURCE_DIR}/third_party/postgres/src/port/libpgport.a"
+)
 set(PostgreSQL_FOUND TRUE)
 set(PostgreSQL_VERSION "REL_15_STABLE")
 set(PostgreSQL_INCLUDE_DIRS ${PostgreSQL_INCLUDE_DIR})

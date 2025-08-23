@@ -1,6 +1,5 @@
 # 创建核心库
 add_library(yw_core STATIC
-    utils.cpp
     app_context.cpp
 )
 
