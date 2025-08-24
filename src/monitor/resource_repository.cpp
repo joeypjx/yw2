@@ -188,7 +188,7 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
         }
     }
 
-    // Disk (按 device key 分组，调用侧可自行决定 key 命名，如 "__dev_sda1")
+    // Disk (按 device key 分组)
     if (query_all || need.count("disk")) {
         pqxx::result r = tx.exec_params(
             "SELECT device, mount_point, EXTRACT(EPOCH FROM time)::bigint AS ts, total, used, free, usage_percent"

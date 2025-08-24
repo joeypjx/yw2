@@ -2,6 +2,7 @@
 #include "yw/node.h"
 #include "yw/monitor.h"
 #include "yw/web.h"
+#include "yw/bmc.h"
 #include "yw/app_context.h"
 #include <spdlog/spdlog.h>
 
@@ -21,7 +22,8 @@ int main() {
     // 创建模块
     std::shared_ptr<yw::node::INodeModule> node_module = yw::node::NodeFactory::getNodeModule(app_context->getHttpService());
     std::shared_ptr<yw::monitor::IMonitorModule> monitor_module = yw::monitor::MonitorFactory::getMonitorModule(app_context->getHttpService(), node_module);
-    std::shared_ptr<yw::web::IWebModule> web_module = yw::web::WebFactory::getWebModule(app_context->getHttpService(), node_module, monitor_module);
+    std::shared_ptr<yw::bmc::IBMCModule> bmc_module = yw::bmc::BMCFactory::getBMCModule();
+    std::shared_ptr<yw::web::IWebModule> web_module = yw::web::WebFactory::getWebModule(app_context->getHttpService(), node_module, monitor_module, bmc_module);
 
     std::this_thread::sleep_for(std::chrono::seconds(1000));
 

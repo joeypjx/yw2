@@ -2,6 +2,7 @@
 #include <hv/HttpService.h>
 #include "yw/node.h"
 #include "yw/monitor.h"
+#include "yw/bmc.h"
 #include "web_model.h"
 #include <nlohmann/json.hpp>
 #include <chrono>
@@ -13,10 +14,12 @@ using json = nlohmann::json;
 
 WebController::WebController(std::shared_ptr<hv::HttpService> service,
                              std::shared_ptr<node::INodeModule> node_module,
-                             std::shared_ptr<monitor::IMonitorModule> monitor_module)
+                             std::shared_ptr<monitor::IMonitorModule> monitor_module,
+                             std::shared_ptr<bmc::IBMCModule> bmc_module)
     : service_(std::move(service)),
       node_module_(std::move(node_module)),
-      monitor_module_(std::move(monitor_module)) {
+      monitor_module_(std::move(monitor_module)),
+      bmc_module_(std::move(bmc_module)) {
     if (service_) {
         service_->AllowCORS();
         setupRoutes();
