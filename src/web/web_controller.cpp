@@ -3,6 +3,7 @@
 #include "yw/node.h"
 #include "yw/monitor.h"
 #include "yw/bmc.h"
+#include "yw/bmc_model.h"
 #include "web_model.h"
 #include <nlohmann/json.hpp>
 #include <chrono>
@@ -165,6 +166,65 @@ void WebController::setupRoutes() {
         json resp = result;
         ctx->setContentType("application/json");
         return ctx->send(resp.dump(2));
+    });
+
+    // 查询近一段时间的资源序列（透传到 IMonitorModule）
+    service_->GET("/resource", [this](const HttpContextPtr& ctx) {
+        if (!monitor_module_) return 500;
+
+        std::string ip;
+        std::string duration = "1m"; // 简写，后续由模块转换
+        std::vector<std::string> kinds;
+
+        auto params = ctx->params();
+        if (params.find("ip") != params.end()) ip = params["ip"];
+        if (params.find("duration") != params.end()) duration = params["duration"];
+        if (params.find("kinds") != params.end()) {
+            const std::string& ks = params["kinds"]; // e.g. cpu,memory,network
+            std::string item;
+            for (size_t i = 0, n = ks.size(); i <= n; ++i) {
+                if (i == n || ks[i] == ',') {
+                    if (!item.empty()) kinds.push_back(item);
+                    item.clear();
+                } else {
+                    item.push_back(ks[i]);
+                }
+            }
+        }
+
+        if (ip.empty()) {
+            return ctx->send("{\"error\":\"missing ip\"}");
+        }
+
+        try {
+            auto series = monitor_module_->queryMetricsSeries(ip, duration, kinds);
+            monitor::ResourceWindow win;
+            win.host_ip = ip;
+            win.metrics = std::move(series);
+            win.time_range = duration;
+            if (node_module_) {
+                auto nodeOpt = node_module_->getNodeByIP(ip);
+                if (nodeOpt) {
+                    win.box_id = nodeOpt->box_id;
+                    win.cpu_id = nodeOpt->cpu_id;
+                    win.slot_id = nodeOpt->slot_id;
+                }
+            }
+
+            nlohmann::json resp = win;
+
+            // 最小改动：在响应中并入 BMC 传感器数据为并列字段 bmc_sensors
+            if (bmc_module_) {
+                auto grouped = bmc_module_->queryBMCSensor(ip, duration);
+                nlohmann::json bmc_json = grouped; // 直接序列化 map<string, vector<BMCSensorRow>>
+                resp["metrics"]["sensor"] = std::move(bmc_json);
+            }
+            ctx->setContentType("application/json");
+            return ctx->send(resp.dump(2));
+        } catch (const std::exception& e) {
+            std::cerr << "query resource failed: " << e.what() << std::endl;
+            return 500;
+        }
     });
 }
 

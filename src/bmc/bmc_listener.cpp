@@ -113,7 +113,34 @@ std::unordered_map<std::string, std::vector<BMCSensorRow>> BMCListener::queryBMC
     const std::string& host_ip,
     const std::string& duration) const {
     if (!repository_) return {};
-    return repository_->queryBMCSensor(host_ip, duration);
+    // 允许简写：1h/5m/10s（仅单一单位）。转换为 PostgreSQL interval 字符串
+    auto normalizeDuration = [](std::string in) -> std::string {
+        if (in.empty()) return std::string("1 minute");
+        auto trim = [](std::string& s){
+            size_t a = s.find_first_not_of(" \t\n\r");
+            size_t b = s.find_last_not_of(" \t\n\r");
+            if (a == std::string::npos) { s.clear(); return; }
+            s = s.substr(a, b - a + 1);
+        };
+        trim(in);
+        if (in.empty()) return std::string("1 minute");
+        char u = in.back();
+        if (u=='s' || u=='S' || u=='m' || u=='M' || u=='h' || u=='H') {
+            std::string num = in.substr(0, in.size()-1);
+            trim(num);
+            if (num.empty()) return std::string("1 minute");
+            bool ok = true; for (char ch : num) { if (ch<'0'||ch>'9') { ok=false; break; } }
+            if (!ok) return in;
+            switch (u) {
+                case 's': case 'S': return num + " seconds";
+                case 'm': case 'M': return num + " minutes";
+                case 'h': case 'H': return num + " hours";
+            }
+        }
+        return in;
+    };
+    std::string interval = normalizeDuration(duration);
+    return repository_->queryBMCSensor(host_ip, interval);
 }
 
 } // namespace bmc

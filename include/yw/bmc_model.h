@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <nlohmann/json.hpp>
 
 namespace yw {
 namespace bmc {
@@ -65,6 +66,17 @@ struct BMCSensorRow {
     std::uint16_t  sensorvalue_H = 0;
     std::uint16_t  sensoralmtype = 0;
 };
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(BMCSensorRow,
+    timestamp,
+    host_ip,
+    sensorseq,
+    sensortype,
+    sensorname,
+    sensorvalue_L,
+    sensorvalue_H,
+    sensoralmtype
+)
 
 } // namespace bmc
 } // namespace yw

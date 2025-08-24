@@ -25,6 +25,9 @@ public:
 
     // IMonitorModule 接口
     std::shared_ptr<Resource> getNodeResource(const std::string& host_ip) const override;
+    MetricsSeries queryMetricsSeries(const std::string& host_ip,
+                                     const std::string& duration,
+                                     const std::vector<std::string>& kinds) const override;
 
 private:
     void setupRoutes();
