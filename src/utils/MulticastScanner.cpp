@@ -86,7 +86,6 @@ bool MulticastScanner::sendOnce() {
         return false;
     }
 
-    spdlog::info("MulticastScanner multicast sent: {} bytes to {}:{}", n, multicast_ip_, multicast_port_);
     return true;
 }
 

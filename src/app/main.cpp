@@ -6,9 +6,23 @@
 #include "yw/app_context.h"
 #include <spdlog/spdlog.h>
 
+#include <csignal>
+#include <atomic>
+#include <chrono>
+#include <thread>
+
+static std::atomic<bool> g_running{true};
+
+static void handle_signal(int) {
+    g_running = false;
+}
+
 // 组装应用
 int main() {
     spdlog::info("Starting yw application...");
+
+    std::signal(SIGINT, handle_signal);
+    std::signal(SIGTERM, handle_signal);
 
     std::shared_ptr<yw::core::AppContext> app_context = std::make_shared<yw::core::AppContext>();
     if (!app_context->initialize()) {
@@ -25,7 +39,9 @@ int main() {
     std::shared_ptr<yw::bmc::IBMCModule> bmc_module = yw::bmc::BMCFactory::getBMCModule();
     std::shared_ptr<yw::web::IWebModule> web_module = yw::web::WebFactory::getWebModule(app_context->getHttpService(), node_module, monitor_module, bmc_module);
 
-    std::this_thread::sleep_for(std::chrono::seconds(1000));
+    while (g_running) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
 
     spdlog::info("Application finished.");
 

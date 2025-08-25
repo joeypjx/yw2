@@ -63,8 +63,6 @@ void NodeManager::setupRoutes() {
     
     // 创建HttpService并配置路由
     service_->POST("/heartbeat", [this](const HttpContextPtr& ctx) {
-        // 处理心跳请求的逻辑
-        std::cout << "Heartbeat received" << std::endl;
 
         // 解析请求体 -> 提取 data 字段并转换为 Node（仅转换，不做其他处理）
         const auto j = nlohmann::json::parse(ctx->body());
@@ -74,25 +72,7 @@ void NodeManager::setupRoutes() {
         }
 
         return 200;
-    });
-    
-    // 获取所有节点（包含更新时间）
-    service_->GET("/nodes", [this](const HttpContextPtr& ctx) {
-        const auto nodes = node_cache_->getAllNodes();
-        nlohmann::json resp = nlohmann::json::array();
-        const auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now()
-        ).time_since_epoch().count();
-        for (auto ext : nodes) {
-            const bool is_online = (now_ms - ext.updated_at) <= 10000; // 10秒内为online
-            ext.status = is_online ? "online" : "offline";
-            resp.push_back(ext);
-        }
-        ctx->setContentType("application/json");
-        return ctx->send(resp.dump(2));
-    });
-    
-    std::cout << "NodeManager routes configured on shared HttpService" << std::endl;
+    });    
 }
 
 } // namespace node

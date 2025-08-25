@@ -23,8 +23,6 @@ bool NodeCache::addOrUpdateNode(const Node& node) {
     NodeRecord& rec = nodes_[node.host_ip];
     rec.node = node;
     rec.last_update_ms = static_cast<std::int64_t>(now_ms);
-
-    spdlog::info("NodeCache::addOrUpdateNode: {}, updated_at_ms={}", node.host_ip, rec.last_update_ms);
     
     return true;
 }
@@ -53,8 +51,6 @@ std::vector<NodeExt> NodeCache::getAllNodes() const {
     }
     return result;
 }
-
-// getLastUpdateMs 已不再需要，更新时间通过 NodeExt.updated_at 暴露
 
 } // namespace node
 } // namespace yw

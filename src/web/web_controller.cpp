@@ -155,7 +155,13 @@ void WebController::setupRoutes() {
             result.push_back(std::move(m));
         }
 
-        json resp = result;
+        json resp = {
+            {"api_version", 1},
+            {"data", {
+                {"nodes_metrics", result}
+            }},
+            {"status", "success"},
+        };
         ctx->setContentType("application/json");
         return ctx->send(resp.dump(2));
     });
@@ -203,20 +209,90 @@ void WebController::setupRoutes() {
                 }
             }
 
-            nlohmann::json resp = win;
+            nlohmann::json resp_historical_metrics = win;
 
             // 最小改动：在响应中并入 BMC 传感器数据为并列字段 bmc_sensors
             if (bmc_module_) {
                 auto grouped = bmc_module_->queryBMCSensor(ip, duration);
                 nlohmann::json bmc_json = grouped; // 直接序列化 map<string, vector<BMCSensorRow>>
-                resp["metrics"]["sensor"] = std::move(bmc_json);
+                resp_historical_metrics["metrics"]["sensor"] = std::move(bmc_json);
             }
+
+            nlohmann::json resp = {
+                {"api_version", 1},
+                {"data", {
+                    {"historical_metrics", resp_historical_metrics}
+                }},
+                {"status", "success"},
+            };
+
             ctx->setContentType("application/json");
             return ctx->send(resp.dump(2));
         } catch (const std::exception& e) {
             std::cerr << "query resource failed: " << e.what() << std::endl;
             return 500;
         }
+    });
+
+    // 获取所有节点（由 INodeModule 提供数据），并附带组件列表（由 IMonitorModule 提供）
+    service_->GET("/node", [this](const HttpContextPtr& ctx) {
+        if (!node_module_) return 500;
+        const auto nodes = node_module_->getAllNodes();
+        int filter_box_id = -1;
+        bool has_filter = false;
+        std::string filter_host_ip;
+        bool has_host_filter = false;
+        auto params = ctx->params();
+        if (params.find("box_id") != params.end()) {
+            try {
+                filter_box_id = std::stoi(params["box_id"]);
+                has_filter = true;
+            } catch (...) {
+                ctx->setContentType("application/json");
+                return ctx->send("{\"error\":\"invalid box_id\"}");
+            }
+        }
+        if (params.find("host_ip") != params.end()) {
+            filter_host_ip = params["host_ip"];
+            has_host_filter = true;
+        }
+        nlohmann::json resp_nodes = nlohmann::json::array();
+        resp_nodes.get_ref<nlohmann::json::array_t&>().reserve(nodes.size());
+        for (const auto& ext : nodes) {
+            if (has_filter && ext.box_id != filter_box_id) continue;
+            if (has_host_filter && ext.host_ip != filter_host_ip) continue;
+            nlohmann::json j = ext;
+            if (monitor_module_) {
+                auto resPtr = monitor_module_->getNodeResource(ext.host_ip);
+                if (resPtr) {
+                    j["component"] = resPtr->component;
+                } else {
+                    j["component"] = nlohmann::json::array();
+                }
+            }
+            resp_nodes.push_back(std::move(j));
+        }
+
+        nlohmann::json resp;
+        if (has_host_filter) {
+            resp = {
+                {"api_version", 1},
+                {"data", resp_nodes[0]},
+                {"status", "success"},
+            };
+
+        } else {
+            resp = {
+                {"api_version", 1},
+                {"data", 
+                    {"nodes", resp_nodes}
+                },
+                {"status", "success"},
+            };
+        }
+
+        ctx->setContentType("application/json");
+        return ctx->send(resp.dump(2));
     });
 }
 
