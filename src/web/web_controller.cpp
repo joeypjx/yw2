@@ -30,14 +30,6 @@ WebController::WebController(std::shared_ptr<hv::HttpService> service,
 WebController::~WebController() = default;
 
 void WebController::setupRoutes() {
-    // 示例：返回所有节点
-    service_->GET("/web/nodes", [this](const HttpContextPtr& ctx) {
-        if (!node_module_) return 500;
-        auto nodes = node_module_->getAllNodes();
-        json resp = nodes;
-        ctx->setContentType("application/json");
-        return ctx->send(resp.dump(2));
-    });
 
     // 汇总所有节点的 NodeMetrics（由 NodeExt + 最新 Resource 拼装）
     service_->GET("/node/metrics", [this](const HttpContextPtr& ctx) {
@@ -169,7 +161,7 @@ void WebController::setupRoutes() {
     });
 
     // 查询近一段时间的资源序列（透传到 IMonitorModule）
-    service_->GET("/resource", [this](const HttpContextPtr& ctx) {
+    service_->GET("/node/historical-metrics", [this](const HttpContextPtr& ctx) {
         if (!monitor_module_) return 500;
 
         std::string ip;
@@ -177,10 +169,10 @@ void WebController::setupRoutes() {
         std::vector<std::string> kinds;
 
         auto params = ctx->params();
-        if (params.find("ip") != params.end()) ip = params["ip"];
-        if (params.find("duration") != params.end()) duration = params["duration"];
-        if (params.find("kinds") != params.end()) {
-            const std::string& ks = params["kinds"]; // e.g. cpu,memory,network
+        if (params.find("host_ip") != params.end()) ip = params["host_ip"];
+        if (params.find("time_range") != params.end()) duration = params["time_range"];
+        if (params.find("metrics") != params.end()) {
+            const std::string& ks = params["metrics"]; // e.g. cpu,memory,network
             std::string item;
             for (size_t i = 0, n = ks.size(); i <= n; ++i) {
                 if (i == n || ks[i] == ',') {

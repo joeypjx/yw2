@@ -23,7 +23,7 @@ bool AppContext::initialize() {
         
         // 配置服务器（硬编码配置）
         http_server_->setHost("0.0.0.0");
-        http_server_->setPort(8080);
+        http_server_->setPort(18888);
         http_server_->setThreadNum(4);
         
         return true;
@@ -75,7 +75,7 @@ void AppContext::runHttpServer() {
             std::cerr << "Failed to start HTTP server, error code: " << ret << std::endl;
             return;
         }
-        std::cout << "HTTP server started on 0.0.0.0:8080" << std::endl;
+        std::cout << "HTTP server started on 0.0.0.0:18888" << std::endl;
     });
 }
 

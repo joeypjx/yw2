@@ -20,15 +20,15 @@ MonitorManager::MonitorManager(std::shared_ptr<hv::HttpService> service,
     
     // 启动资源扫描器（示例 manager_ip 与端口与 NodeManager 保持一致，路由改为 /resource）
     scanner_ = std::make_unique<yw::utils::MulticastScanner>(
-        "192.168.10.254",
-        8080,
+        "192.168.10.58",
+        18888,
         "/resource"
     );
     scanner_->start();
 
     // 初始化仓库（连接串可改为配置项）
     repository_ = std::make_unique<ResourceRepository>(
-        "postgres://postgres:HZ715Net@localhost:5432/resource"
+        "postgres://postgres:HZ715Net@localhost:5432/yw"
     );
 
     // 初始化资源缓存

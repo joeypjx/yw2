@@ -6,3 +6,9 @@
 
 bugs
 1 /node/metrics 时间矫正
+
+/node
+/node?box_id
+/node?host_ip
+/node/metrics
+/node/historical-metrics?host_ip=192.168.66.5&time_range=2m&metrics=cpu,memory,gpu,sensor

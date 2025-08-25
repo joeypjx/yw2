@@ -45,9 +45,8 @@ void BMCRepository::save(const UdpInfo& pkt) {
     for (int i = 0; i < 2; ++i) {
         const auto& f = pkt.fan[i];
         tx.exec_params(
-            "INSERT INTO bmc_fan(\"timestamp\", boxid, fanseq, fanmode, fanspeed)"
-            " VALUES (to_timestamp($1), $2, $3, $4, $5)",
-            static_cast<long long>(pkt.timestamp),
+            "INSERT INTO bmc_fan(\"time\", boxid, fanseq, fanmode, fanspeed)"
+            " VALUES (now(), $1, $2, $3, $4)",
             static_cast<int>(pkt.boxid),
             static_cast<int>(f.fanseq),
             static_cast<int>(f.fanmode),
@@ -105,9 +104,8 @@ void BMCRepository::save(const UdpInfo& pkt) {
             if (host_ip.empty()) continue;
 
             tx.exec_params(
-                "INSERT INTO bmc_sensor(\"timestamp\", host_ip, sensorseq, sensortype, sensorname, sensorvalue_L, sensorvalue_H, sensoralmtype)"
-                " VALUES (to_timestamp($1), $2::inet, $3, $4, $5, $6, $7, $8)",
-                static_cast<long long>(pkt.timestamp),
+                "INSERT INTO bmc_sensor(\"time\", host_ip, sensorseq, sensortype, sensorname, sensorvalue_L, sensorvalue_H, sensoralmtype)"
+                " VALUES (now(), $1::inet, $2, $3, $4, $5, $6, $7)",
                 host_ip,
                 static_cast<int>(s.sensorseq),
                 static_cast<int>(s.sensortype),
@@ -129,10 +127,10 @@ std::unordered_map<std::string, std::vector<BMCSensorRow>> BMCRepository::queryB
     pqxx::connection c(conninfo_);
     pqxx::read_transaction tx{c};
     pqxx::result r = tx.exec_params(
-        "SELECT EXTRACT(EPOCH FROM \"timestamp\")::bigint AS ts, host_ip, sensorseq, sensortype, sensorname, sensorvalue_L, sensorvalue_H, sensoralmtype"
+        "SELECT EXTRACT(EPOCH FROM \"time\")::bigint AS ts, host_ip, sensorseq, sensortype, sensorname, sensorvalue_L, sensorvalue_H, sensoralmtype"
         " FROM bmc_sensor"
-        " WHERE host_ip = $1::inet AND \"timestamp\" >= now() - $2::interval"
-        " ORDER BY sensorname DESC, \"timestamp\" DESC",
+        " WHERE host_ip = $1::inet AND \"time\" >= now() - $2::interval"
+        " ORDER BY \"time\" DESC",
         host_ip, duration
     );
     for (const auto& row : r) {

@@ -19,8 +19,8 @@ NodeManager::NodeManager(std::shared_ptr<hv::HttpService> service)
     // 启动节点扫描器（示例：以本机IP与HTTP端口启动）
     // TODO: manager_ip 可从配置或探测获取
     scanner_ = std::make_unique<yw::utils::MulticastScanner>(
-        "192.168.10.254",   // manager_ip
-        8080,                 // manager_port
+        "192.168.10.58",   // manager_ip
+        18888,                 // manager_port
         "/heartbeat"         // url
     );
     scanner_->start();

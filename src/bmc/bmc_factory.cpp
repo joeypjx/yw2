@@ -14,7 +14,7 @@ std::shared_ptr<IBMCModule> BMCFactory::getBMCModule() {
         const std::string listen_ip = ""; // 0.0.0.0
         const std::string mcast_group = "224.100.200.15";
         const std::uint16_t mcast_port = 5715;
-        const std::string conninfo = "postgres://postgres:HZ715Net@localhost:5432/resource";
+        const std::string conninfo = "postgres://postgres:HZ715Net@localhost:5432/yw";
         auto listener = std::make_shared<BMCListener>(listen_ip, mcast_group, mcast_port, conninfo);
         listener->start();
         instance = listener;
