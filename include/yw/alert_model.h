@@ -31,6 +31,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(AlertStatus, {
 struct Rule {
     std::string                 id;             // 规则唯一 ID
     std::string                 name;           // 规则名称
+    std::string                 description;    // 规则描述
     std::string                 expression;     // 规则表达式（SQL/DSL）
     std::string                 window;         // 统计窗口，如 "5m"
     std::string                 eval_every;     // 评估周期，如 "30s"
@@ -72,7 +73,7 @@ struct AlertEvent {
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Rule,
-    id, name, expression, window, eval_every, severity, selector, for_times, enabled)
+    id, name, description, expression, window, eval_every, severity, selector, for_times, enabled)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AlertState,
     fingerprint, rule_id, status, severity, labels,

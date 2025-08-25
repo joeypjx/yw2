@@ -377,6 +377,7 @@ void WebController::setupRoutes() {
             alert::Rule rule;
             rule.id = rule_json["id"].get<std::string>();
             rule.name = rule_json.value("name", rule.id);
+            rule.description = rule_json.value("description", "");
             rule.expression = rule_json["expression"].get<std::string>();
             rule.window = rule_json.value("window", "5m");
             rule.eval_every = rule_json.value("eval_every", "30s");
@@ -465,115 +466,7 @@ void WebController::setupRoutes() {
         return ctx->send(resp.dump(2));
     });
 
-    // 创建告警规则
-    service_->POST("/alert/rule", [this](const HttpContextPtr& ctx) {
-        if (!alert_module_) return 500;
 
-        try {
-            // 解析请求体
-            auto body = ctx->body();
-            if (body.empty()) {
-                return ctx->send("{\"error\":\"empty request body\"}");
-            }
-
-            auto rule_json = json::parse(body);
-            
-            // 验证必需字段
-            if (!rule_json.contains("id") || !rule_json.contains("expression")) {
-                return ctx->send("{\"error\":\"missing required fields: id, expression\"}");
-            }
-
-            // 构造 Rule 对象
-            alert::Rule rule;
-            rule.id = rule_json["id"].get<std::string>();
-            rule.name = rule_json.value("name", rule.id);
-            rule.expression = rule_json["expression"].get<std::string>();
-            rule.window = rule_json.value("window", "5m");
-            rule.eval_every = rule_json.value("eval_every", "30s");
-            rule.severity = rule_json.value("severity", alert::Severity::Warn);
-            rule.for_times = rule_json.value("for_times", 1);
-            rule.enabled = rule_json.value("enabled", true);
-
-            // 解析标签选择器
-            if (rule_json.contains("selector") && rule_json["selector"].is_object()) {
-                for (auto it = rule_json["selector"].begin(); it != rule_json["selector"].end(); ++it) {
-                    if (it.value().is_string()) {
-                        rule.selector[it.key()] = it.value().get<std::string>();
-                    }
-                }
-            }
-
-            // 保存规则
-            if (alert_module_->upsertRule(rule)) {
-                json resp = {
-                    {"api_version", 1},
-                    {"data", {
-                        {"rule_id", rule.id},
-                        {"message", "Rule created/updated successfully"}
-                    }},
-                    {"status", "success"},
-                };
-                ctx->setContentType("application/json");
-                return ctx->send(resp.dump(2));
-            } else {
-                return ctx->send("{\"error\":\"failed to create/update rule\"}");
-            }
-
-        } catch (const json::exception& e) {
-            return ctx->send("{\"error\":\"invalid JSON format: " + std::string(e.what()) + "\"}");
-        } catch (const std::exception& e) {
-            return ctx->send("{\"error\":\"internal error: " + std::string(e.what()) + "\"}");
-        }
-    });
-
-    // 查询活跃告警
-    service_->GET("/alert/active", [this](const HttpContextPtr& ctx) {
-        if (!alert_module_) return 500;
-
-        // 解析标签匹配器（可选）
-        alert::LabelSet matcher;
-        auto params = ctx->params();
-        for (const auto& [key, value] : params) {
-            if (key != "duration" && key != "time_range") {
-                matcher[key] = value;
-            }
-        }
-
-        auto alerts = alert_module_->listActiveAlerts(matcher);
-        
-        json resp = {
-            {"api_version", 1},
-            {"data", {
-                {"alerts", alerts}
-            }},
-            {"status", "success"},
-        };
-        ctx->setContentType("application/json");
-        return ctx->send(resp.dump(2));
-    });
-
-    // 查询告警事件
-    service_->GET("/alert/events", [this](const HttpContextPtr& ctx) {
-        if (!alert_module_) return 500;
-
-        std::string duration = "1h"; // 默认查询最近1小时
-        auto params = ctx->params();
-        if (params.find("duration") != params.end()) {
-            duration = params["duration"];
-        }
-
-        auto events = alert_module_->queryEvents(duration);
-        
-        json resp = {
-            {"api_version", 1},
-            {"data", {
-                {"events", events}
-            }},
-            {"status", "success"},
-        };
-        ctx->setContentType("application/json");
-        return ctx->send(resp.dump(2));
-    });
 }
 
 } // namespace web

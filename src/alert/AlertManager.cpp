@@ -1,4 +1,6 @@
 #include "AlertManager.h"
+#include "DatabaseEventRepository.h"
+#include "DatabaseRuleRepository.h"
 #include <chrono>
 #include <cctype>
 
@@ -40,10 +42,10 @@ AlertManager::AlertManager() {
         // 后续服务初始化时会检查 conn_ 状态
     }
     
-    // 组装最小运行所需服务（内存实现 + 简易提供者）
-    rule_repo_     = std::make_shared<MemoryRuleRepository>();
+    // 组装最小运行所需服务（数据库实现 + 简易提供者）
+    rule_repo_     = std::make_shared<DatabaseRuleRepository>(conn_);
     alert_repo_    = std::make_shared<MemoryAlertRepository>();
-    event_repo_    = std::make_shared<MemoryEventRepository>();
+    event_repo_    = std::make_shared<DatabaseEventRepository>(conn_);
     fp_            = std::make_shared<SimpleFingerprintGenerator>();
     ts_            = std::make_shared<SimpleTimeseriesProvider>(conn_);
     evaluator_     = std::make_shared<BasicAlertEvaluator>(ts_);

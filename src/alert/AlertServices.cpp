@@ -3,6 +3,8 @@
 #include <sstream>
 #include <algorithm>
 #include <iostream>
+#include <numeric>
+#include <iterator>
 
 namespace yw {
 namespace alert {
@@ -74,56 +76,132 @@ nlohmann::json SimpleTimeseriesProvider::evaluate(const std::string& expression,
 
     std::string table;
     std::string value_col;
+    std::vector<std::string> partition_cols;
+
     if (domain == "cpu") {
         table = "resource_cpu";
-        value_col = field; // 例如 usage_percent
+        value_col = field;
     } else if (domain == "memory") {
         table = "resource_memory";
-        value_col = field; // 例如 used/usage_percent
+        value_col = field;
+    } else if (domain == "disk") {
+        table = "resource_disk";
+        value_col = field;
+        partition_cols = {"device", "mount_point"};
+    } else if (domain == "network") {
+        table = "resource_network";
+        value_col = field;
+        partition_cols = {"interface"};
+    } else if (domain == "gpu") {
+        table = "resource_gpu";
+        value_col = field;
+        partition_cols = {"gpu_index"};
     } else {
-        return out; // 暂不支持其他域
+        return out; // Unsupported domain
     }
 
     std::string sql;
-    bool has_host_filter = false;
-    std::string host_param;
-    auto it = selector.find("host_ip");
+    std::vector<std::string> where_conditions;
+    std::vector<std::string> params;
+    int param_count = 0;
+
+    // Build WHERE conditions for selectors
+    for (const auto& [key, value] : selector) {
+        if (key == "host_ip") {
+            where_conditions.push_back("host_ip = $" + std::to_string(++param_count) + "::inet");
+        } else {
+            where_conditions.push_back(key + " = $" + std::to_string(++param_count));
+        }
+        params.push_back(value);
+    }
+
+    auto join_str = [](const std::vector<std::string>& vec, const std::string& delim) {
+        if (vec.empty()) return std::string();
+        return std::accumulate(std::next(vec.begin()), vec.end(), vec[0], 
+            [&delim](const std::string& a, const std::string& b) {
+                return a + delim + b;
+            });
+    };
+
+    std::string where_clause;
+    if (!where_conditions.empty()) {
+        where_clause = " AND " + join_str(where_conditions, " AND ");
+    }
+
+    std::vector<std::string> select_cols = {"host_ip::text AS host_ip"};
+    std::vector<std::string> group_by_cols = {"host_ip"};
+    for (const auto& col : partition_cols) {
+        // Cast integer gpu_index to text for consistent label handling
+        if (col == "gpu_index") {
+            select_cols.push_back(col + "::text AS " + col);
+        } else {
+            select_cols.push_back(col);
+        }
+        group_by_cols.push_back(col);
+    }
+    
+    std::string select_list = join_str(select_cols, ", ");
+    std::string group_by_list = join_str(group_by_cols, ", ");
 
     if (agg == "last" || agg == "latest") {
-        // 取每个 host_ip 的最新一行
-        sql = "SELECT DISTINCT ON (host_ip) host_ip::text AS host_ip, " + value_col + " AS value, "
+        sql = "SELECT DISTINCT ON (" + group_by_list + ") " + select_list + ", " + value_col + " AS value, "
               "1 AS samples, time AS last_ts FROM " + table +
-              " WHERE time > now() - " + interval_sql;
-        if (it != selector.end()) {
-            has_host_filter = true;
-            host_param = it->second;
-            sql += " AND host_ip = $1::inet";
-        }
-        sql += " ORDER BY host_ip, time DESC";
+              " WHERE time > now() - " + interval_sql + where_clause +
+              " ORDER BY " + group_by_list + ", time DESC";
     } else {
         std::string agg_fn = "AVG";
         if (agg == "max") agg_fn = "MAX";
         else if (agg == "min") agg_fn = "MIN";
-        sql = "SELECT host_ip::text AS host_ip, " + agg_fn + "(" + value_col + ") AS value, "
+        sql = "SELECT " + select_list + ", " + agg_fn + "(" + value_col + ") AS value, "
               "COUNT(*) AS samples, MAX(time) AS last_ts FROM " + table +
-              " WHERE time > now() - " + interval_sql;
-        if (it != selector.end()) {
-            has_host_filter = true;
-            host_param = it->second;
-            sql += " AND host_ip = $1::inet";
-        }
-        sql += " GROUP BY host_ip";
+              " WHERE time > now() - " + interval_sql + where_clause +
+              " GROUP BY " + group_by_list;
     }
 
     try {
         pqxx::work tx(*conn_);
-        pqxx::result r = has_host_filter ? tx.exec_params(sql, host_param) : tx.exec(sql);
+        pqxx::result r;
+        
+        if (!params.empty()) {
+            // 动态构建参数数组
+            std::vector<const char*> param_ptrs;
+            for (const auto& param : params) {
+                param_ptrs.push_back(param.c_str());
+            }
+            
+            // 根据参数数量动态调用 exec_params
+            switch (params.size()) {
+                case 1:
+                    r = tx.exec_params(sql, param_ptrs[0]);
+                    break;
+                case 2:
+                    r = tx.exec_params(sql, param_ptrs[0], param_ptrs[1]);
+                    break;
+                case 3:
+                    r = tx.exec_params(sql, param_ptrs[0], param_ptrs[1], param_ptrs[2]);
+                    break;
+                case 4:
+                    r = tx.exec_params(sql, param_ptrs[0], param_ptrs[1], param_ptrs[2], param_ptrs[3]);
+                    break;
+                default:
+                    // 如果参数太多，暂时不支持
+                    return out;
+            }
+        } else {
+            r = tx.exec(sql);
+        }
+        
         tx.commit();
         auto& arr = out["rows"];
         for (const auto& row : r) {
             nlohmann::json item;
             nlohmann::json labels;
             labels["host_ip"] = row["host_ip"].as<std::string>();
+            for (const auto& col : partition_cols) {
+                if (!row[col].is_null()) {
+                    labels[col] = row[col].as<std::string>();
+                }
+            }
             item["labels"] = std::move(labels);
             item["value"] = row["value"].is_null() ? 0.0 : row["value"].as<double>();
             item["samples"] = row["samples"].as<long long>(0);
@@ -340,6 +418,8 @@ std::vector<AlertEvent> BasicAlertStateManager::apply(const Rule& rule,
         ev.rule_id = rule.id;
         ev.severity = rule.severity;
         ev.labels = pt.labels;
+        ev.title = rule.name;           // 从规则名称获取标题
+        ev.description = rule.description; // 从规则描述获取描述
         ev.value = pt.value;
         ev.context = pt.context;
 

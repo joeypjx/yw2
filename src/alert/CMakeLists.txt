@@ -2,6 +2,8 @@ add_library(yw_alert STATIC
     AlertManager.cpp
     AlertServices.cpp
     alert_factory.cpp
+    DatabaseEventRepository.cpp
+    DatabaseRuleRepository.cpp
 )
 
 target_include_directories(yw_alert PUBLIC
