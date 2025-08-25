@@ -1,14 +1,15 @@
 #pragma once
 
 #include <memory>
+#include <hv/HttpService.h>
 #include "yw/web.h"
-
-namespace hv { class HttpService; }
+#include "yw/node.h"
+#include "yw/monitor.h"
+#include "yw/bmc.h"
+#include "yw/alert.h"
+#include "web_model.h"
 
 namespace yw {
-namespace node { class INodeModule; }
-namespace monitor { class IMonitorModule; }
-namespace bmc { class IBMCModule; }
 namespace web {
 
 class WebController : public IWebModule {
@@ -16,17 +17,19 @@ public:
     WebController(std::shared_ptr<hv::HttpService> service,
                   std::shared_ptr<node::INodeModule> node_module,
                   std::shared_ptr<monitor::IMonitorModule> monitor_module,
-                  std::shared_ptr<bmc::IBMCModule> bmc_module);
-    ~WebController();
+                  std::shared_ptr<bmc::IBMCModule> bmc_module,
+                  std::shared_ptr<alert::IAlertModule> alert_module);
+
+    ~WebController() override;
+
+    void setupRoutes() override;
 
 private:
-    void setupRoutes();
-
-private:
-    std::shared_ptr<hv::HttpService> service_;
-    std::shared_ptr<node::INodeModule> node_module_;
+    std::shared_ptr<hv::HttpService>         service_;
+    std::shared_ptr<node::INodeModule>      node_module_;
     std::shared_ptr<monitor::IMonitorModule> monitor_module_;
-    std::shared_ptr<bmc::IBMCModule> bmc_module_;
+    std::shared_ptr<bmc::IBMCModule>        bmc_module_;
+    std::shared_ptr<alert::IAlertModule>    alert_module_;
 };
 
 } // namespace web

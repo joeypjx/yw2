@@ -3,8 +3,10 @@
 #include "yw/monitor.h"
 #include "yw/web.h"
 #include "yw/bmc.h"
+#include "yw/alert.h"
 #include "yw/app_context.h"
 #include <spdlog/spdlog.h>
+#include <pqxx/pqxx>
 
 #include <csignal>
 #include <atomic>
@@ -37,7 +39,11 @@ int main() {
     std::shared_ptr<yw::node::INodeModule> node_module = yw::node::NodeFactory::getNodeModule(app_context->getHttpService());
     std::shared_ptr<yw::monitor::IMonitorModule> monitor_module = yw::monitor::MonitorFactory::getMonitorModule(app_context->getHttpService(), node_module);
     std::shared_ptr<yw::bmc::IBMCModule> bmc_module = yw::bmc::BMCFactory::getBMCModule();
-    std::shared_ptr<yw::web::IWebModule> web_module = yw::web::WebFactory::getWebModule(app_context->getHttpService(), node_module, monitor_module, bmc_module);
+    
+    // 创建告警模块（内部管理数据库连接）
+    std::shared_ptr<yw::alert::IAlertModule> alert_module = yw::alert::AlertFactory::getAlertModule();
+    
+    std::shared_ptr<yw::web::IWebModule> web_module = yw::web::WebFactory::getWebModule(app_context->getHttpService(), node_module, monitor_module, bmc_module, alert_module);
 
     while (g_running) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
