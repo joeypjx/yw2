@@ -5,10 +5,13 @@
 #include <atomic>
 #include <functional>
 #include <cstdint>
+#include <memory>
+#include <optional>
 
 #include "yw/bmc_model.h"
 #include "bmc_repository.h"
 #include "yw/bmc.h"
+#include "bmc_cache.h"
 
 namespace yw {
 namespace bmc {
@@ -34,6 +37,12 @@ public:
         const std::string& host_ip,
         const std::string& duration) const override;
 
+    // BMCCache 访问接口（查询指定 box_id 的 UdpInfo）
+    std::optional<UdpInfo> getBoxBMC(int box_id) const override;
+
+    // 获取所有 box 的最新 BMC UdpInfo
+    std::vector<UdpInfo> getAllBoxBMC() const override;
+
 private:
     void runLoop();
     bool openSocket();
@@ -49,6 +58,9 @@ private:
     std::atomic<bool> running_{false};
     PacketHandler handler_;
     std::unique_ptr<BMCRepository> repository_;
+
+    // 缓存（按 box_id）
+    std::unique_ptr<BMCCache> bmc_cache_;
 };
 
 } // namespace bmc

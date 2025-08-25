@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <cstring>
 #include <iostream>
+#include "bmc_cache.h"
 
 namespace yw {
 namespace bmc {
@@ -19,6 +20,7 @@ BMCListener::BMCListener(const std::string& listen_ip,
     if (!conninfo.empty()) {
         repository_ = std::make_unique<BMCRepository>(conninfo);
     }
+    bmc_cache_ = std::make_unique<BMCCache>();
 }
 
 BMCListener::~BMCListener() { stop(); }
@@ -83,6 +85,8 @@ void BMCListener::closeSocket() {
     }
 }
 
+// 移除静态缓存，改为成员 unique_ptr
+
 void BMCListener::runLoop() {
     while (running_) {
         std::uint8_t buffer[2048];
@@ -102,11 +106,23 @@ void BMCListener::runLoop() {
             continue;
         }
         if (handler_) handler_(*pkt);
+        // 写入缓存（按 box_id）
+        if (bmc_cache_) bmc_cache_->addOrUpdate(*pkt);
         if (repository_) {
             try { repository_->save(*pkt); }
             catch (const std::exception& e) { std::cerr << "bmc save failed: " << e.what() << std::endl; }
         }
     }
+}
+
+std::optional<UdpInfo> BMCListener::getBoxBMC(int box_id) const {
+    if (!bmc_cache_) return std::nullopt;
+    return bmc_cache_->getByBoxId(box_id);
+}
+
+std::vector<UdpInfo> BMCListener::getAllBoxBMC() const {
+    if (!bmc_cache_) return {};
+    return bmc_cache_->getAll();
 }
 
 std::unordered_map<std::string, std::vector<BMCSensorRow>> BMCListener::queryBMCSensor(

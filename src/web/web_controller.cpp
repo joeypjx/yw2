@@ -234,6 +234,64 @@ void WebController::setupRoutes() {
         }
     });
 
+    // 获取所有 box 的最新 BMC 简要信息
+    service_->GET("/box/bmc", [this](const HttpContextPtr& ctx) {
+        if (!bmc_module_) return 500;
+
+        auto all = bmc_module_->getAllBoxBMC();
+        nlohmann::json arr = nlohmann::json::array();
+        arr.get_ref<nlohmann::json::array_t&>().reserve(all.size());
+        for (const auto& info : all) {
+            nlohmann::json j;
+            j["box_id"] = info.boxid;
+            j["box_name"] = info.boxname;
+            j["timestamp"] = info.timestamp;
+            // fan data
+            nlohmann::json fans = nlohmann::json::array();
+            fans.get_ref<nlohmann::json::array_t&>().reserve(2);
+            for (int i = 0; i < 2; ++i) {
+                const auto& f = info.fan[i];
+                nlohmann::json jf;
+                jf["fanseq"] = f.fanseq;
+                jf["fanmode"] = f.fanmode;
+                jf["fanspeed"] = f.fanspeed;
+
+                // 解码：报警类型/工作模式（各4位）
+                std::uint8_t mode = f.fanmode;
+                int alarm_type = (mode >> 4) & 0x0F; // 高4位
+                int work_mode = (mode & 0x0F);       // 低4位（0自动，1手动）
+                jf["alarm_type"] = alarm_type;
+                jf["work_mode"] = work_mode;
+
+                // 解码：转速（高1位为单位，后7位为数值）
+                std::uint8_t speed_byte = static_cast<std::uint8_t>(f.fanspeed & 0xFF);
+                int speed_unit = (speed_byte >> 7) & 0x01; // 0等级 1占空比
+                int speed_val = (speed_byte & 0x7F);
+                if (speed_unit == 0) {
+                    jf["speed_unit"] = "level";   // 1低速 2中速 3高速
+                    jf["speed_level"] = speed_val;
+                } else {
+                    jf["speed_unit"] = "duty";    // 占空比百分比 1-100
+                    jf["duty_cycle"] = speed_val;
+                }
+                fans.push_back(std::move(jf));
+            }
+            j["fan"] = std::move(fans);
+            arr.push_back(std::move(j));
+        }
+
+        nlohmann::json resp = {
+            {"api_version", 1},
+            {"data", {
+                {"box_bmc", arr}
+            }},
+            {"status", "success"},
+        };
+
+        ctx->setContentType("application/json");
+        return ctx->send(resp.dump(2));
+    });
+
     // 获取所有节点（由 INodeModule 提供数据），并附带组件列表（由 IMonitorModule 提供）
     service_->GET("/node", [this](const HttpContextPtr& ctx) {
         if (!node_module_) return 500;

@@ -2,6 +2,7 @@ add_library(yw_bmc STATIC
     bmc_listener.cpp
     bmc_repository.cpp
     bmc_factory.cpp
+    bmc_cache.cpp
 )
 
 target_include_directories(yw_bmc PUBLIC
