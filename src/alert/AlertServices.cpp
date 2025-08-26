@@ -289,10 +289,14 @@ namespace {
 struct ParsedCond {
     std::string op;
     double      threshold = 0.0;
-    bool        ok = false;
 };
 
-static ParsedCond parse_condition(const std::string& expr) {
+struct ParsedConds {
+    std::vector<ParsedCond> conds;
+    bool ok = false;
+};
+
+static ParsedCond parse_single_condition(const std::string& expr, bool& ok) {
     // 支持的操作符顺序很重要：>=, <=, ==, !=, >, <
     static const std::vector<std::string> ops = {">=","<=","==","!=",">","<"};
     for (const auto& o : ops) {
@@ -312,13 +316,50 @@ static ParsedCond parse_condition(const std::string& expr) {
             }
             try {
                 double th = std::stod(expr.substr(start, end - start));
-                return ParsedCond{o, th, true};
+                ok = true;
+                return ParsedCond{o, th};
             } catch (...) {
-                return ParsedCond{"", 0.0, false};
+                ok = false;
+                return ParsedCond{"", 0.0};
             }
         }
     }
-    return ParsedCond{"", 0.0, false};
+    ok = false;
+    return ParsedCond{"", 0.0};
+}
+
+static ParsedConds parse_conditions(const std::string& expr) {
+    ParsedConds out;
+    // 支持区间：使用 "&&" 连接两个比较，例如：metric >= 10 && metric <= 20
+    // 也兼容单一比较：metric > 10
+    std::vector<std::string> parts;
+    {
+        std::string s = expr;
+        // 简单分割 "&&"
+        std::size_t start = 0;
+        while (true) {
+            auto pos = s.find("&&", start);
+            if (pos == std::string::npos) {
+                parts.emplace_back(s.substr(start));
+                break;
+            }
+            parts.emplace_back(s.substr(start, pos - start));
+            start = pos + 2;
+        }
+    }
+    for (auto& p : parts) {
+        // 去空白
+        auto l = p.find_first_not_of(" \t\n\r");
+        auto r = p.find_last_not_of(" \t\n\r");
+        if (l == std::string::npos) continue;
+        std::string trimmed = p.substr(l, r - l + 1);
+        bool ok_single = false;
+        auto cond = parse_single_condition(trimmed, ok_single);
+        if (!ok_single) { out.ok = false; out.conds.clear(); return out; }
+        out.conds.push_back(cond);
+    }
+    out.ok = !out.conds.empty();
+    return out;
 }
 
 static bool eval_match(double v, const std::string& op, double th) {
@@ -335,8 +376,8 @@ static bool eval_match(double v, const std::string& op, double th) {
 std::vector<EvaluationPoint> BasicAlertEvaluator::evaluate(const Rule& rule, std::int64_t /*now_ms*/) {
     std::vector<EvaluationPoint> out;
 
-    // 解析表达式中的比较关系与阈值（若无法解析，则只透传 value 与 matched=false）
-    const auto pc = parse_condition(rule.expression);
+    // 解析表达式：支持单一比较与区间（使用 && 拼接两个比较）
+    const auto pcs = parse_conditions(rule.expression);
 
     // 调用时序提供者：约定返回 JSON 对象，包含 rows 数组
     nlohmann::json res = ts_ ? ts_->evaluate(rule.expression, rule.selector, rule.window) : nlohmann::json();
@@ -366,11 +407,15 @@ std::vector<EvaluationPoint> BasicAlertEvaluator::evaluate(const Rule& rule, std
         }
         p.value = v;
 
-        // matched：优先使用 provider 结果，否则本地依据阈值计算
+        // matched：优先使用 provider 结果，否则本地依据阈值/区间计算
         if (row.contains("matched") && row["matched"].is_boolean()) {
             p.matched = row["matched"].get<bool>();
-        } else if (pc.ok) {
-            p.matched = eval_match(v, pc.op, pc.threshold);
+        } else if (pcs.ok) {
+            bool all_ok = true;
+            for (const auto& c : pcs.conds) {
+                if (!eval_match(v, c.op, c.threshold)) { all_ok = false; break; }
+            }
+            p.matched = all_ok;
         } else {
             p.matched = false;
         }
