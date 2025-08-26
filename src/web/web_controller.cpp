@@ -278,40 +278,15 @@ void WebController::setupRoutes() {
             j["box_id"] = info.boxid;
             
             // fan data
-            nlohmann::json fans = nlohmann::json::array();
-            fans.get_ref<nlohmann::json::array_t&>().reserve(2);
-            for (int i = 0; i < 2; ++i) {
-                const auto& f = info.fan[i];
-                nlohmann::json jf;
-                jf["fanseq"] = f.fanseq;
-                jf["fanmode"] = f.fanmode;
-                jf["fanspeed"] = f.fanspeed;
+            j["fan_0_speed"] = info.fan[0].fanspeed;
+            j["fan_1_speed"] = info.fan[1].fanspeed;
 
-                // 解码：报警类型/工作模式（各4位）
-                std::uint8_t mode = f.fanmode;
-                int alarm_type = (mode >> 4) & 0x0F; // 高4位
-                int work_mode = (mode & 0x01);       // 低4位（0自动，1手动）
-                jf["alarm_type"] = alarm_type;
-                jf["work_mode"] = work_mode;
-
-                // 解码：转速（高1位为单位，后7位为数值）
-                std::uint8_t speed_byte = static_cast<std::uint8_t>(f.fanspeed & 0xFF);
-                int speed_unit = (speed_byte >> 7) & 0x01; // 0等级 1占空比
-                int speed_val = (speed_byte & 0x7F);
-                if (speed_unit == 0) {
-                    jf["speed_unit"] = "level";   // 1低速 2中速 3高速
-                    jf["speed_level"] = speed_val;
-                } else {
-                    jf["speed_unit"] = "duty";    // 占空比百分比 1-100
-                    jf["duty_cycle"] = speed_val;
-                }
-                fans.push_back(std::move(jf));
-            }
-            j["fan"] = std::move(fans);
-
-            // hostip 192.168.67.181 node sensor data
+            // hostip 192.168.xx.180/181 node sensor data
             if (bmc_module_) {
-                auto grouped = bmc_module_->queryBMCSensor("192.168.67.181", duration);
+                auto grouped = bmc_module_->queryBMCSensor("192.168." + std::to_string(info.boxid *2 + 1) + ".180", duration);
+                if (grouped.size() == 0) {
+                    grouped = bmc_module_->queryBMCSensor("192.168." + std::to_string(info.boxid *2 + 1) + ".181", duration);
+                }
                 nlohmann::json bmc_json = grouped; // 直接序列化 map<string, vector<BMCSensorRow>>
                 j["sensor"] = std::move(bmc_json);
             }
