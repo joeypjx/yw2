@@ -23,7 +23,7 @@ std::vector<Rule> DatabaseRuleRepository::listRules() const {
         
         const std::string sql = R"(
             SELECT 
-                id, name, description, expression, time_window, eval_every, severity, 
+                id, name, description, expression, time_window, eval_every, severity, tag,
                 selector, for_times, enabled, created_at, updated_at
             FROM alert_rule 
             ORDER BY created_at DESC
@@ -54,7 +54,7 @@ std::optional<Rule> DatabaseRuleRepository::getRule(const std::string& id) const
         
         const std::string sql = R"(
             SELECT 
-                id, name, description, expression, time_window, eval_every, severity, 
+                id, name, description, expression, time_window, eval_every, severity, tag,
                 selector, for_times, enabled, created_at, updated_at
             FROM alert_rule 
             WHERE id = $1
@@ -85,10 +85,10 @@ bool DatabaseRuleRepository::upsertRule(const Rule& rule) {
         // 使用 UPSERT 语法 (INSERT ... ON CONFLICT DO UPDATE)
         const std::string sql = R"(
             INSERT INTO alert_rule (
-                id, name, description, expression, time_window, eval_every, severity, 
+                id, name, description, expression, time_window, eval_every, severity, tag,
                 selector, for_times, enabled
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
             )
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
@@ -97,6 +97,7 @@ bool DatabaseRuleRepository::upsertRule(const Rule& rule) {
                 time_window = EXCLUDED.time_window,
                 eval_every = EXCLUDED.eval_every,
                 severity = EXCLUDED.severity,
+                tag = EXCLUDED.tag,
                 selector = EXCLUDED.selector,
                 for_times = EXCLUDED.for_times,
                 enabled = EXCLUDED.enabled,
@@ -122,9 +123,10 @@ bool DatabaseRuleRepository::upsertRule(const Rule& rule) {
             rule.window,                // $5: window
             rule.eval_every,            // $6: eval_every
             severity_str,               // $7: severity
-            selector_json,              // $8: selector
-            rule.for_times,             // $9: for_times
-            rule.enabled                // $10: enabled
+            rule.tag,                   // $8: tag
+            selector_json,              // $9: selector
+            rule.for_times,             // $10: for_times
+            rule.enabled                // $11: enabled
         );
         tx.commit();
         
@@ -215,6 +217,7 @@ Rule DatabaseRuleRepository::parseRuleFromRow(const pqxx::row& row) const {
     rule.window = row["time_window"].as<std::string>();
     rule.eval_every = row["eval_every"].as<std::string>();
     rule.severity = parseSeverityFromString(row["severity"].as<std::string>());
+    rule.tag = row["tag"].is_null() ? "" : row["tag"].as<std::string>();
     rule.for_times = row["for_times"].as<int>();
     rule.enabled = row["enabled"].as<bool>();
     

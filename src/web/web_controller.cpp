@@ -399,6 +399,7 @@ void WebController::setupRoutes() {
             rule.window = rule_json.value("window", "5m");
             rule.eval_every = rule_json.value("eval_every", "30s");
             rule.severity = rule_json.value("severity", alert::Severity::Warn);
+            rule.tag = rule_json.value("tag", "");
             rule.for_times = rule_json.value("for_times", 1);
             rule.enabled = rule_json.value("enabled", true);
 

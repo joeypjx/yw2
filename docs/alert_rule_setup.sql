@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS alert_rule (
     time_window TEXT NOT NULL,              -- 时间窗口（如：5m, 1h）
     eval_every  TEXT NOT NULL,              -- 评估频率（如：30s, 1m）
     severity    TEXT NOT NULL,              -- 严重级别（info, warn, critical）
+    tag         TEXT DEFAULT '',            -- 规则标签（用于分类）
     selector    JSONB,                      -- 标签选择器（用于过滤目标）
     for_times   INTEGER NOT NULL DEFAULT 1, -- 连续匹配次数（防抖动）
     enabled     BOOLEAN NOT NULL DEFAULT true, -- 是否启用
@@ -26,6 +27,9 @@ ON alert_rule (severity, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_alert_rule_name 
 ON alert_rule (name);
+
+CREATE INDEX IF NOT EXISTS idx_alert_rule_tag 
+ON alert_rule (tag, created_at DESC);
 
 -- 创建更新时间触发器
 CREATE OR REPLACE FUNCTION update_alert_rule_updated_at()
@@ -50,6 +54,7 @@ COMMENT ON COLUMN alert_rule.expression IS '告警表达式，使用DSL格式（
 COMMENT ON COLUMN alert_rule.time_window IS '时间窗口，用于聚合计算（如：5m, 1h, 1d）';
 COMMENT ON COLUMN alert_rule.eval_every IS '评估频率，规则执行间隔（如：30s, 1m, 5m）';
 COMMENT ON COLUMN alert_rule.severity IS '严重级别：info(信息)、warn(警告)、critical(严重)';
+COMMENT ON COLUMN alert_rule.tag IS '规则标签，用于规则分类和管理';
 COMMENT ON COLUMN alert_rule.selector IS '标签选择器，用于过滤监控目标（JSON格式）';
 COMMENT ON COLUMN alert_rule.for_times IS '连续匹配次数，防止告警抖动';
 COMMENT ON COLUMN alert_rule.enabled IS '是否启用该规则';
@@ -57,23 +62,24 @@ COMMENT ON COLUMN alert_rule.created_at IS '规则创建时间';
 COMMENT ON COLUMN alert_rule.updated_at IS '规则最后更新时间';
 
 -- 创建一些示例规则（可选）
-INSERT INTO alert_rule (id, name, description, expression, time_window, eval_every, severity, selector, for_times) VALUES
-    ('cpu_high', 'CPU使用率过高', '当CPU使用率持续超过80%时触发告警，可能表示系统负载过高或存在性能问题', 'cpu.usage_percent.avg > 80', '5m', '1m', 'warn', '{"host_type": "server"}', 2),
-    ('memory_high', '内存使用率过高', '当内存使用率超过90%时触发严重告警，可能导致系统不稳定或服务中断', 'memory.usage_percent.avg > 90', '5m', '1m', 'critical', '{"host_type": "server"}', 1),
-    ('disk_high', '磁盘使用率过高', '当磁盘使用率超过85%时触发告警，建议及时清理或扩容存储空间', 'disk.usage_percent.avg > 85', '10m', '2m', 'warn', '{"host_type": "server"}', 3)
+INSERT INTO alert_rule (id, name, description, expression, time_window, eval_every, severity, tag, selector, for_times) VALUES
+    ('cpu_high', 'CPU使用率过高', '当CPU使用率持续超过80%时触发告警，可能表示系统负载过高或存在性能问题', 'cpu.usage_percent.avg > 80', '5m', '1m', 'warn', 'resource', '{"host_type": "server"}', 2),
+    ('memory_high', '内存使用率过高', '当内存使用率超过90%时触发严重告警，可能导致系统不稳定或服务中断', 'memory.usage_percent.avg > 90', '5m', '1m', 'critical', 'resource', '{"host_type": "server"}', 1),
+    ('disk_high', '磁盘使用率过高', '当磁盘使用率超过85%时触发告警，建议及时清理或扩容存储空间', 'disk.usage_percent.avg > 85', '10m', '2m', 'warn', 'storage', '{"host_type": "server"}', 3)
 ON CONFLICT (id) DO NOTHING;
 
 -- 创建规则统计视图
 CREATE OR REPLACE VIEW rule_statistics AS
 SELECT 
     severity,
+    tag,
     enabled,
     COUNT(*) as rule_count,
     MIN(created_at) as oldest_rule,
     MAX(updated_at) as latest_update
 FROM alert_rule
-GROUP BY severity, enabled
-ORDER BY severity, enabled;
+GROUP BY severity, tag, enabled
+ORDER BY severity, tag, enabled;
 
 -- 创建活跃规则视图
 CREATE OR REPLACE VIEW active_rules AS
@@ -84,10 +90,11 @@ SELECT
     time_window,
     eval_every,
     severity,
+    tag,
     selector,
     for_times,
     created_at,
     updated_at
 FROM alert_rule
 WHERE enabled = true
-ORDER BY severity DESC, created_at DESC;
+ORDER BY severity DESC, tag, created_at DESC;

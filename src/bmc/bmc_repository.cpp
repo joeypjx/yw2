@@ -92,7 +92,7 @@ void BMCRepository::save(const UdpInfo& pkt) {
                 } else if (slot_id >= 8 && slot_id <= 12) {
                     network_id = box_id * 2 + 1;
                     switch (slot_id) {
-                        case 8: host_id = 5; break; case 9: host_id = 37; break; case 10: host_id = 69; break; case 11: host_id = 101; break; case 12: host_id = 133; case 13: host_id = 181; break; case 14: host_id = 182; break;
+                        case 8: host_id = 5; break; case 9: host_id = 37; break; case 10: host_id = 69; break; case 11: host_id = 101; break; case 12: host_id = 133; break; case 13: host_id = 181; break; case 14: host_id = 182; break;
                         default: host_id = 5; break;
                     }
                 } else { return std::string(); }

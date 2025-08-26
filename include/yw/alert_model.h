@@ -36,6 +36,7 @@ struct Rule {
     std::string                 window;         // 统计窗口，如 "5m"
     std::string                 eval_every;     // 评估周期，如 "30s"
     Severity                    severity = Severity::Warn;
+    std::string                 tag;            // 规则标签
     LabelSet                    selector;       // 标签选择器
     std::int32_t                for_times = 1;  // 连续命中次数才触发
     bool                        enabled = true; // 是否启用
@@ -73,7 +74,7 @@ struct AlertEvent {
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Rule,
-    id, name, description, expression, window, eval_every, severity, selector, for_times, enabled)
+    id, name, description, expression, window, eval_every, severity, tag, selector, for_times, enabled)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AlertState,
     fingerprint, rule_id, status, severity, labels,

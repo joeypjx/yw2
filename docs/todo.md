@@ -12,3 +12,27 @@ bugs
 /node?host_ip
 /node/metrics
 /node/historical-metrics?host_ip=192.168.66.5&time_range=2m&metrics=cpu,memory,gpu,sensor
+
+  {
+    "alert_name": "¸æ¾¯¹æÔòÃû³Æ",  -- id
+    "expression": {                  -- expression: 
+      "stable": "³¬¼¶±íÃû³Æ",
+      "metric": "Ö¸±êÃû³Æ",
+      "conditions": [
+        {
+          "operator": "²Ù×÷·û",
+          "threshold": ãÐÖµ
+        }
+      ],
+      "tags": [
+        {
+          "±êÇ©Ãû": "±êÇ©Öµ"
+        }
+      ]
+    },
+    "for": "³ÖÐøÊ±¼ä", -- eval_every * for_times
+    "severity": "ÑÏÖØµÈ¼¶", -- severity
+    "summary": "¸æ¾¯ÕªÒª", -- name
+    "description": "¸æ¾¯ÏêÏ¸ÃèÊö",  -- description
+    "alert_type": "¸æ¾¯ÀàÐÍ" --
+  }
