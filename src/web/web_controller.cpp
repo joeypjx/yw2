@@ -7,6 +7,7 @@
 #include "web_model.h"
 #include <nlohmann/json.hpp>
 #include <chrono>
+#include <iomanip>
 
 namespace yw {
 namespace web {
@@ -386,21 +387,98 @@ void WebController::setupRoutes() {
             auto rule_json = json::parse(body);
             
             // 验证必需字段
-            if (!rule_json.contains("id") || !rule_json.contains("expression")) {
+            if (!rule_json.contains("alert_name") || !rule_json.contains("expression")) {
                 return ctx->send("{\"error\":\"missing required fields: id, expression\"}");
             }
 
             // 构造 Rule 对象
             alert::Rule rule;
-            rule.id = rule_json["id"].get<std::string>();
-            rule.name = rule_json.value("name", rule.id);
+            rule.id = rule_json["alert_name"].get<std::string>();
+            rule.name = rule_json.value("summary", rule.id);
             rule.description = rule_json.value("description", "");
-            rule.expression = rule_json["expression"].get<std::string>();
+            // 解析 expression JSON -> 规则表达式字符串，并将 tags 合并到 selector
+            if (rule_json.contains("expression") && rule_json["expression"].is_object()) {
+                const auto& expr = rule_json["expression"];
+                std::string domain = expr.value("stable", "");
+                std::string metric = expr.value("metric", "");
+                std::string lhs = domain;
+                if (!lhs.empty()) lhs += ".";
+                lhs += metric;
+                std::string expr_str;
+                if (expr.contains("conditions") && expr["conditions"].is_array()) {
+                    bool first = true;
+                    for (const auto& c : expr["conditions"]) {
+                        if (!c.is_object()) continue;
+                        std::string op = c.value("operator", "");
+                        if (op != ">" && op != "<" && op != ">=" && op != "<=" && op != "==" && op != "!=") continue;
+                        double th = c.value("threshold", 0.0);
+                        if (!first) expr_str += " && ";
+                        expr_str += lhs + " " + op + " " + std::to_string(th);
+                        first = false;
+                    }
+                }
+                if (expr_str.empty()) {
+                    // 兜底：若未给出条件，则给出一个恒不触发的条件，避免空表达式
+                    expr_str = lhs + " > 1e309";
+                }
+                rule.expression = std::move(expr_str);
+                if (expr.contains("tags") && expr["tags"].is_array()) {
+                    for (const auto& t : expr["tags"]) {
+                        if (!t.is_object()) continue;
+                        for (auto it = t.begin(); it != t.end(); ++it) {
+                            if (it.value().is_string()) {
+                                rule.selector[it.key()] = it.value().get<std::string>();
+                            } else if (it.value().is_number() || it.value().is_boolean()) {
+                                rule.selector[it.key()] = it.value().dump();
+                            }
+                        }
+                    }
+                }
+            } else {
+                rule.expression = rule_json["expression"].get<std::string>();
+            }
             rule.window = rule_json.value("window", "5m");
-            rule.eval_every = rule_json.value("eval_every", "30s");
+            rule.eval_every = rule_json.value("eval_every", "1s");
             rule.severity = rule_json.value("severity", alert::Severity::Warn);
-            rule.tag = rule_json.value("tag", "");
-            rule.for_times = rule_json.value("for_times", 1);
+            rule.tag = rule_json.value("alert_type", "系统告警");
+            {
+                auto trim = [](std::string s){
+                    auto not_space = [](int ch){ return !std::isspace(ch); };
+                    s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
+                    s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
+                    return s;
+                };
+                auto parse_duration_seconds = [&](const std::string& f) -> long long {
+                    if (f.empty()) return 0;
+                    std::string s = trim(f);
+                    if (s.empty()) return 0;
+                    char unit = s.back();
+                    bool has_unit = std::isalpha(static_cast<unsigned char>(unit)) != 0;
+                    std::string num = has_unit ? s.substr(0, s.size()-1) : s;
+                    num = trim(num);
+                    if (num.empty()) return 0;
+                    long long n = 0;
+                    try { n = std::stoll(num); } catch (...) { return 0; }
+                    if (!has_unit) return n; // 默认为秒
+                    switch (static_cast<char>(std::tolower(static_cast<unsigned char>(unit)))) {
+                        case 's': return n;
+                        case 'm': return n * 60;
+                        case 'h': return n * 3600;
+                        default: return n; // 未知单位，按秒处理
+                    }
+                };
+                int ft = rule_json.value("for_times", 0);
+                if (rule_json.contains("for") && rule_json["for"].is_string()) {
+                    long long for_seconds = parse_duration_seconds(rule_json["for"].get<std::string>());
+                    long long every_seconds = parse_duration_seconds(rule.eval_every);
+                    if (every_seconds <= 0) every_seconds = 1; // 防止除零
+                    // 动态换算：向上取整 ceil(for_seconds / every_seconds)
+                    long long quotient = (for_seconds + every_seconds - 1) / every_seconds;
+                    ft = static_cast<int>(quotient);
+                }
+                if (ft <= 0) ft = 1;
+                rule.for_times = ft;
+            }
             rule.enabled = rule_json.value("enabled", true);
 
             // 解析标签选择器
@@ -473,11 +551,103 @@ void WebController::setupRoutes() {
 
         auto events = alert_module_->queryEvents(duration);
         
+        // 转换为目标格式
+        auto trim = [](std::string s){
+            auto not_space = [](int ch){ return !std::isspace(ch); };
+            s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
+            s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
+            return s;
+        };
+        auto format_time = [](std::int64_t ms) -> std::string {
+            if (ms <= 0) return std::string();
+            std::time_t t = static_cast<std::time_t>(ms / 1000);
+            std::tm tm{};
+#if defined(_WIN32)
+            localtime_s(&tm, &t);
+#else
+            localtime_r(&t, &tm);
+#endif
+            std::ostringstream oss;
+            oss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
+            return oss.str();
+        };
+        auto parse_metric_name = [&](const nlohmann::json& ctx) -> std::string {
+            if (!ctx.is_object() || !ctx.contains("metric") || !ctx["metric"].is_string()) return std::string();
+            std::string expr = ctx["metric"].get<std::string>();
+            // 找到第一个比较操作符位置
+            static const std::vector<std::string> ops = {">=","<=","==","!=",">","<"};
+            size_t pos = std::string::npos;
+            for (const auto& o : ops) { auto p = expr.find(o); if (p != std::string::npos) { pos = p; break; } }
+            std::string lhs = pos == std::string::npos ? expr : expr.substr(0, pos);
+            lhs = trim(lhs);
+            // 取最后一个点之后的部分作为 metric 名
+            auto dot = lhs.rfind('.');
+            if (dot == std::string::npos) return lhs;
+            return lhs.substr(dot + 1);
+        };
+
+        nlohmann::json arr = nlohmann::json::array();
+        arr.get_ref<nlohmann::json::array_t&>().reserve(events.size());
+        for (const auto& e : events) {
+            // 基本时间
+            std::string starts_at = format_time(e.timestamp_ms);
+            std::string ends_at = format_time(e.resolved_timestamp_ms);
+            std::string updated_at = !ends_at.empty() ? ends_at : starts_at;
+
+            // 严重级别映射
+            std::string sev = "warning";
+            switch (e.severity) {
+                case alert::Severity::Info: sev = "info"; break;
+                case alert::Severity::Critical: sev = "critical"; break;
+                case alert::Severity::Warn: default: sev = "warning"; break;
+            }
+
+            // 指标名
+            std::string metric_name = parse_metric_name(e.context);
+
+            // 值格式化
+            std::ostringstream vss; vss << std::fixed << std::setprecision(6) << e.value;
+
+            // labels：聚合
+            nlohmann::json labels = nlohmann::json::object();
+            labels["alert_type"] = e.context.contains("tag") && e.context["tag"].is_string() ? e.context["tag"].get<std::string>() : std::string("metric");
+            labels["alertname"] = e.context.contains("rule_id") && e.context["rule_id"].is_string() ? e.context["rule_id"].get<std::string>() : e.rule_id;
+            // host_ip 优先来自 labels，其次 context
+            if (e.labels.find("host_ip") != e.labels.end()) labels["host_ip"] = e.labels.at("host_ip");
+            else if (e.context.contains("host_ip") && e.context["host_ip"].is_string()) labels["host_ip"] = e.context["host_ip"].get<std::string>();
+            if (!metric_name.empty()) labels["metrics"] = metric_name;
+            labels["severity"] = sev;
+            labels["value"] = vss.str();
+
+            // annotations
+            nlohmann::json annotations = nlohmann::json::object();
+            annotations["description"] = e.description;
+            annotations["summary"] = e.title;
+
+            std::string status_str = "inactive";
+            switch (e.status) {
+                case alert::AlertStatus::Pending: status_str = "pending"; break;
+                case alert::AlertStatus::Firing: status_str = "firing"; break;
+                case alert::AlertStatus::Resolved: status_str = "resolved"; break;
+                case alert::AlertStatus::Inactive: default: status_str = "inactive"; break;
+            }
+
+            nlohmann::json item = {
+                {"annotations", annotations},
+                {"created_at", starts_at},
+                {"ends_at", ends_at.empty() ? nlohmann::json() : nlohmann::json(ends_at)},
+                {"fingerprint", e.fingerprint},
+                {"labels", labels},
+                {"starts_at", starts_at},
+                {"status", status_str},
+                {"updated_at", updated_at}
+            };
+            arr.push_back(std::move(item));
+        }
+
         json resp = {
             {"api_version", 1},
-            {"data", {
-                {"events", events}
-            }},
+            {"data", arr},
             {"status", "success"},
         };
         ctx->setContentType("application/json");

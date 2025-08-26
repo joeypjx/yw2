@@ -18,12 +18,23 @@ bool DatabaseEventRepository::append(const AlertEvent& event) {
     
     try {
         // 准备 SQL 语句
-        const std::string sql = R"(
+        const std::string insert_sql = R"(
             INSERT INTO alert_event (
-                time, fingerprint, rule_id, action, status, severity,
+                time, resolved_time, fingerprint, rule_id, action, status, severity,
                 labels, title, description, value, unit, context
             ) VALUES (
-                to_timestamp($1), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+                to_timestamp($1), CASE WHEN $2 THEN to_timestamp($1) ELSE NULL END,
+                $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+            )
+        )";
+        const std::string update_resolved_sql = R"(
+            UPDATE alert_event AS ae
+            SET resolved_time = to_timestamp($1), status = '已解决', action = 'resolved'
+            WHERE ae.ctid IN (
+                SELECT ctid FROM alert_event
+                WHERE fingerprint = $2 AND rule_id = $3 AND status != '已解决' AND resolved_time IS NULL
+                ORDER BY time DESC
+                LIMIT 1
             )
         )";
         
@@ -33,22 +44,38 @@ bool DatabaseEventRepository::append(const AlertEvent& event) {
         // 转换 severity 枚举为字符串
         std::string severity_str;
         switch (event.severity) {
-            case Severity::Info: severity_str = "info"; break;
-            case Severity::Warn: severity_str = "warn"; break;
-            case Severity::Critical: severity_str = "critical"; break;
-            default: severity_str = "warn"; break;
+            case Severity::Info: severity_str = "提示"; break;
+            case Severity::Warn: severity_str = "一般"; break;
+            case Severity::Critical: severity_str = "严重"; break;
+            default: severity_str = "一般"; break;
         }
         
         // 转换 status 枚举为字符串
         std::string status_str;
         switch (event.status) {
-            case AlertStatus::Inactive: status_str = "inactive"; break;
-            case AlertStatus::Pending: status_str = "pending"; break;
-            case AlertStatus::Firing: status_str = "firing"; break;
-            case AlertStatus::Resolved: status_str = "resolved"; break;
-            default: status_str = "inactive"; break;
+            case AlertStatus::Inactive: status_str = "未触发"; break;
+            case AlertStatus::Pending: status_str = "待触发"; break;
+            case AlertStatus::Firing: status_str = "触发中"; break;
+            case AlertStatus::Resolved: status_str = "已解决"; break;
+            default: status_str = "未触发"; break;
         }
         
+        // 当 action 为 resolved：不新增事件，改为更新最近一条 firing 记录的 resolved_time
+        if (event.action == "resolved") {
+            pqxx::work tx(*conn_);
+            tx.exec_params(update_resolved_sql,
+                timestamp_s,       // $1: resolved_time (epoch seconds)
+                event.fingerprint, // $2: fingerprint
+                event.rule_id      // $3: rule_id
+            );
+            tx.commit();
+            return true;
+        }
+        // 仅当 action 为 firing 时插入记录；其他 action 忽略
+        if (event.action != "firing") {
+            return true;
+        }
+
         // 转换 labels 为 JSON 字符串
         std::string labels_json = "{}";
         if (!event.labels.empty()) {
@@ -62,21 +89,24 @@ bool DatabaseEventRepository::append(const AlertEvent& event) {
             context_json = event.context.dump();
         }
         
-        // 执行插入
+        const bool is_resolved = (status_str == "已解决");
+
+        // 执行插入（参数化）
         pqxx::work tx(*conn_);
-        tx.exec_params(sql,
-            timestamp_s,                    // $1: time
-            event.fingerprint,              // $2: fingerprint
-            event.rule_id,                  // $3: rule_id
-            event.action,                   // $4: action
-            status_str,                     // $5: status
-            severity_str,                   // $6: severity
-            labels_json,                    // $7: labels
-            event.title,                    // $8: title
-            event.description,              // $9: description
-            event.value,                    // $10: value
-            event.unit,                     // $11: unit
-            context_json                    // $12: context
+        tx.exec_params(insert_sql,
+            timestamp_s,                    // $1: time (epoch seconds)
+            is_resolved,                    // $2: resolved flag
+            event.fingerprint,              // $3: fingerprint
+            event.rule_id,                  // $4: rule_id
+            event.action,                   // $5: action
+            status_str,                     // $6: status
+            severity_str,                   // $7: severity
+            labels_json,                    // $8: labels
+            event.title,                    // $9: title
+            event.description,              // $10: description
+            event.value,                    // $11: value
+            event.unit,                     // $12: unit
+            context_json                    // $13: context
         );
         tx.commit();
         
@@ -102,6 +132,7 @@ std::vector<AlertEvent> DatabaseEventRepository::query(const std::string& durati
         const std::string sql = R"(
             SELECT 
                 EXTRACT(EPOCH FROM time) * 1000 as timestamp_ms,
+                EXTRACT(EPOCH FROM resolved_time) * 1000 as resolved_timestamp_ms,
                 fingerprint, rule_id, action, status, severity,
                 labels, title, description, value, unit, context
             FROM alert_event 
@@ -119,21 +150,22 @@ std::vector<AlertEvent> DatabaseEventRepository::query(const std::string& durati
             
             // 转换时间戳（秒转毫秒）
             event.timestamp_ms = static_cast<std::int64_t>(row["timestamp_ms"].as<double>());
+            event.resolved_timestamp_ms = row["resolved_timestamp_ms"].is_null() ? 0 : static_cast<std::int64_t>(row["resolved_timestamp_ms"].as<double>());
             event.fingerprint = row["fingerprint"].as<std::string>();
             event.rule_id = row["rule_id"].as<std::string>();
             event.action = row["action"].as<std::string>();
             
             // 转换 status 字符串为枚举
             std::string status_str = row["status"].as<std::string>();
-            if (status_str == "pending") event.status = AlertStatus::Pending;
-            else if (status_str == "firing") event.status = AlertStatus::Firing;
-            else if (status_str == "resolved") event.status = AlertStatus::Resolved;
+            if (status_str == "待触发") event.status = AlertStatus::Pending;
+            else if (status_str == "触发中") event.status = AlertStatus::Firing;
+            else if (status_str == "已解决") event.status = AlertStatus::Resolved;
             else event.status = AlertStatus::Inactive;
             
             // 转换 severity 字符串为枚举
             std::string severity_str = row["severity"].as<std::string>();
-            if (severity_str == "info") event.severity = Severity::Info;
-            else if (severity_str == "critical") event.severity = Severity::Critical;
+            if (severity_str == "提示") event.severity = Severity::Info;
+            else if (severity_str == "严重") event.severity = Severity::Critical;
             else event.severity = Severity::Warn;
             
             // 解析 labels JSON

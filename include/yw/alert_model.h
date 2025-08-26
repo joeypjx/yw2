@@ -16,16 +16,16 @@ enum class Severity { Info, Warn, Critical };
 enum class AlertStatus { Inactive, Pending, Firing, Resolved };
 
 NLOHMANN_JSON_SERIALIZE_ENUM(Severity, {
-    {Severity::Info,      "info"},
-    {Severity::Warn,      "warn"},
-    {Severity::Critical,  "critical"}
+    {Severity::Info,      "提示"},
+    {Severity::Warn,      "一般"},
+    {Severity::Critical,  "严重"}
 })
 
 NLOHMANN_JSON_SERIALIZE_ENUM(AlertStatus, {
-    {AlertStatus::Inactive, "inactive"},
-    {AlertStatus::Pending,  "pending"},
-    {AlertStatus::Firing,   "firing"},
-    {AlertStatus::Resolved, "resolved"}
+    {AlertStatus::Inactive, "未触发"},
+    {AlertStatus::Pending,  "待触发"},
+    {AlertStatus::Firing,   "触发中"},
+    {AlertStatus::Resolved, "已解决"}
 })
 
 struct Rule {
@@ -60,6 +60,7 @@ struct AlertState {
 
 struct AlertEvent {
     std::int64_t                timestamp_ms = 0;   // 事件时间
+    std::int64_t                resolved_timestamp_ms = 0; // 解决时间（毫秒，0 表示未解决）
     std::string                 fingerprint;
     std::string                 rule_id;
     std::string                 action;             // firing/resolved/ack/notified/escalated
@@ -82,7 +83,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AlertState,
     occurrences, acked, acked_by, acked_at_ms)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AlertEvent,
-    timestamp_ms, fingerprint, rule_id, action, status, severity,
+    timestamp_ms, resolved_timestamp_ms, fingerprint, rule_id, action, status, severity,
     labels, title, description, value, unit, context)
 
 } // namespace alert

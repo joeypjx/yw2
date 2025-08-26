@@ -4,6 +4,7 @@
 -- 创建告警事件表
 CREATE TABLE IF NOT EXISTS alert_event (
     time        TIMESTAMPTZ NOT NULL,    -- 事件时间
+    resolved_time TIMESTAMPTZ,           -- 解决时间（仅在 resolved 事件时填充）
     fingerprint TEXT NOT NULL,           -- 告警指纹（唯一标识）
     rule_id     TEXT NOT NULL,           -- 规则ID
     action      TEXT NOT NULL,           -- 动作类型（pending, firing, resolved等）
@@ -20,6 +21,10 @@ CREATE TABLE IF NOT EXISTS alert_event (
 -- 创建时间索引（用于时间范围查询）
 CREATE INDEX IF NOT EXISTS idx_alert_event_time 
 ON alert_event (time DESC);
+
+-- 解决时间索引（便于统计恢复耗时等）
+CREATE INDEX IF NOT EXISTS idx_alert_event_resolved_time 
+ON alert_event (resolved_time DESC);
 
 -- 创建指纹索引（用于特定告警查询）
 CREATE INDEX IF NOT EXISTS idx_alert_event_fingerprint 
@@ -44,6 +49,7 @@ ON alert_event (status, severity, time DESC);
 -- 添加表注释
 COMMENT ON TABLE alert_event IS '告警事件表，存储所有告警状态变化和事件记录';
 COMMENT ON COLUMN alert_event.time IS '事件发生时间';
+COMMENT ON COLUMN alert_event.resolved_time IS '告警被恢复/解决的时间，仅在 resolved 事件中填充';
 COMMENT ON COLUMN alert_event.fingerprint IS '告警指纹，用于唯一标识告警实例';
 COMMENT ON COLUMN alert_event.rule_id IS '触发此事件的告警规则ID';
 COMMENT ON COLUMN alert_event.action IS '事件动作类型：pending(待处理)、firing(触发中)、resolved(已解决)';

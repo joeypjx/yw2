@@ -433,6 +433,26 @@ std::vector<EvaluationPoint> BasicAlertEvaluator::evaluate(const Rule& rule, std
             p.context["last_ts"] = row["last_ts"];
         }
 
+        // 追加 Rule 的关键信息到 context，便于事件落库与展示
+        p.context["rule_id"] = rule.id;
+        p.context["rule_name"] = rule.name;
+        p.context["rule_description"] = rule.description;
+        // 严重级别统一为英文串，便于与事件表保持一致
+        std::string severity_str;
+        switch (rule.severity) {
+            case Severity::Info: severity_str = "提示"; break;
+            case Severity::Critical: severity_str = "严重"; break;
+            case Severity::Warn: default: severity_str = "一般"; break;
+        }
+        p.context["severity"] = severity_str;
+        p.context["tag"] = rule.tag;
+        p.context["for_times"] = rule.for_times;
+        p.context["eval_every"] = rule.eval_every;
+        // 将 selector 的每个元素直接并入 context，便于下游直接读取
+        for (const auto& kv : rule.selector) {
+            p.context[kv.first] = kv.second;
+        }
+
         out.push_back(std::move(p));
     }
 
@@ -540,7 +560,6 @@ void BasicScheduler::start() {
                 std::lock_guard<std::mutex> lk(mu_);
                 for (auto& [id, t] : tasks_) {
                     if (now_ms >= t.next_run_ms) {
-                        std::cout << "runTask: " << id << " " << now_ms << " " << t.next_run_ms << std::endl;
                         try { t.task(); } catch (...) {}
                         t.next_run_ms = now_ms + t.interval_ms;
                     }
