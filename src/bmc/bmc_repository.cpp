@@ -126,26 +126,51 @@ std::unordered_map<std::string, std::vector<BMCSensorRow>> BMCRepository::queryB
     std::unordered_map<std::string, std::vector<BMCSensorRow>> out;
     pqxx::connection c(conninfo_);
     pqxx::read_transaction tx{c};
-    pqxx::result r = tx.exec_params(
-        "SELECT EXTRACT(EPOCH FROM \"time\")::bigint AS ts, host_ip, sensorseq, sensortype, sensorname, sensorvalue_L, sensorvalue_H, sensoralmtype"
-        " FROM bmc_sensor"
-        " WHERE host_ip = $1::inet AND \"time\" >= now() - $2::interval"
-        " ORDER BY \"time\" DESC",
+    
+    // 首先获取该主机下的所有传感器名称
+    pqxx::result sensors = tx.exec_params(
+        "SELECT DISTINCT sensorname FROM bmc_sensor WHERE host_ip = $1::inet AND \"time\" >= now() - $2::interval",
         host_ip, duration
     );
-    for (const auto& row : r) {
-        BMCSensorRow e{};
-        e.timestamp      = row[0].as<long long>(0);
-        e.host_ip        = row[1].as<std::string>("");
-        e.sensorseq      = static_cast<std::uint16_t>(row[2].as<int>(0));
-        e.sensortype     = static_cast<std::uint16_t>(row[3].as<int>(0));
-        e.sensorname     = row[4].as<std::string>("");
-        e.sensorvalue_L  = static_cast<std::uint16_t>(row[5].as<int>(0));
-        e.sensorvalue_H  = static_cast<std::uint16_t>(row[6].as<int>(0));
-        e.sensor_value   = static_cast<std::double_t>(e.sensorvalue_H) + static_cast<std::double_t>(e.sensorvalue_L) * 0.01;
-        e.sensoralmtype  = static_cast<std::uint16_t>(row[7].as<int>(0));
-        out[e.sensorname].push_back(std::move(e));
+    
+    for (const auto& sensor_row : sensors) {
+        const std::string sensorname = sensor_row[0].as<std::string>("");
+        pqxx::result r = tx.exec_params(
+            "SELECT EXTRACT(EPOCH FROM bucket)::bigint AS ts, "
+            "host_ip, sensorseq, sensortype, sensorname, "
+            "COALESCE(ROUND(AVG(sensorvalue_L)), 0)::smallint as sensorvalue_L, "
+            "COALESCE(ROUND(AVG(sensorvalue_H)), 0)::smallint as sensorvalue_H, "
+            "COALESCE(ROUND(AVG(sensoralmtype)), 0)::smallint as sensoralmtype "
+            "FROM ( "
+            "    SELECT "
+            "        host_ip, sensorseq, sensortype, sensorname, "
+            "        time_bucket_gapfill('10 seconds', \"time\", now() - $2::interval, now()) AS bucket, "
+            "        AVG(sensorvalue_L) as sensorvalue_L, "
+            "        AVG(sensorvalue_H) as sensorvalue_H, "
+            "        AVG(sensoralmtype) as sensoralmtype "
+            "    FROM bmc_sensor "
+            "    WHERE host_ip = $1::inet AND sensorname = $3 AND \"time\" >= now() - $2::interval "
+            "    GROUP BY host_ip, sensorseq, sensortype, sensorname, bucket "
+            ") AS gapfilled_data "
+            "ORDER BY ts DESC",
+            host_ip, duration, sensorname
+        );
+        
+        for (const auto& row : r) {
+            BMCSensorRow e{};
+            e.timestamp      = row[0].as<long long>(0);
+            e.host_ip        = row[1].as<std::string>("");
+            e.sensorseq      = static_cast<std::uint16_t>(row[2].as<int>(0));
+            e.sensortype     = static_cast<std::uint16_t>(row[3].as<int>(0));
+            e.sensorname     = row[4].as<std::string>("");
+            e.sensorvalue_L  = static_cast<std::uint16_t>(row[5].as<int>(0));
+            e.sensorvalue_H  = static_cast<std::uint16_t>(row[6].as<int>(0));
+            e.sensor_value   = static_cast<std::double_t>(e.sensorvalue_H) + static_cast<std::double_t>(e.sensorvalue_L) * 0.01;
+            e.sensoralmtype  = static_cast<std::uint16_t>(row[7].as<int>(0));
+            out[sensorname].push_back(std::move(e));
+        }
     }
+    
     return out;
 }
 

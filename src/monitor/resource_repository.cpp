@@ -108,14 +108,41 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
     pqxx::connection c(conninfo_);
     pqxx::read_transaction tx{c};
 
-    // CPU
+    // CPU - 每10秒聚合平均值
     if (query_all || need.count("cpu")) {
         pqxx::result r = tx.exec_params(
-            "SELECT EXTRACT(EPOCH FROM time)::bigint AS ts, usage_percent, load_avg_1m, load_avg_5m, load_avg_15m,"
-            " core_count, core_allocated, temperature, voltage, current, power"
-            " FROM resource_cpu"
-            " WHERE host_ip = $1::inet AND time >= now() - $2::interval"
-            " ORDER BY time ASC",
+            // 2. 外层查询：负责格式化时间戳、处理NULL值和排序
+            "SELECT "
+            "    EXTRACT(EPOCH FROM bucket)::bigint AS ts, "
+            "    COALESCE(usage_percent, 0) as usage_percent, "
+            "    COALESCE(load_avg_1m, 0) as load_avg_1m, "
+            "    COALESCE(load_avg_5m, 0) as load_avg_5m, "
+            "    COALESCE(load_avg_15m, 0) as load_avg_15m, "
+            "    COALESCE(core_count, 0)::int as core_count, "
+            "    COALESCE(core_allocated, 0)::int as core_allocated, "
+            "    COALESCE(temperature, 0) as temperature, "
+            "    COALESCE(voltage, 0) as voltage, "
+            "    COALESCE(current, 0) as current, "
+            "    COALESCE(power, 0) as power "
+            "FROM ( "
+            // 1. 内层查询：只调用一次 time_bucket_gapfill，并完成所有聚合计算
+            "    SELECT "
+            "        time_bucket_gapfill('10 seconds', time, now() - $2::interval, now()) AS bucket, "
+            "        AVG(usage_percent) as usage_percent, "
+            "        AVG(load_avg_1m) as load_avg_1m, "
+            "        AVG(load_avg_5m) as load_avg_5m, "
+            "        AVG(load_avg_15m) as load_avg_15m, "
+            "        ROUND(AVG(core_count)) as core_count, "
+            "        ROUND(AVG(core_allocated)) as core_allocated, "
+            "        AVG(temperature) as temperature, "
+            "        AVG(voltage) as voltage, "
+            "        AVG(current) as current, "
+            "        AVG(power) as power "
+            "    FROM resource_cpu "
+            "    WHERE host_ip = $1::inet AND time >= now() - $2::interval "
+            "    GROUP BY bucket " // 直接按内层定义的别名 bucket 分组
+            ") AS gapfilled_data " // 给子查询起一个别名
+            "ORDER BY ts ASC",
             host_ip, duration
         );
         out.cpu.reserve(r.size());
@@ -136,13 +163,27 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
         }
     }
 
-    // Memory
+    // Memory - 每10秒聚合平均值
     if (query_all || need.count("memory")) {
         pqxx::result r = tx.exec_params(
-            "SELECT EXTRACT(EPOCH FROM time)::bigint AS ts, total, used, free, usage_percent"
-            " FROM resource_memory"
-            " WHERE host_ip = $1::inet AND time >= now() - $2::interval"
-            " ORDER BY time ASC",
+            "SELECT "
+            "    EXTRACT(EPOCH FROM bucket)::bigint AS ts, "
+            "    COALESCE(total, 0)::bigint as total, "
+            "    COALESCE(used, 0)::bigint as used, "
+            "    COALESCE(free, 0)::bigint as free, "
+            "    COALESCE(usage_percent, 0) as usage_percent "
+            "FROM ( "
+            "    SELECT "
+            "        time_bucket_gapfill('10 seconds', time, now() - $2::interval, now()) AS bucket, "
+            "        ROUND(AVG(total)) as total, "
+            "        ROUND(AVG(used)) as used, "
+            "        ROUND(AVG(free)) as free, "
+            "        AVG(usage_percent) as usage_percent "
+            "    FROM resource_memory "
+            "    WHERE host_ip = $1::inet AND time >= now() - $2::interval "
+            "    GROUP BY bucket "
+            ") AS gapfilled_data "
+            "ORDER BY ts ASC",
             host_ip, duration
         );
         out.memory.reserve(r.size());
@@ -157,13 +198,27 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
         }
     }
 
-    // Network (按 interface 分组)
+    // Network - 每10秒聚合平均值，按 interface 分组
     if (query_all || need.count("network")) {
         pqxx::result r = tx.exec_params(
-            "SELECT interface, EXTRACT(EPOCH FROM time)::bigint AS ts, rx_bytes, tx_bytes, rx_packets, tx_packets, rx_errors, tx_errors, rx_rate, tx_rate"
-            " FROM resource_network"
-            " WHERE host_ip = $1::inet AND time >= now() - $2::interval"
-            " ORDER BY interface, time ASC",
+            "SELECT interface, EXTRACT(EPOCH FROM bucket)::bigint AS ts, "
+            "COALESCE(rx_bytes, 0)::bigint as rx_bytes, COALESCE(tx_bytes, 0)::bigint as tx_bytes, "
+            "COALESCE(rx_packets, 0)::bigint as rx_packets, COALESCE(tx_packets, 0)::bigint as tx_packets, "
+            "COALESCE(rx_errors, 0)::bigint as rx_errors, COALESCE(tx_errors, 0)::bigint as tx_errors, "
+            "COALESCE(rx_rate, 0)::bigint as rx_rate, COALESCE(tx_rate, 0)::bigint as tx_rate "
+            "FROM ( "
+            "    SELECT "
+            "        interface, "
+            "        time_bucket_gapfill('10 seconds', time, now() - $2::interval, now()) AS bucket, "
+            "        ROUND(AVG(rx_bytes)) as rx_bytes, ROUND(AVG(tx_bytes)) as tx_bytes, "
+            "        ROUND(AVG(rx_packets)) as rx_packets, ROUND(AVG(tx_packets)) as tx_packets, "
+            "        ROUND(AVG(rx_errors)) as rx_errors, ROUND(AVG(tx_errors)) as tx_errors, "
+            "        ROUND(AVG(rx_rate)) as rx_rate, ROUND(AVG(tx_rate)) as tx_rate "
+            "    FROM resource_network "
+            "    WHERE host_ip = $1::inet AND time >= now() - $2::interval "
+            "    GROUP BY interface, bucket "
+            ") AS gapfilled_data "
+            "ORDER BY interface, ts ASC",
             host_ip, duration
         );
         for (const auto& row : r) {
@@ -183,13 +238,23 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
         }
     }
 
-    // Disk (按 device key 分组)
+    // Disk - 每10秒聚合平均值，按 device key 分组
     if (query_all || need.count("disk")) {
         pqxx::result r = tx.exec_params(
-            "SELECT device, mount_point, EXTRACT(EPOCH FROM time)::bigint AS ts, total, used, free, usage_percent"
-            " FROM resource_disk"
-            " WHERE host_ip = $1::inet AND time >= now() - $2::interval"
-            " ORDER BY device, time ASC",
+            "SELECT device, mount_point, EXTRACT(EPOCH FROM bucket)::bigint AS ts, "
+            "COALESCE(total, 0)::bigint as total, COALESCE(used, 0)::bigint as used, COALESCE(free, 0)::bigint as free, "
+            "COALESCE(usage_percent, 0) as usage_percent "
+            "FROM ( "
+            "    SELECT "
+            "        device, mount_point, "
+            "        time_bucket_gapfill('10 seconds', time, now() - $2::interval, now()) AS bucket, "
+            "        ROUND(AVG(total)) as total, ROUND(AVG(used)) as used, ROUND(AVG(free)) as free, "
+            "        AVG(usage_percent) as usage_percent "
+            "    FROM resource_disk "
+            "    WHERE host_ip = $1::inet AND time >= now() - $2::interval "
+            "    GROUP BY device, mount_point, bucket "
+            ") AS gapfilled_data "
+            "ORDER BY device, ts ASC",
             host_ip, duration
         );
         for (const auto& row : r) {
@@ -206,13 +271,25 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
         }
     }
 
-    // GPU (按 gpu_index 分组)
+    // GPU - 每10秒聚合平均值，按 gpu_index 分组
     if (query_all || need.count("gpu")) {
         pqxx::result r = tx.exec_params(
-            "SELECT gpu_index, name, EXTRACT(EPOCH FROM time)::bigint AS ts, compute_usage, mem_usage, mem_used, mem_total, temperature, power"
-            " FROM resource_gpu"
-            " WHERE host_ip = $1::inet AND time >= now() - $2::interval"
-            " ORDER BY gpu_index, time ASC",
+            "SELECT gpu_index, name, EXTRACT(EPOCH FROM bucket)::bigint AS ts, "
+            "COALESCE(compute_usage, 0) as compute_usage, COALESCE(mem_usage, 0) as mem_usage, "
+            "COALESCE(mem_used, 0)::bigint as mem_used, COALESCE(mem_total, 0)::bigint as mem_total, "
+            "COALESCE(temperature, 0) as temperature, COALESCE(power, 0) as power "
+            "FROM ( "
+            "    SELECT "
+            "        gpu_index, name, "
+            "        time_bucket_gapfill('10 seconds', time, now() - $2::interval, now()) AS bucket, "
+            "        AVG(compute_usage) as compute_usage, AVG(mem_usage) as mem_usage, "
+            "        ROUND(AVG(mem_used)) as mem_used, ROUND(AVG(mem_total)) as mem_total, "
+            "        AVG(temperature) as temperature, AVG(power) as power "
+            "    FROM resource_gpu "
+            "    WHERE host_ip = $1::inet AND time >= now() - $2::interval "
+            "    GROUP BY gpu_index, name, bucket "
+            ") AS gapfilled_data "
+            "ORDER BY gpu_index, ts ASC",
             host_ip, duration
         );
         for (const auto& row : r) {
