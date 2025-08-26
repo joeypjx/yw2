@@ -142,6 +142,7 @@ std::unordered_map<std::string, std::vector<BMCSensorRow>> BMCRepository::queryB
         e.sensorname     = row[4].as<std::string>("");
         e.sensorvalue_L  = static_cast<std::uint16_t>(row[5].as<int>(0));
         e.sensorvalue_H  = static_cast<std::uint16_t>(row[6].as<int>(0));
+        e.sensorvalue    = static_cast<std::double_t>(e.sensorvalue_H) + static_cast<std::double_t>(e.sensorvalue_L) * 0.01;
         e.sensoralmtype  = static_cast<std::uint16_t>(row[7].as<int>(0));
         out[e.sensorname].push_back(std::move(e));
     }

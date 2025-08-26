@@ -236,18 +236,47 @@ void WebController::setupRoutes() {
         }
     });
 
-    // 获取所有 box 的最新 BMC 简要信息
+    // 获取指定 box 的最新 BMC 简要信息（必须提供 box_id 参数）
     service_->GET("/box/bmc", [this](const HttpContextPtr& ctx) {
         if (!bmc_module_) return 500;
 
-        auto all = bmc_module_->getAllBoxBMC();
-        nlohmann::json arr = nlohmann::json::array();
-        arr.get_ref<nlohmann::json::array_t&>().reserve(all.size());
-        for (const auto& info : all) {
+        // 检查 box_id 参数是否存在
+        std::string box_id_param = ctx->param("box_id");
+        if (box_id_param.empty()) {
+            nlohmann::json resp = {
+                {"api_version", 1},
+                {"status", "error"},
+                {"message", "box_id parameter is required"}
+            };
+            ctx->setContentType("application/json");
+            return ctx->send(resp.dump(2));
+        }
+
+        // 获取 duration 参数，默认为 "5m"
+        std::string duration = ctx->param("duration");
+        if (duration.empty()) {
+            duration = "5m";
+        }
+
+        // 获取指定 box_id 的 BMC 数据
+        try {
+            int box_id = std::stoi(box_id_param);
+            auto info_opt = bmc_module_->getBoxBMC(box_id);
+            
+            if (!info_opt.has_value()) {
+                nlohmann::json resp = {
+                    {"api_version", 1},
+                    {"status", "error"},
+                    {"message", "Box not found or no BMC data available"}
+                };
+                ctx->setContentType("application/json");
+                return ctx->send(resp.dump(2));
+            }
+
+            const auto& info = info_opt.value();
             nlohmann::json j;
             j["box_id"] = info.boxid;
-            j["box_name"] = info.boxname;
-            j["timestamp"] = info.timestamp;
+            
             // fan data
             nlohmann::json fans = nlohmann::json::array();
             fans.get_ref<nlohmann::json::array_t&>().reserve(2);
@@ -279,19 +308,32 @@ void WebController::setupRoutes() {
                 fans.push_back(std::move(jf));
             }
             j["fan"] = std::move(fans);
-            arr.push_back(std::move(j));
+
+            // hostip 192.168.67.181 node sensor data
+            if (bmc_module_) {
+                auto grouped = bmc_module_->queryBMCSensor("192.168.67.181", duration);
+                nlohmann::json bmc_json = grouped; // 直接序列化 map<string, vector<BMCSensorRow>>
+                j["sensor"] = std::move(bmc_json);
+            }
+
+            nlohmann::json resp = {
+                {"api_version", 1},
+                {"data", j},
+                {"status", "success"},
+            };
+
+            ctx->setContentType("application/json");
+            return ctx->send(resp.dump(2));
+            
+        } catch (const std::exception& e) {
+            nlohmann::json resp = {
+                {"api_version", 1},
+                {"status", "error"},
+                {"message", "Invalid box_id parameter"}
+            };
+            ctx->setContentType("application/json");
+            return ctx->send(resp.dump(2));
         }
-
-        nlohmann::json resp = {
-            {"api_version", 1},
-            {"data", {
-                {"box_bmc", arr}
-            }},
-            {"status", "success"},
-        };
-
-        ctx->setContentType("application/json");
-        return ctx->send(resp.dump(2));
     });
 
     // 获取所有节点（由 INodeModule 提供数据），并附带组件列表（由 IMonitorModule 提供）
@@ -344,9 +386,9 @@ void WebController::setupRoutes() {
         } else {
             resp = {
                 {"api_version", 1},
-                {"data", 
+                {"data", {
                     {"nodes", resp_nodes}
-                },
+                }},
                 {"status", "success"},
             };
         }

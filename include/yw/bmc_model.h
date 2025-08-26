@@ -62,8 +62,9 @@ struct BMCSensorRow {
     std::uint16_t  sensorseq = 0;
     std::uint16_t  sensortype = 0;
     std::string    sensorname;
-    std::uint16_t  sensorvalue_L = 0;
-    std::uint16_t  sensorvalue_H = 0;
+    std::uint16_t  sensorvalue_L = 0; // decimal part
+    std::uint16_t  sensorvalue_H = 0; // integer part
+    std::double_t  sensorvalue = 0; // integer part + decimal part *0.01
     std::uint16_t  sensoralmtype = 0;
 };
 
@@ -75,6 +76,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(BMCSensorRow,
     sensorname,
     sensorvalue_L,
     sensorvalue_H,
+    sensorvalue,
     sensoralmtype
 )
 
