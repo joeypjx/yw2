@@ -109,10 +109,21 @@ bool AlertManager::deleteRule(const std::string& id) {
 
 // 删除静默/抑制/路由/通道相关：不实现
 
-// 告警查询与操作（占位实现）
-std::vector<AlertEvent> AlertManager::queryEvents(const std::string& duration) const { return event_repo_->query(duration); }
+// 告警查询与操作
+std::vector<AlertEvent> AlertManager::queryEvents(const std::string& duration) const { 
+    return event_repo_->query(duration); 
+}
+
 bool AlertManager::ackAlert(const std::string& fingerprint, const std::string& user, const std::string& comment) { return state_manager_->ack(fingerprint, user, comment); }
-bool AlertManager::appendAlertEvent(const AlertEvent& event) { return event_repo_->append(event); }
+
+bool AlertManager::appendAlertEvent(const AlertEvent& event) { 
+    const bool ok = event_repo_->append(event);
+    if (ok) {
+        dispatcher_.dispatch(AlertManagerEvent::AlertEventAppended, event);
+        pusher_.push(event);
+    }
+    return ok;
+}
 
 } // namespace alert
 } // namespace yw

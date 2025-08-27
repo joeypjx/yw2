@@ -576,6 +576,31 @@ void WebController::setupRoutes() {
         ctx->setContentType("application/json");
         return ctx->send(resp.dump(2));
     });
+
+    // 手动告警组件状态
+    service_->POST("/alert/component", [this](const HttpContextPtr& ctx) {
+        if (!alert_module_) return 500;
+        auto body = ctx->body();
+        if (body.empty()) {
+            return ctx->send("{\"error\":\"empty request body\"}");
+        }
+        // {"host_ip","instance_id","uuid","index","status"};
+        auto json = nlohmann::json::parse(body);
+        // 创建告警事件
+        alert::AlertEvent event;
+        event.fingerprint = json.value("host_ip", "") + "_" + json.value("instance_id", "") + "_" + json.value("uuid", "") + "_" + json.value("index", "");
+        event.rule_id = json.value("rule_id", "component");
+        event.action = "firing";
+        event.status = alert::AlertStatus::Firing;
+        event.severity = alert::Severity::Warn; // 告警级别
+        event.context = json;
+        event.title = "业务组件状态异常";
+        event.description = json.value("host_ip", "") + " 节点上 " + json.value("instance_id", "") + " 组件状态为 " + json.value("status", "unknown");
+        event.timestamp_ms = std::chrono::system_clock::now().time_since_epoch().count();
+        alert_module_->appendAlertEvent(event);
+
+        return ctx->send("{\"status\":\"success\"}");
+    });
 }
 
 } // namespace web
