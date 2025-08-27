@@ -18,7 +18,6 @@ bool AlertPusher::start(const char* ip_port) {
     if (started_) return true;
 
     ws_service_->onopen = [this](const WebSocketChannelPtr& channel, const HttpRequestPtr& req){
-        (void)req;
         std::lock_guard<std::mutex> g(mu_);
         channels_.insert(channel);
     };
