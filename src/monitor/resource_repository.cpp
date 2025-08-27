@@ -139,7 +139,7 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
             "        AVG(current) as current, "
             "        AVG(power) as power "
             "    FROM resource_cpu "
-            "    WHERE host_ip = $1::inet AND time >= now() - $2::interval "
+            "    WHERE host_ip = $1::inet AND time >= now() - $2::interval AND time <= now() "
             "    GROUP BY bucket " // 直接按内层定义的别名 bucket 分组
             ") AS gapfilled_data " // 给子查询起一个别名
             "ORDER BY ts ASC",
@@ -180,7 +180,7 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
             "        ROUND(AVG(free)) as free, "
             "        AVG(usage_percent) as usage_percent "
             "    FROM resource_memory "
-            "    WHERE host_ip = $1::inet AND time >= now() - $2::interval "
+            "    WHERE host_ip = $1::inet AND time >= now() - $2::interval AND time <= now() "
             "    GROUP BY bucket "
             ") AS gapfilled_data "
             "ORDER BY ts ASC",
@@ -200,27 +200,45 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
 
     // Network - 每10秒聚合平均值，按 interface 分组
     if (query_all || need.count("network")) {
-        pqxx::result r = tx.exec_params(
-            "SELECT interface, EXTRACT(EPOCH FROM bucket)::bigint AS ts, "
-            "COALESCE(rx_bytes, 0)::bigint as rx_bytes, COALESCE(tx_bytes, 0)::bigint as tx_bytes, "
-            "COALESCE(rx_packets, 0)::bigint as rx_packets, COALESCE(tx_packets, 0)::bigint as tx_packets, "
-            "COALESCE(rx_errors, 0)::bigint as rx_errors, COALESCE(tx_errors, 0)::bigint as tx_errors, "
-            "COALESCE(rx_rate, 0)::bigint as rx_rate, COALESCE(tx_rate, 0)::bigint as tx_rate "
-            "FROM ( "
-            "    SELECT "
-            "        interface, "
-            "        time_bucket_gapfill('10 seconds', time, now() - $2::interval, now()) AS bucket, "
-            "        ROUND(AVG(rx_bytes)) as rx_bytes, ROUND(AVG(tx_bytes)) as tx_bytes, "
-            "        ROUND(AVG(rx_packets)) as rx_packets, ROUND(AVG(tx_packets)) as tx_packets, "
-            "        ROUND(AVG(rx_errors)) as rx_errors, ROUND(AVG(tx_errors)) as tx_errors, "
-            "        ROUND(AVG(rx_rate)) as rx_rate, ROUND(AVG(tx_rate)) as tx_rate "
-            "    FROM resource_network "
-            "    WHERE host_ip = $1::inet AND time >= now() - $2::interval "
-            "    GROUP BY interface, bucket "
-            ") AS gapfilled_data "
-            "ORDER BY interface, ts ASC",
-            host_ip, duration
-        );
+        const char* network_query = R"SQL(
+WITH bucket_series AS (
+  SELECT generate_series(
+    date_trunc('second', now() - $2::interval),
+    date_trunc('second', now()),
+    '10 seconds'::interval
+  ) AS bucket
+),
+interface_dims AS (
+  SELECT DISTINCT interface FROM resource_network WHERE host_ip = $1::inet
+)
+SELECT
+    dims.interface,
+    EXTRACT(EPOCH FROM buckets.bucket)::bigint AS ts,
+    COALESCE(ROUND(AVG(metrics.rx_bytes)), 0)::bigint AS rx_bytes,
+    COALESCE(ROUND(AVG(metrics.tx_bytes)), 0)::bigint AS tx_bytes,
+    COALESCE(ROUND(AVG(metrics.rx_packets)), 0)::bigint AS rx_packets,
+    COALESCE(ROUND(AVG(metrics.tx_packets)), 0)::bigint AS tx_packets,
+    COALESCE(ROUND(AVG(metrics.rx_errors)), 0)::bigint AS rx_errors,
+    COALESCE(ROUND(AVG(metrics.tx_errors)), 0)::bigint AS tx_errors,
+    COALESCE(ROUND(AVG(metrics.rx_rate)), 0)::bigint AS rx_rate,
+    COALESCE(ROUND(AVG(metrics.tx_rate)), 0)::bigint AS tx_rate
+FROM
+    interface_dims AS dims
+CROSS JOIN
+    bucket_series AS buckets
+LEFT JOIN
+    resource_network AS metrics
+ON
+    metrics.interface = dims.interface
+    AND metrics.host_ip = $1::inet
+    AND time_bucket('10 seconds', metrics.time) = buckets.bucket
+    AND metrics.time >= now() - $2::interval AND metrics.time <= now()
+GROUP BY
+    dims.interface, buckets.bucket
+ORDER BY
+    dims.interface, ts ASC
+)SQL";
+        pqxx::result r = tx.exec_params(network_query, host_ip, duration);
         for (const auto& row : r) {
             NetworkPoint p{};
             const std::string iface = row[0].as<std::string>("");
@@ -240,23 +258,43 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
 
     // Disk - 每10秒聚合平均值，按 device key 分组
     if (query_all || need.count("disk")) {
-        pqxx::result r = tx.exec_params(
-            "SELECT device, mount_point, EXTRACT(EPOCH FROM bucket)::bigint AS ts, "
-            "COALESCE(total, 0)::bigint as total, COALESCE(used, 0)::bigint as used, COALESCE(free, 0)::bigint as free, "
-            "COALESCE(usage_percent, 0) as usage_percent "
-            "FROM ( "
-            "    SELECT "
-            "        device, mount_point, "
-            "        time_bucket_gapfill('10 seconds', time, now() - $2::interval, now()) AS bucket, "
-            "        ROUND(AVG(total)) as total, ROUND(AVG(used)) as used, ROUND(AVG(free)) as free, "
-            "        AVG(usage_percent) as usage_percent "
-            "    FROM resource_disk "
-            "    WHERE host_ip = $1::inet AND time >= now() - $2::interval "
-            "    GROUP BY device, mount_point, bucket "
-            ") AS gapfilled_data "
-            "ORDER BY device, ts ASC",
-            host_ip, duration
-        );
+        const char* disk_query = R"SQL(
+WITH bucket_series AS (
+  SELECT generate_series(
+    date_trunc('second', now() - $2::interval),
+    date_trunc('second', now()),
+    '10 seconds'::interval
+  ) AS bucket
+),
+disk_dims AS (
+  SELECT DISTINCT device, mount_point FROM resource_disk WHERE host_ip = $1::inet
+)
+SELECT
+    dims.device,
+    dims.mount_point,
+    EXTRACT(EPOCH FROM buckets.bucket)::bigint AS ts,
+    COALESCE(ROUND(AVG(metrics.total)), 0)::bigint AS total,
+    COALESCE(ROUND(AVG(metrics.used)), 0)::bigint AS used,
+    COALESCE(ROUND(AVG(metrics.free)), 0)::bigint AS free,
+    COALESCE(AVG(metrics.usage_percent), 0) AS usage_percent
+FROM
+    disk_dims AS dims
+CROSS JOIN
+    bucket_series AS buckets
+LEFT JOIN
+    resource_disk AS metrics
+ON
+    metrics.device = dims.device
+    AND metrics.mount_point = dims.mount_point
+    AND metrics.host_ip = $1::inet
+    AND time_bucket('10 seconds', metrics.time) = buckets.bucket
+    AND metrics.time >= now() - $2::interval AND metrics.time <= now()
+GROUP BY
+    dims.device, dims.mount_point, buckets.bucket
+ORDER BY
+    dims.device, ts ASC
+)SQL";
+        pqxx::result r = tx.exec_params(disk_query, host_ip, duration);
         for (const auto& row : r) {
             DiskPoint p{};
             const std::string device = row[0].as<std::string>("");
@@ -273,25 +311,45 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
 
     // GPU - 每10秒聚合平均值，按 gpu_index 分组
     if (query_all || need.count("gpu")) {
-        pqxx::result r = tx.exec_params(
-            "SELECT gpu_index, name, EXTRACT(EPOCH FROM bucket)::bigint AS ts, "
-            "COALESCE(compute_usage, 0) as compute_usage, COALESCE(mem_usage, 0) as mem_usage, "
-            "COALESCE(mem_used, 0)::bigint as mem_used, COALESCE(mem_total, 0)::bigint as mem_total, "
-            "COALESCE(temperature, 0) as temperature, COALESCE(power, 0) as power "
-            "FROM ( "
-            "    SELECT "
-            "        gpu_index, name, "
-            "        time_bucket_gapfill('10 seconds', time, now() - $2::interval, now()) AS bucket, "
-            "        AVG(compute_usage) as compute_usage, AVG(mem_usage) as mem_usage, "
-            "        ROUND(AVG(mem_used)) as mem_used, ROUND(AVG(mem_total)) as mem_total, "
-            "        AVG(temperature) as temperature, AVG(power) as power "
-            "    FROM resource_gpu "
-            "    WHERE host_ip = $1::inet AND time >= now() - $2::interval "
-            "    GROUP BY gpu_index, name, bucket "
-            ") AS gapfilled_data "
-            "ORDER BY gpu_index, ts ASC",
-            host_ip, duration
-        );
+        const char* gpu_query = R"SQL(
+WITH bucket_series AS (
+  SELECT generate_series(
+    date_trunc('second', now() - $2::interval),
+    date_trunc('second', now()),
+    '10 seconds'::interval
+  ) AS bucket
+),
+gpu_dims AS (
+  SELECT DISTINCT gpu_index, name FROM resource_gpu WHERE host_ip = $1::inet
+)
+SELECT
+    dims.gpu_index,
+    dims.name,
+    EXTRACT(EPOCH FROM buckets.bucket)::bigint AS ts,
+    COALESCE(AVG(metrics.compute_usage), 0) AS compute_usage,
+    COALESCE(AVG(metrics.mem_usage), 0) AS mem_usage,
+    COALESCE(ROUND(AVG(metrics.mem_used)), 0)::bigint AS mem_used,
+    COALESCE(ROUND(AVG(metrics.mem_total)), 0)::bigint AS mem_total,
+    COALESCE(AVG(metrics.temperature), 0) AS temperature,
+    COALESCE(AVG(metrics.power), 0) AS power
+FROM
+    gpu_dims AS dims
+CROSS JOIN
+    bucket_series AS buckets
+LEFT JOIN
+    resource_gpu AS metrics
+ON
+    metrics.gpu_index = dims.gpu_index
+    AND metrics.name = dims.name
+    AND metrics.host_ip = $1::inet
+    AND time_bucket('10 seconds', metrics.time) = buckets.bucket
+    AND metrics.time >= now() - $2::interval AND metrics.time <= now()
+GROUP BY
+    dims.gpu_index, dims.name, buckets.bucket
+ORDER BY
+    dims.gpu_index, ts ASC
+)SQL";
+        pqxx::result r = tx.exec_params(gpu_query, host_ip, duration);
         for (const auto& row : r) {
             GpuPoint p{};
             const int index = row[0].as<int>(0);
