@@ -8,6 +8,14 @@ BEGIN;
 -- CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 -- 2) 资源表（宽表，分域）
+-- 节点心跳 Alive（每次资源上报时打一条 1）
+CREATE TABLE IF NOT EXISTS resource_alive (
+  time     TIMESTAMPTZ NOT NULL,
+  host_ip  INET        NOT NULL,
+  alive    SMALLINT    NOT NULL
+);
+SELECT create_hypertable('resource_alive','time','host_ip',4, if_not_exists => TRUE);
+
 -- CPU
 CREATE TABLE IF NOT EXISTS resource_cpu (
   time            TIMESTAMPTZ NOT NULL,
@@ -115,6 +123,7 @@ CREATE INDEX IF NOT EXISTS idx_net_host_iface_time    ON resource_network  (host
 CREATE INDEX IF NOT EXISTS idx_disk_host_dev_time     ON resource_disk     (host_ip, device, time DESC);
 CREATE INDEX IF NOT EXISTS idx_gpu_host_idx_time      ON resource_gpu      (host_ip, gpu_index, time DESC);
 CREATE INDEX IF NOT EXISTS idx_comp_host_inst_time    ON component_resource(host_ip, instance_id, time DESC);
+CREATE INDEX IF NOT EXISTS idx_alive_host_time        ON resource_alive     (host_ip, time DESC);
 
 -- 4) 压缩与保留策略
 -- 显式设置压缩策略，指定 orderby/segmentby 以消除默认推断告警
@@ -146,6 +155,10 @@ ALTER TABLE component_resource SET (
   timescaledb.compress_orderby = 'time DESC, host_ip',
   timescaledb.compress_segmentby = 'instance_id'
 );
+ALTER TABLE resource_alive SET (
+  timescaledb.compress = true,
+  timescaledb.compress_orderby = 'time DESC, host_ip'
+);
 
 SELECT add_compression_policy('resource_cpu',       INTERVAL '7 days', if_not_exists => TRUE);
 SELECT add_compression_policy('resource_memory',    INTERVAL '7 days', if_not_exists => TRUE);
@@ -153,6 +166,7 @@ SELECT add_compression_policy('resource_network',   INTERVAL '7 days', if_not_ex
 SELECT add_compression_policy('resource_disk',      INTERVAL '7 days', if_not_exists => TRUE);
 SELECT add_compression_policy('resource_gpu',       INTERVAL '7 days', if_not_exists => TRUE);
 SELECT add_compression_policy('component_resource', INTERVAL '7 days', if_not_exists => TRUE);
+SELECT add_compression_policy('resource_alive',     INTERVAL '7 days', if_not_exists => TRUE);
 
 SELECT add_retention_policy('resource_cpu',       INTERVAL '90 days', if_not_exists => TRUE);
 SELECT add_retention_policy('resource_memory',    INTERVAL '90 days', if_not_exists => TRUE);
@@ -160,6 +174,7 @@ SELECT add_retention_policy('resource_network',   INTERVAL '90 days', if_not_exi
 SELECT add_retention_policy('resource_disk',      INTERVAL '90 days', if_not_exists => TRUE);
 SELECT add_retention_policy('resource_gpu',       INTERVAL '90 days', if_not_exists => TRUE);
 SELECT add_retention_policy('component_resource', INTERVAL '90 days', if_not_exists => TRUE);
+SELECT add_retention_policy('resource_alive',     INTERVAL '90 days', if_not_exists => TRUE);
 
 COMMIT;
 

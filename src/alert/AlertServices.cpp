@@ -96,6 +96,9 @@ nlohmann::json SimpleTimeseriesProvider::evaluate(const std::string& expression,
         table = "resource_gpu";
         value_col = field;
         partition_cols = {"gpu_index"};
+    } else if (domain == "alive") {
+        table = "resource_alive";
+        value_col = field; // alive
     } else {
         return out; // Unsupported domain
     }
@@ -143,7 +146,36 @@ nlohmann::json SimpleTimeseriesProvider::evaluate(const std::string& expression,
     std::string select_list = join_str(select_cols, ", ");
     std::string group_by_list = join_str(group_by_cols, ", ");
 
-    if (agg == "last" || agg == "latest") {
+    if (domain == "alive") {
+        // 特殊处理：心跳离线检测
+        // 需求：窗口内若无记录，按 0 处理；有记录取聚合（默认 max）
+        std::string agg_fn = "AVG";
+        if (agg == "max") agg_fn = "MAX";
+        else if (agg == "min") agg_fn = "MIN";
+
+        // 如果 selector 指定 host_ip，则只对该主机做 LEFT JOIN，以保证无样本时也返回一行 value=0
+        auto it_host = selector.find("host_ip");
+        if (it_host != selector.end()) {
+            // 重置参数，仅包含 host_ip
+            params.clear();
+            params.push_back(it_host->second);
+            sql = "SELECT host(h.host_ip) AS host_ip, "
+                  "COALESCE(" + agg_fn + "(a.alive), 0) AS value, "
+                  "COALESCE(COUNT(a.alive), 0) AS samples, MAX(a.time) AS last_ts "
+                  "FROM (SELECT $1::inet AS host_ip) h "
+                  "LEFT JOIN resource_alive a ON a.host_ip = h.host_ip AND a.time > now() - " + interval_sql + " "
+                  "GROUP BY h.host_ip";
+        } else {
+            // 未指定 host，则取所有出现过的主机作为维度，LEFT JOIN 当前窗口
+            sql = "WITH dims AS (SELECT DISTINCT host_ip FROM resource_alive) "
+                  "SELECT host(d.host_ip) AS host_ip, "
+                  "COALESCE(" + agg_fn + "(a.alive), 0) AS value, "
+                  "COALESCE(COUNT(a.alive), 0) AS samples, MAX(a.time) AS last_ts "
+                  "FROM dims d "
+                  "LEFT JOIN resource_alive a ON a.host_ip = d.host_ip AND a.time > now() - " + interval_sql + " "
+                  "GROUP BY d.host_ip";
+        }
+    } else if (agg == "last" || agg == "latest") {
         sql = "SELECT DISTINCT ON (" + group_by_list + ") " + select_list + ", " + value_col + " AS value, "
               "1 AS samples, time AS last_ts FROM " + table +
               " WHERE time > now() - " + interval_sql + where_clause +

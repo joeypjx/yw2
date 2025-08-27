@@ -63,9 +63,10 @@ COMMENT ON COLUMN alert_rule.updated_at IS '规则最后更新时间';
 
 -- 创建一些示例规则（可选）
 INSERT INTO alert_rule (id, name, description, expression, time_window, eval_every, severity, tag, selector, for_times) VALUES
-    ('cpu_high', 'CPU使用率过高', '当CPU使用率持续超过80%时触发告警，可能表示系统负载过高或存在性能问题', 'cpu.usage_percent.avg > 80', '5m', '1m', 'warn', 'resource', '{"host_type": "server"}', 2),
-    ('memory_high', '内存使用率过高', '当内存使用率超过90%时触发严重告警，可能导致系统不稳定或服务中断', 'memory.usage_percent.avg > 90', '5m', '1m', 'critical', 'resource', '{"host_type": "server"}', 1),
-    ('disk_high', '磁盘使用率过高', '当磁盘使用率超过85%时触发告警，建议及时清理或扩容存储空间', 'disk.usage_percent.avg > 85', '10m', '2m', 'warn', 'storage', '{"host_type": "server"}', 3)
+    ('cpu_high', 'CPU使用率过高', '当CPU使用率持续超过80%时触发告警，可能表示系统负载过高或存在性能问题', 'cpu.usage_percent.avg > 80', '5m', '1m', '一般', 'resource', '{"host_type": "server"}', 2),
+    ('memory_high', '内存使用率过高', '当内存使用率超过90%时触发严重告警，可能导致系统不稳定或服务中断', 'memory.usage_percent.avg > 90', '5m', '1m', '严重', 'resource', '{"host_type": "server"}', 1),
+    ('disk_high', '磁盘使用率过高', '当磁盘使用率超过85%时触发告警，建议及时清理或扩容存储空间', 'disk.usage_percent.avg > 85', '10m', '2m', '一般', 'storage', '{"host_type": "server"}', 3),
+    ('node_offline', '节点离线', '节点 {{host_ip}} 心跳在5秒窗口内未出现，判定离线', 'alive.alive.max == 0', '5s', '10s', '严重', 'availability', NULL, 1)
 ON CONFLICT (id) DO NOTHING;
 
 -- 创建规则统计视图

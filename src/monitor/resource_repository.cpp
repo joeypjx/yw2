@@ -14,6 +14,12 @@ void ResourceRepository::save(const Resource& data) {
     pqxx::connection c(conninfo_);
     pqxx::work tx{c};
 
+    // Alive 心跳
+    tx.exec_params(
+        "INSERT INTO resource_alive(time, host_ip, alive) VALUES (now(), $1::inet, 1)",
+        data.host_ip
+    );
+
     // CPU
     tx.exec_params(
         "INSERT INTO resource_cpu(time, host_ip, usage_percent, load_avg_1m, load_avg_5m, load_avg_15m, core_count, core_allocated, temperature, voltage, current, power)"
