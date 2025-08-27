@@ -580,8 +580,6 @@ void BasicScheduler::registerTask(const std::string& id, std::int64_t interval_m
     const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
     tasks_[id] = TaskEntry{interval_ms, std::move(task), now_ms + interval_ms};
-    std::cout << "registerTask: " << id << " " << interval_ms << " " << now_ms + interval_ms << std::endl;
-    std::cout << "tasks_.size(): " << tasks_.size() << std::endl;
 }
 
 void BasicScheduler::unregisterTask(const std::string& id) {

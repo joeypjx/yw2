@@ -1,3 +1,4 @@
+// 1. 先包含 AlertManager.h
 #include "AlertManager.h"
 #include "DatabaseEventRepository.h"
 #include "DatabaseRuleRepository.h"
@@ -51,8 +52,10 @@ AlertManager::AlertManager() {
     evaluator_     = std::make_shared<BasicAlertEvaluator>(ts_);
     state_manager_ = std::make_shared<BasicAlertStateManager>(alert_repo_, event_repo_, fp_);
     scheduler_     = std::make_shared<BasicScheduler>();
+    // 启动内部 WebSocket 推送（默认端口 18999）
+    (void)pusher_.start(":18999");
 
-    // 为每条规则注册调度任务（当前在内存 repo，后续可改为动态刷新）
+    // 为每条规则注册调度任务
     scheduler_->start();
 
     for (const auto& r : rule_repo_->listRules()) {
@@ -62,12 +65,21 @@ AlertManager::AlertManager() {
             const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
             auto points = evaluator_->evaluate(r, now_ms);
-            (void)state_manager_->apply(r, points, now_ms);
+            auto events = state_manager_->apply(r, points, now_ms);
+            for (const auto& ev : events) {
+                dispatcher_.dispatch(AlertManagerEvent::AlertEventAppended, ev);
+                pusher_.push(ev);
+            }
         });
     }
 }
 
 AlertManager::~AlertManager() = default;
+
+bool AlertManager::startPusher(const std::string& ip_port) {
+    // return pusher_.start(ip_port.empty() ? ":18999" : ip_port.c_str());
+    return true;
+}
 
 // 规则管理（占位实现）
 std::vector<Rule> AlertManager::listRules() const { return rule_repo_->listRules(); }
@@ -81,7 +93,11 @@ bool AlertManager::upsertRule(const Rule& rule) {
             const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
             auto points = evaluator_->evaluate(rule, now_ms);
-            (void)state_manager_->apply(rule, points, now_ms);
+            auto events = state_manager_->apply(rule, points, now_ms);
+            for (const auto& ev : events) {
+                dispatcher_.dispatch(AlertManagerEvent::AlertEventAppended, ev);
+                pusher_.push(ev);
+            }
         });
     }
     return ok;
@@ -100,5 +116,6 @@ bool AlertManager::ackAlert(const std::string& fingerprint, const std::string& u
 
 } // namespace alert
 } // namespace yw
+
 
 

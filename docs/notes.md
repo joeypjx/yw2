@@ -20,3 +20,35 @@ cmake .. -DCMAKE_CXX_COMPILER=/opt/homebrew/bin/g++-15
 make -j8
 
 docker run -d -p 12345:80 swaggerapi/swagger-editor:v5.0.0-alpha.113
+
+// 
+
+docker run -d --name timescaledb \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=HZ715Net \
+  -e POSTGRES_DB=yw \
+  -p 5432:5432 \
+  -v /data/timescale_data:/var/lib/postgresql/data \
+  timescale/timescaledb:2.21.2-pg16
+
+docker cp *.sql timescaledb:/root
+docker exec -it timescaledb /bin/bash
+
+???
+psql -U postgres
+ CREATE DATABASE yw;
+ quit
+
+psql -U postgres -d yw -f timescaledb_setup.sql
+psql -U postgres -d yw -f bmc_timescaledb_setup.sql
+psql -U postgres -d yw -f alert_rule_setup.sql
+psql -U postgres -d yw -f alert_event_setup_basic.sql
+
+
+//
+
+docker load -i tdengine.tar
+docker run -d -p 6030:6030 -p 6041:6041 -p 6043:6043 -p 6044-6049:6044-6049 -p 6044-6045:6044-6045/udp -p 6060:6060 tdengine/tdengine:latest
+
+test HZ715Net resource
+

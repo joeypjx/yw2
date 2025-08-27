@@ -78,6 +78,7 @@ set(BUILD_UNITTEST OFF CACHE BOOL "Build libhv unit tests" FORCE)
 add_subdirectory(third_party/spdlog)
 add_subdirectory(third_party/libhv)
 add_subdirectory(third_party/json)
+add_subdirectory(third_party/eventpp)
 
 # 先添加 libpqxx 子目录
 set(SKIP_BUILD_TEST TRUE CACHE BOOL "Skip build test" FORCE)

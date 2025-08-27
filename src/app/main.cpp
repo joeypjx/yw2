@@ -1,3 +1,4 @@
+#include <spdlog/spdlog.h>
 #include "yw/core.h"
 #include "yw/node.h"
 #include "yw/monitor.h"
@@ -5,8 +6,6 @@
 #include "yw/bmc.h"
 #include "yw/alert.h"
 #include "yw/app_context.h"
-#include <spdlog/spdlog.h>
-#include <pqxx/pqxx>
 
 #include <csignal>
 #include <atomic>
@@ -23,8 +22,8 @@ static void handle_signal(int) {
 int main() {
     spdlog::info("Starting yw application...");
 
-    std::signal(SIGINT, handle_signal);
-    std::signal(SIGTERM, handle_signal);
+    // std::signal(SIGINT, handle_signal);
+    // std::signal(SIGTERM, handle_signal);
 
     std::shared_ptr<yw::core::AppContext> app_context = std::make_shared<yw::core::AppContext>();
     if (!app_context->initialize()) {

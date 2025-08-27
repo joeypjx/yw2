@@ -45,6 +45,11 @@ public:
     std::shared_ptr<hv::HttpService> getHttpService() const;
 
     /**
+     * @brief 获取底层 HttpServer 指针（用于注入给 AlertPusher）
+     */
+    hv::HttpServer* getHttpServer() const;
+
+    /**
      * @brief 运行HTTP服务器
      */
     void runHttpServer();

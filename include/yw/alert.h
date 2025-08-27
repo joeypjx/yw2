@@ -9,6 +9,10 @@
 
 #include "alert_model.h"
 
+namespace hv {
+class HttpServer;
+}
+
 namespace yw {
 namespace alert {
 
@@ -28,10 +32,12 @@ public:
     virtual bool ackAlert(const std::string& fingerprint, const std::string& user, const std::string& comment) = 0;
 };
 
+class AlertFactory {
+    public:
+        static std::shared_ptr<IAlertModule> getAlertModule();
+};
+
 } // namespace alert
 } // namespace yw
-
-// 包含 AlertFactory 定义
-#include "alert_factory.h"
 
 

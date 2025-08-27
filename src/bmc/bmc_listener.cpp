@@ -95,22 +95,34 @@ void BMCListener::runLoop() {
         if (n < 0) {
             if (!running_) break;
             std::perror("recvfrom");
+            std::cerr << "[BMCListener] recvfrom 失败，errno=" << errno << std::endl;
             continue;
         }
         if (static_cast<size_t>(n) < sizeof(UdpInfo)) {
             // 丢弃无效包
+            std::cerr << "[BMCListener] 收到包长度过小(" << n << "字节)，丢弃" << std::endl;
             continue;
         }
         const UdpInfo* pkt = reinterpret_cast<const UdpInfo*>(buffer);
         if (pkt->head != 0xA55A || pkt->tail != 0xA55A) {
+            std::cerr << "[BMCListener] 包头/包尾校验失败，丢弃" << std::endl;
             continue;
         }
-        if (handler_) handler_(*pkt);
+        if (handler_) {
+            std::cerr << "[BMCListener] 调用 handler 处理 box_id=" << pkt->boxid << std::endl;
+            handler_(*pkt);
+        }
         // 写入缓存（按 box_id）
-        if (bmc_cache_) bmc_cache_->addOrUpdate(*pkt);
+        if (bmc_cache_) {
+            bmc_cache_->addOrUpdate(*pkt);
+        }
         if (repository_) {
-            try { repository_->save(*pkt); }
-            catch (const std::exception& e) { std::cerr << "bmc save failed: " << e.what() << std::endl; }
+            try {
+                repository_->save(*pkt);
+            }
+            catch (const std::exception& e) {
+                std::cerr << "[BMCListener] bmc save failed: " << e.what() << std::endl;
+            }
         }
     }
 }

@@ -39,6 +39,11 @@ std::shared_ptr<hv::HttpService> AppContext::getHttpService() const {
     return http_service_;
 }
 
+hv::HttpServer* AppContext::getHttpServer() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return http_server_.get();
+}
+
 void AppContext::cleanup() {
     std::lock_guard<std::mutex> lock(mutex_);
     
