@@ -6,6 +6,7 @@
 #include "yw/bmc.h"
 #include "yw/alert.h"
 #include "yw/app_context.h"
+#include "yw/JsonConfig.h"
 
 #include <csignal>
 #include <atomic>
@@ -21,6 +22,13 @@ static void handle_signal(int) {
 // 组装应用
 int main() {
     spdlog::info("Starting yw application...");
+
+    // 加载全局配置
+    if (!yw::utils::JsonConfig::Load("config/config.json")) {
+        spdlog::warn("JsonConfig load failed: config/config.json");
+    } else {
+        spdlog::info("JsonConfig loaded: config/config.json");
+    }
 
     // std::signal(SIGINT, handle_signal);
     // std::signal(SIGTERM, handle_signal);

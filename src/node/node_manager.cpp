@@ -7,6 +7,7 @@
 #include <hv/HttpService.h>
 #include <chrono>
 #include "yw/MulticastScanner.h"
+#include "yw/JsonConfig.h"
 
 namespace yw {
 namespace node {
@@ -19,8 +20,8 @@ NodeManager::NodeManager(std::shared_ptr<hv::HttpService> service)
     // 启动节点扫描器（示例：以本机IP与HTTP端口启动）
     // TODO: manager_ip 可从配置或探测获取
     scanner_ = std::make_unique<yw::utils::MulticastScanner>(
-        "192.168.10.58",   // manager_ip
-        18888,                 // manager_port
+        yw::utils::JsonConfig::Get<std::string>("ip", "192.168.60.5"),
+        yw::utils::JsonConfig::Get<int>("port", 18888),
         "/heartbeat"         // url
     );
     scanner_->start();

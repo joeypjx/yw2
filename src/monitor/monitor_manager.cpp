@@ -7,6 +7,7 @@
 #include <hv/HttpService.h>
 #include "yw/MulticastScanner.h"
 #include "yw/node.h"
+#include "yw/JsonConfig.h"
 
 namespace yw {
 namespace monitor {
@@ -20,8 +21,8 @@ MonitorManager::MonitorManager(std::shared_ptr<hv::HttpService> service,
     
     // 启动资源扫描器（示例 manager_ip 与端口与 NodeManager 保持一致，路由改为 /resource）
     scanner_ = std::make_unique<yw::utils::MulticastScanner>(
-        "192.168.10.58",
-        18888,
+        yw::utils::JsonConfig::Get<std::string>("ip", "192.168.60.5"),
+        yw::utils::JsonConfig::Get<int>("port", 18888),
         "/resource"
     );
     scanner_->start();
