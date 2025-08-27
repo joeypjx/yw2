@@ -243,10 +243,6 @@ std::vector<AlertState> MemoryAlertRepository::listActive(const LabelSet& /*matc
 bool MemoryEventRepository::append(const AlertEvent& event) {
     std::lock_guard<std::mutex> lk(mu_);
     events_.push_back(event);
-    std::cout << "append event: " << event.fingerprint << " " << event.rule_id  << " " << event.value << " " << event.context << " " << event.action << std::endl;
-    for (const auto& e : events_) {
-        std::cout << "event: " << e.fingerprint << " " << e.rule_id  << " " << e.value << " " << e.context << " " << e.action << std::endl;
-    }
     return true;
 }
 

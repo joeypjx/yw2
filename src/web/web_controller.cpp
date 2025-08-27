@@ -5,6 +5,7 @@
 #include "yw/bmc.h"
 #include "yw/bmc_model.h"
 #include "web_model.h"
+#include "alert_view_utils.h"
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include <iomanip>
@@ -386,61 +387,16 @@ void WebController::setupRoutes() {
 
             auto rule_json = json::parse(body);
             
-            // 验证必需字段
-            if (!rule_json.contains("alert_name") || !rule_json.contains("expression")) {
-                return ctx->send("{\"error\":\"missing required fields: id, expression\"}");
+            // 使用用户侧结构体进行转换
+            alert::UserAlertRule ur = rule_json;
+            if (ur.alert_name.empty() && ur.id.empty()) {
+                return ctx->send("{\"error\":\"missing alert_name/id\"}");
             }
+            alert::Rule rule = yw::web::fromUserAlertRule(ur);
+            // 覆盖可选字段 window/eval_every（若提供）
+            rule.window = rule_json.value("window", rule.window);
+            rule.eval_every = rule_json.value("eval_every", rule.eval_every);
 
-            // 构造 Rule 对象
-            alert::Rule rule;
-            rule.id = rule_json["alert_name"].get<std::string>();
-            rule.name = rule_json.value("summary", rule.id);
-            rule.description = rule_json.value("description", "");
-            // 解析 expression JSON -> 规则表达式字符串，并将 tags 合并到 selector
-            if (rule_json.contains("expression") && rule_json["expression"].is_object()) {
-                const auto& expr = rule_json["expression"];
-                std::string domain = expr.value("stable", "");
-                std::string metric = expr.value("metric", "");
-                std::string lhs = domain;
-                if (!lhs.empty()) lhs += ".";
-                lhs += metric;
-                std::string expr_str;
-                if (expr.contains("conditions") && expr["conditions"].is_array()) {
-                    bool first = true;
-                    for (const auto& c : expr["conditions"]) {
-                        if (!c.is_object()) continue;
-                        std::string op = c.value("operator", "");
-                        if (op != ">" && op != "<" && op != ">=" && op != "<=" && op != "==" && op != "!=") continue;
-                        double th = c.value("threshold", 0.0);
-                        if (!first) expr_str += " && ";
-                        expr_str += lhs + " " + op + " " + std::to_string(th);
-                        first = false;
-                    }
-                }
-                if (expr_str.empty()) {
-                    // 兜底：若未给出条件，则给出一个恒不触发的条件，避免空表达式
-                    expr_str = lhs + " > 1e309";
-                }
-                rule.expression = std::move(expr_str);
-                if (expr.contains("tags") && expr["tags"].is_array()) {
-                    for (const auto& t : expr["tags"]) {
-                        if (!t.is_object()) continue;
-                        for (auto it = t.begin(); it != t.end(); ++it) {
-                            if (it.value().is_string()) {
-                                rule.selector[it.key()] = it.value().get<std::string>();
-                            } else if (it.value().is_number() || it.value().is_boolean()) {
-                                rule.selector[it.key()] = it.value().dump();
-                            }
-                        }
-                    }
-                }
-            } else {
-                rule.expression = rule_json["expression"].get<std::string>();
-            }
-            rule.window = rule_json.value("window", "5m");
-            rule.eval_every = rule_json.value("eval_every", "1s");
-            rule.severity = rule_json.value("severity", alert::Severity::Warn);
-            rule.tag = rule_json.value("alert_type", "系统告警");
             {
                 auto trim = [](std::string s){
                     auto not_space = [](int ch){ return !std::isspace(ch); };
@@ -448,29 +404,10 @@ void WebController::setupRoutes() {
                     s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
                     return s;
                 };
-                auto parse_duration_seconds = [&](const std::string& f) -> long long {
-                    if (f.empty()) return 0;
-                    std::string s = trim(f);
-                    if (s.empty()) return 0;
-                    char unit = s.back();
-                    bool has_unit = std::isalpha(static_cast<unsigned char>(unit)) != 0;
-                    std::string num = has_unit ? s.substr(0, s.size()-1) : s;
-                    num = trim(num);
-                    if (num.empty()) return 0;
-                    long long n = 0;
-                    try { n = std::stoll(num); } catch (...) { return 0; }
-                    if (!has_unit) return n; // 默认为秒
-                    switch (static_cast<char>(std::tolower(static_cast<unsigned char>(unit)))) {
-                        case 's': return n;
-                        case 'm': return n * 60;
-                        case 'h': return n * 3600;
-                        default: return n; // 未知单位，按秒处理
-                    }
-                };
                 int ft = rule_json.value("for_times", 0);
                 if (rule_json.contains("for") && rule_json["for"].is_string()) {
-                    long long for_seconds = parse_duration_seconds(rule_json["for"].get<std::string>());
-                    long long every_seconds = parse_duration_seconds(rule.eval_every);
+                    long long for_seconds = yw::web::parseDurationSeconds(rule_json["for"].get<std::string>());
+                    long long every_seconds = yw::web::parseDurationSeconds(rule.eval_every);
                     if (every_seconds <= 0) every_seconds = 1; // 防止除零
                     // 动态换算：向上取整 ceil(for_seconds / every_seconds)
                     long long quotient = (for_seconds + every_seconds - 1) / every_seconds;
@@ -479,23 +416,14 @@ void WebController::setupRoutes() {
                 if (ft <= 0) ft = 1;
                 rule.for_times = ft;
             }
-            rule.enabled = rule_json.value("enabled", true);
-
-            // 解析标签选择器
-            if (rule_json.contains("selector") && rule_json["selector"].is_object()) {
-                for (auto it = rule_json["selector"].begin(); it != rule_json["selector"].end(); ++it) {
-                    if (it.value().is_string()) {
-                        rule.selector[it.key()] = it.value().get<std::string>();
-                    }
-                }
-            }
+            rule.enabled = ur.enabled;
 
             // 保存规则
             if (alert_module_->upsertRule(rule)) {
                 json resp = {
                     {"api_version", 1},
                     {"data", {
-                        {"rule_id", rule.id},
+                        {"id", rule.id},
                         {"message", "Rule created/updated successfully"}
                     }},
                     {"status", "success"},
@@ -515,116 +443,11 @@ void WebController::setupRoutes() {
 
     service_->GET("/alarm/rules", [this](const HttpContextPtr& ctx) {
         if (!alert_module_) return 500;
-
-        auto trim = [](std::string s){
-            auto not_space = [](int ch){ return !std::isspace(ch); };
-            s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
-            s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
-            return s;
-        };
-        auto parse_duration_seconds = [&](const std::string& f) -> long long {
-            if (f.empty()) return 0;
-            std::string s = trim(f);
-            if (s.empty()) return 0;
-            char unit = s.back();
-            bool has_unit = std::isalpha(static_cast<unsigned char>(unit)) != 0;
-            std::string num = has_unit ? s.substr(0, s.size()-1) : s;
-            num = trim(num);
-            if (num.empty()) return 0;
-            long long n = 0;
-            try { n = std::stoll(num); } catch (...) { return 0; }
-            if (!has_unit) return n; // 默认为秒
-            switch (static_cast<char>(std::tolower(static_cast<unsigned char>(unit)))) {
-                case 's': return n;
-                case 'm': return n * 60;
-                case 'h': return n * 3600;
-                default: return n; // 未知单位，按秒处理
-            }
-        };
-        auto format_seconds_compact = [](long long sec) -> std::string {
-            if (sec <= 0) return std::string("0s");
-            if (sec % 3600 == 0) return std::to_string(sec/3600) + "h";
-            if (sec % 60 == 0) return std::to_string(sec/60) + "m";
-            return std::to_string(sec) + "s";
-        };
-        auto split_conditions = [&](const std::string& expr) -> std::vector<std::string> {
-            std::vector<std::string> parts;
-            std::string cur;
-            for (size_t i = 0; i < expr.size(); ++i) {
-                if (i + 1 < expr.size() && expr[i] == '&' && expr[i+1] == '&') {
-                    parts.push_back(trim(cur));
-                    cur.clear();
-                    ++i; // skip second '&'
-                } else {
-                    cur.push_back(expr[i]);
-                }
-            }
-            if (!cur.empty()) parts.push_back(trim(cur));
-            return parts;
-        };
-        auto parse_expression_object = [&](const std::string& expr) -> nlohmann::json {
-            nlohmann::json obj;
-            obj["stable"] = "";
-            obj["metric"] = "";
-            obj["conditions"] = nlohmann::json::array();
-            if (expr.empty()) return obj;
-
-            // 拆分条件
-            auto conds = split_conditions(expr);
-            // 解析每个条件：domain.metric <op> value
-            for (const auto& c : conds) {
-                // 寻找操作符（优先双字符）
-                static const std::vector<std::string> ops = {">=","<=","==","!=",">","<"};
-                size_t pos = std::string::npos; std::string op;
-                for (const auto& o : ops) { auto p = c.find(o); if (p != std::string::npos) { pos = p; op = o; break; } }
-                if (pos == std::string::npos) continue;
-                std::string lhs = trim(c.substr(0, pos));
-                std::string rhs = trim(c.substr(pos + op.size()));
-                // lhs: domain.metric
-                auto dot = lhs.rfind('.');
-                std::string stable = dot == std::string::npos ? std::string() : lhs.substr(0, dot);
-                std::string metric = dot == std::string::npos ? lhs : lhs.substr(dot + 1);
-                if (obj["stable"].get<std::string>().empty()) obj["stable"] = stable;
-                if (obj["metric"].get<std::string>().empty()) obj["metric"] = metric;
-                double threshold = 0.0;
-                try { threshold = std::stod(rhs); } catch (...) { threshold = 0.0; }
-                obj["conditions"].push_back({ {"operator", op}, {"threshold", threshold} });
-            }
-            return obj;
-        };
-
         auto rules = alert_module_->listRules();
         nlohmann::json arr = nlohmann::json::array();
         arr.get_ref<nlohmann::json::array_t&>().reserve(rules.size());
         for (const auto& r : rules) {
-            // 反推 for 持续时间
-            long long every = parse_duration_seconds(r.eval_every);
-            long long total = (every <= 0 ? 0 : every * (r.for_times <= 0 ? 1 : r.for_times));
-            std::string for_str = format_seconds_compact(total);
-
-            // 构造 expression 对象
-            nlohmann::json expr_obj = parse_expression_object(r.expression);
-
-            // 枚举转字符串
-            std::string severity_str;
-            try { severity_str = nlohmann::json(r.severity).get<std::string>(); }
-            catch (...) { severity_str = ""; }
-
-            // 输出对象
-            nlohmann::json item = {
-                {"alert_name", r.id},
-                {"alert_type", r.tag},
-                {"created_at", ""},
-                {"description", r.description},
-                {"enabled", r.enabled},
-                {"expression", expr_obj},
-                {"for", for_str},
-                {"id", r.id},
-                {"severity", severity_str},
-                {"summary", r.name},
-                {"updated_at", ""}
-            };
-            arr.push_back(std::move(item));
+            arr.push_back(yw::web::toUserAlertRule(r));
         }
 
         nlohmann::json resp = {
@@ -640,83 +463,6 @@ void WebController::setupRoutes() {
     service_->GET("/alarm/rules/{id}", [this](const HttpContextPtr& ctx) {
         if (!alert_module_) return 500;
 
-        auto trim = [](std::string s){
-            auto not_space = [](int ch){ return !std::isspace(ch); };
-            s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
-            s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
-            return s;
-        };
-        auto parse_duration_seconds = [&](const std::string& f) -> long long {
-            if (f.empty()) return 0;
-            std::string s = trim(f);
-            if (s.empty()) return 0;
-            char unit = s.back();
-            bool has_unit = std::isalpha(static_cast<unsigned char>(unit)) != 0;
-            std::string num = has_unit ? s.substr(0, s.size()-1) : s;
-            num = trim(num);
-            if (num.empty()) return 0;
-            long long n = 0;
-            try { n = std::stoll(num); } catch (...) { return 0; }
-            if (!has_unit) return n; // 默认为秒
-            switch (static_cast<char>(std::tolower(static_cast<unsigned char>(unit)))) {
-                case 's': return n;
-                case 'm': return n * 60;
-                case 'h': return n * 3600;
-                default: return n; // 未知单位，按秒处理
-            }
-        };
-        auto format_seconds_compact = [](long long sec) -> std::string {
-            if (sec <= 0) return std::string("0s");
-            if (sec % 3600 == 0) return std::to_string(sec/3600) + "h";
-            if (sec % 60 == 0) return std::to_string(sec/60) + "m";
-            return std::to_string(sec) + "s";
-        };
-        auto split_conditions = [&](const std::string& expr) -> std::vector<std::string> {
-            std::vector<std::string> parts;
-            std::string cur;
-            for (size_t i = 0; i < expr.size(); ++i) {
-                if (i + 1 < expr.size() && expr[i] == '&' && expr[i+1] == '&') {
-                    parts.push_back(trim(cur));
-                    cur.clear();
-                    ++i; // skip second '&'
-                } else {
-                    cur.push_back(expr[i]);
-                }
-            }
-            if (!cur.empty()) parts.push_back(trim(cur));
-            return parts;
-        };
-        auto parse_expression_object = [&](const std::string& expr) -> nlohmann::json {
-            nlohmann::json obj;
-            obj["stable"] = "";
-            obj["metric"] = "";
-            obj["conditions"] = nlohmann::json::array();
-            if (expr.empty()) return obj;
-
-            // 拆分条件
-            auto conds = split_conditions(expr);
-            // 解析每个条件：domain.metric <op> value
-            for (const auto& c : conds) {
-                // 寻找操作符（优先双字符）
-                static const std::vector<std::string> ops = {">=","<=","==","!=",">","<"};
-                size_t pos = std::string::npos; std::string op;
-                for (const auto& o : ops) { auto p = c.find(o); if (p != std::string::npos) { pos = p; op = o; break; } }
-                if (pos == std::string::npos) continue;
-                std::string lhs = trim(c.substr(0, pos));
-                std::string rhs = trim(c.substr(pos + op.size()));
-                // lhs: domain.metric
-                auto dot = lhs.rfind('.');
-                std::string stable = dot == std::string::npos ? std::string() : lhs.substr(0, dot);
-                std::string metric = dot == std::string::npos ? lhs : lhs.substr(dot + 1);
-                if (obj["stable"].get<std::string>().empty()) obj["stable"] = stable;
-                if (obj["metric"].get<std::string>().empty()) obj["metric"] = metric;
-                double threshold = 0.0;
-                try { threshold = std::stod(rhs); } catch (...) { threshold = 0.0; }
-                obj["conditions"].push_back({ {"operator", op}, {"threshold", threshold} });
-            }
-            return obj;
-        };
-
         const std::string rid = ctx->param("id");
         auto ruleOpt = alert_module_->getRule(rid);
         if (!ruleOpt) {
@@ -724,29 +470,7 @@ void WebController::setupRoutes() {
         }
         const auto& r = *ruleOpt;
 
-        long long every = parse_duration_seconds(r.eval_every);
-        long long total = (every <= 0 ? 0 : every * (r.for_times <= 0 ? 1 : r.for_times));
-        std::string for_str = format_seconds_compact(total);
-
-        nlohmann::json expr_obj = parse_expression_object(r.expression);
-
-        std::string severity_str;
-        try { severity_str = nlohmann::json(r.severity).get<std::string>(); }
-        catch (...) { severity_str = ""; }
-
-        nlohmann::json item = {
-            {"alert_name", r.id},
-            {"alert_type", r.tag},
-            {"created_at", ""},
-            {"description", r.description},
-            {"enabled", r.enabled},
-            {"expression", expr_obj},
-            {"for", for_str},
-            {"id", r.id},
-            {"severity", severity_str},
-            {"summary", r.name},
-            {"updated_at", ""}
-        };
+        nlohmann::json item = yw::web::toUserAlertRule(r);
 
         nlohmann::json resp = {
             {"api_version", 1},
@@ -762,32 +486,6 @@ void WebController::setupRoutes() {
         if (!alert_module_) return 500;
         const std::string rid = ctx->param("id");
 
-        auto trim = [](std::string s){
-            auto not_space = [](int ch){ return !std::isspace(ch); };
-            s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
-            s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
-            return s;
-        };
-        auto parse_duration_seconds = [&](const std::string& f) -> long long {
-            if (f.empty()) return 0;
-            std::string s = trim(f);
-            if (s.empty()) return 0;
-            char unit = s.back();
-            bool has_unit = std::isalpha(static_cast<unsigned char>(unit)) != 0;
-            std::string num = has_unit ? s.substr(0, s.size()-1) : s;
-            num = trim(num);
-            if (num.empty()) return 0;
-            long long n = 0;
-            try { n = std::stoll(num); } catch (...) { return 0; }
-            if (!has_unit) return n; // 默认为秒
-            switch (static_cast<char>(std::tolower(static_cast<unsigned char>(unit)))) {
-                case 's': return n;
-                case 'm': return n * 60;
-                case 'h': return n * 3600;
-                default: return n; // 未知单位，按秒处理
-            }
-        };
-
         try {
             auto body = ctx->body();
             if (body.empty()) {
@@ -795,56 +493,24 @@ void WebController::setupRoutes() {
             }
 
             auto rule_json = nlohmann::json::parse(body);
-            if (!rule_json.contains("expression")) {
-                return ctx->send("{\"error\":\"missing expression\"}");
+            // 使用用户侧结构体进行转换，路径 id 为准
+            alert::UserAlertRule ur = rule_json;
+            if (ur.alert_name.empty() && ur.id.empty()) {
+                ur.id = rid;
+                ur.alert_name = rid;
             }
-
-            // 构造 Rule 对象（以路径 id 为准）
-            alert::Rule rule;
+            alert::Rule rule = yw::web::fromUserAlertRule(ur);
             rule.id = rid;
-            rule.name = rule_json.value("summary", rule.id);
-            rule.description = rule_json.value("description", "");
-
-            // 解析 expression 对象 -> 字符串
-            if (rule_json["expression"].is_object()) {
-                const auto& expr = rule_json["expression"];
-                std::string domain = expr.value("stable", "");
-                std::string metric = expr.value("metric", "");
-                std::string lhs = domain;
-                if (!lhs.empty()) lhs += ".";
-                lhs += metric;
-                std::string expr_str;
-                if (expr.contains("conditions") && expr["conditions"].is_array()) {
-                    bool first = true;
-                    for (const auto& c : expr["conditions"]) {
-                        if (!c.is_object()) continue;
-                        std::string op = c.value("operator", "");
-                        if (op != ">" && op != "<" && op != ">=" && op != "<=" && op != "==" && op != "!=") continue;
-                        double th = c.value("threshold", 0.0);
-                        if (!first) expr_str += " && ";
-                        expr_str += lhs + " " + op + " " + std::to_string(th);
-                        first = false;
-                    }
-                }
-                if (expr_str.empty()) {
-                    expr_str = lhs + " > 1e309";
-                }
-                rule.expression = std::move(expr_str);
-            } else {
-                rule.expression = rule_json["expression"].get<std::string>();
-            }
-
-            rule.window = rule_json.value("window", "5m");
-            rule.eval_every = rule_json.value("eval_every", "1s");
-            rule.severity = rule_json.value("severity", alert::Severity::Warn);
-            rule.tag = rule_json.value("alert_type", "系统告警");
+            // 覆盖可选字段 window/eval_every（若提供）
+            rule.window = rule_json.value("window", rule.window);
+            rule.eval_every = rule_json.value("eval_every", rule.eval_every);
 
             // 计算 for_times：支持 from "for" 与兼容 "for_times"
             {
                 int ft = rule_json.value("for_times", 0);
                 if (rule_json.contains("for") && rule_json["for"].is_string()) {
-                    long long for_seconds = parse_duration_seconds(rule_json["for"].get<std::string>());
-                    long long every_seconds = parse_duration_seconds(rule.eval_every);
+                    long long for_seconds = yw::web::parseDurationSeconds(rule_json["for"].get<std::string>());
+                    long long every_seconds = yw::web::parseDurationSeconds(rule.eval_every);
                     if (every_seconds <= 0) every_seconds = 1;
                     long long quotient = (for_seconds + every_seconds - 1) / every_seconds;
                     ft = static_cast<int>(quotient);
@@ -853,21 +519,14 @@ void WebController::setupRoutes() {
                 rule.for_times = ft;
             }
 
-            rule.enabled = rule_json.value("enabled", true);
-            if (rule_json.contains("selector") && rule_json["selector"].is_object()) {
-                for (auto it = rule_json["selector"].begin(); it != rule_json["selector"].end(); ++it) {
-                    if (it.value().is_string()) {
-                        rule.selector[it.key()] = it.value().get<std::string>();
-                    }
-                }
-            }
+            rule.enabled = ur.enabled;
 
             // 写入
             if (alert_module_->upsertRule(rule)) {
                 nlohmann::json resp = {
                     {"api_version", 1},
                     {"data", {
-                        {"rule_id", rule.id},
+                        {"id", rule.id},
                         {"message", "Rule updated successfully"}
                     }},
                     {"status", "success"},
@@ -884,137 +543,30 @@ void WebController::setupRoutes() {
         }
     });
 
-    // 查询活跃告警
-    service_->GET("/alert/active", [this](const HttpContextPtr& ctx) {
+    service_->POST("/alarm/rules/{id}/delete", [this](const HttpContextPtr& ctx) {
         if (!alert_module_) return 500;
-
-        // 解析标签匹配器（可选）
-        alert::LabelSet matcher;
-        auto params = ctx->params();
-        for (const auto& [key, value] : params) {
-            if (key != "duration" && key != "time_range") {
-                matcher[key] = value;
-            }
+        const std::string id = ctx->param("id");
+        if (alert_module_->deleteRule(id)) {
+            return ctx->send("{\"status\":\"success\"}");
         }
-
-        auto alerts = alert_module_->listActiveAlerts(matcher);
-        
-        json resp = {
-            {"api_version", 1},
-            {"data", {
-                {"alerts", alerts}
-            }},
-            {"status", "success"},
-        };
-        ctx->setContentType("application/json");
-        return ctx->send(resp.dump(2));
+        return ctx->send("{\"status\":\"failed\"}");
     });
 
     // 查询告警事件
     service_->GET("/alarm/events", [this](const HttpContextPtr& ctx) {
         if (!alert_module_) return 500;
 
-        std::string duration = "1h"; // 默认查询最近1小时
+        std::string duration = "24h"; // 默认查询最近24小时
         auto params = ctx->params();
         if (params.find("duration") != params.end()) {
             duration = params["duration"];
         }
 
         auto events = alert_module_->queryEvents(duration);
-        
-        // 转换为目标格式
-        auto trim = [](std::string s){
-            auto not_space = [](int ch){ return !std::isspace(ch); };
-            s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
-            s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
-            return s;
-        };
-        auto format_time = [](std::int64_t ms) -> std::string {
-            if (ms <= 0) return std::string();
-            std::time_t t = static_cast<std::time_t>(ms / 1000);
-            std::tm tm{};
-#if defined(_WIN32)
-            localtime_s(&tm, &t);
-#else
-            localtime_r(&t, &tm);
-#endif
-            std::ostringstream oss;
-            oss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
-            return oss.str();
-        };
-        auto parse_metric_name = [&](const nlohmann::json& ctx) -> std::string {
-            if (!ctx.is_object() || !ctx.contains("metric") || !ctx["metric"].is_string()) return std::string();
-            std::string expr = ctx["metric"].get<std::string>();
-            // 找到第一个比较操作符位置
-            static const std::vector<std::string> ops = {">=","<=","==","!=",">","<"};
-            size_t pos = std::string::npos;
-            for (const auto& o : ops) { auto p = expr.find(o); if (p != std::string::npos) { pos = p; break; } }
-            std::string lhs = pos == std::string::npos ? expr : expr.substr(0, pos);
-            lhs = trim(lhs);
-            // 取最后一个点之后的部分作为 metric 名
-            auto dot = lhs.rfind('.');
-            if (dot == std::string::npos) return lhs;
-            return lhs.substr(dot + 1);
-        };
-
+        auto views = yw::web::toUserAlertEventViews(events);
         nlohmann::json arr = nlohmann::json::array();
-        arr.get_ref<nlohmann::json::array_t&>().reserve(events.size());
-        for (const auto& e : events) {
-            // 基本时间
-            std::string starts_at = format_time(e.timestamp_ms);
-            std::string ends_at = format_time(e.resolved_timestamp_ms);
-            std::string updated_at = !ends_at.empty() ? ends_at : starts_at;
-
-            // 严重级别映射
-            std::string sev = "warning";
-            switch (e.severity) {
-                case alert::Severity::Info: sev = "info"; break;
-                case alert::Severity::Critical: sev = "critical"; break;
-                case alert::Severity::Warn: default: sev = "warning"; break;
-            }
-
-            // 指标名
-            std::string metric_name = parse_metric_name(e.context);
-
-            // 值格式化
-            std::ostringstream vss; vss << std::fixed << std::setprecision(6) << e.value;
-
-            // labels：聚合
-            nlohmann::json labels = nlohmann::json::object();
-            labels["alert_type"] = e.context.contains("tag") && e.context["tag"].is_string() ? e.context["tag"].get<std::string>() : std::string("metric");
-            labels["alertname"] = e.context.contains("rule_id") && e.context["rule_id"].is_string() ? e.context["rule_id"].get<std::string>() : e.rule_id;
-            // host_ip 优先来自 labels，其次 context
-            if (e.labels.find("host_ip") != e.labels.end()) labels["host_ip"] = e.labels.at("host_ip");
-            else if (e.context.contains("host_ip") && e.context["host_ip"].is_string()) labels["host_ip"] = e.context["host_ip"].get<std::string>();
-            if (!metric_name.empty()) labels["metrics"] = metric_name;
-            labels["severity"] = sev;
-            labels["value"] = vss.str();
-
-            // annotations
-            nlohmann::json annotations = nlohmann::json::object();
-            annotations["description"] = e.description;
-            annotations["summary"] = e.title;
-
-            std::string status_str = "inactive";
-            switch (e.status) {
-                case alert::AlertStatus::Pending: status_str = "pending"; break;
-                case alert::AlertStatus::Firing: status_str = "firing"; break;
-                case alert::AlertStatus::Resolved: status_str = "resolved"; break;
-                case alert::AlertStatus::Inactive: default: status_str = "inactive"; break;
-            }
-
-            nlohmann::json item = {
-                {"annotations", annotations},
-                {"created_at", starts_at},
-                {"ends_at", ends_at.empty() ? nlohmann::json() : nlohmann::json(ends_at)},
-                {"fingerprint", e.fingerprint},
-                {"labels", labels},
-                {"starts_at", starts_at},
-                {"status", status_str},
-                {"updated_at", updated_at}
-            };
-            arr.push_back(std::move(item));
-        }
+        arr.get_ref<nlohmann::json::array_t&>().reserve(views.size());
+        for (const auto& v : views) arr.push_back(v);
 
         json resp = {
             {"api_version", 1},
@@ -1024,8 +576,6 @@ void WebController::setupRoutes() {
         ctx->setContentType("application/json");
         return ctx->send(resp.dump(2));
     });
-
-
 }
 
 } // namespace web

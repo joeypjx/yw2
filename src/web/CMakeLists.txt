@@ -1,6 +1,7 @@
 add_library(yw_web STATIC
     web_controller.cpp
     web_factory.cpp
+    alert_view_utils.cpp
 )
 
 target_include_directories(yw_web PUBLIC

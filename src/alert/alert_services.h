@@ -9,7 +9,7 @@
 #include <functional>
 #include <nlohmann/json.hpp>
 
-#include "alert_model.h"
+#include "yw/alert_model.h"
 
 namespace yw {
 namespace alert {

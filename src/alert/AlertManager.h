@@ -38,8 +38,8 @@ public:
     bool deleteRule(const std::string& id) override;
 
     // 告警查询与操作
-    std::vector<AlertState> listActiveAlerts(const LabelSet& matcher) const override;
     std::vector<AlertEvent> queryEvents(const std::string& duration) const override;
+    bool appendAlertEvent(const AlertEvent& event) override;
     bool ackAlert(const std::string& fingerprint, const std::string& user, const std::string& comment) override;
 
     // 事件调度器访问（订阅方可注册回调）

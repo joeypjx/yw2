@@ -220,6 +220,9 @@ Rule DatabaseRuleRepository::parseRuleFromRow(const pqxx::row& row) const {
     rule.tag = row["tag"].is_null() ? "" : row["tag"].as<std::string>();
     rule.for_times = row["for_times"].as<int>();
     rule.enabled = row["enabled"].as<bool>();
+    // 填充创建/更新时间（格式化为字符串由上层做，这里直接存 ISO 字符串或空）
+    rule.created_at = row["created_at"].is_null() ? std::string("") : row["created_at"].as<std::string>("");
+    rule.updated_at = row["updated_at"].is_null() ? std::string("") : row["updated_at"].as<std::string>("");
     
     // 解析 selector JSON
     if (!row["selector"].is_null()) {
@@ -240,16 +243,16 @@ Rule DatabaseRuleRepository::parseRuleFromRow(const pqxx::row& row) const {
 
 std::string DatabaseRuleRepository::parseSeverityToString(Severity severity) const {
     switch (severity) {
-        case Severity::Info: return "info";
-        case Severity::Warn: return "warn";
-        case Severity::Critical: return "critical";
-        default: return "warn";
+        case Severity::Info: return "提示";
+        case Severity::Warn: return "一般";
+        case Severity::Critical: return "严重";
+        default: return "一般";
     }
 }
 
 Severity DatabaseRuleRepository::parseSeverityFromString(const std::string& severity_str) const {
-    if (severity_str == "info") return Severity::Info;
-    if (severity_str == "critical") return Severity::Critical;
+    if (severity_str == "提示") return Severity::Info;
+    if (severity_str == "严重") return Severity::Critical;
     return Severity::Warn; // 默认值
 }
 

@@ -27,8 +27,11 @@ public:
     virtual bool deleteRule(const std::string& id) = 0;
 
     // 告警查询与操作
-    virtual std::vector<AlertState> listActiveAlerts(const LabelSet& matcher) const = 0;
     virtual std::vector<AlertEvent> queryEvents(const std::string& duration) const = 0; // e.g. "1h"
+
+    // 手动处理告警事件
+    virtual bool appendAlertEvent(const AlertEvent& event) = 0;
+
     virtual bool ackAlert(const std::string& fingerprint, const std::string& user, const std::string& comment) = 0;
 };
 

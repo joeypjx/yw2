@@ -29,10 +29,10 @@ bool DatabaseEventRepository::append(const AlertEvent& event) {
         )";
         const std::string update_resolved_sql = R"(
             UPDATE alert_event AS ae
-            SET resolved_time = to_timestamp($1), status = '已解决', action = 'resolved'
+            SET resolved_time = to_timestamp($1), status = 'resolved', action = 'resolved'
             WHERE ae.ctid IN (
                 SELECT ctid FROM alert_event
-                WHERE fingerprint = $2 AND rule_id = $3 AND status != '已解决' AND resolved_time IS NULL
+                WHERE fingerprint = $2 AND rule_id = $3 AND status != 'resolved' AND resolved_time IS NULL
                 ORDER BY time DESC
                 LIMIT 1
             )
@@ -53,11 +53,11 @@ bool DatabaseEventRepository::append(const AlertEvent& event) {
         // 转换 status 枚举为字符串
         std::string status_str;
         switch (event.status) {
-            case AlertStatus::Inactive: status_str = "未触发"; break;
-            case AlertStatus::Pending: status_str = "待触发"; break;
-            case AlertStatus::Firing: status_str = "触发中"; break;
-            case AlertStatus::Resolved: status_str = "已解决"; break;
-            default: status_str = "未触发"; break;
+            case AlertStatus::Inactive: status_str = "inactive"; break;
+            case AlertStatus::Pending: status_str = "pending"; break;
+            case AlertStatus::Firing: status_str = "firing"; break;
+            case AlertStatus::Resolved: status_str = "resolved"; break;
+            default: status_str = "inactive"; break;
         }
         
         // 当 action 为 resolved：不新增事件，改为更新最近一条 firing 记录的 resolved_time
@@ -89,7 +89,7 @@ bool DatabaseEventRepository::append(const AlertEvent& event) {
             context_json = event.context.dump();
         }
         
-        const bool is_resolved = (status_str == "已解决");
+        const bool is_resolved = (status_str == "resolved");
 
         // 执行插入（参数化）
         pqxx::work tx(*conn_);
@@ -157,9 +157,9 @@ std::vector<AlertEvent> DatabaseEventRepository::query(const std::string& durati
             
             // 转换 status 字符串为枚举
             std::string status_str = row["status"].as<std::string>();
-            if (status_str == "待触发") event.status = AlertStatus::Pending;
-            else if (status_str == "触发中") event.status = AlertStatus::Firing;
-            else if (status_str == "已解决") event.status = AlertStatus::Resolved;
+            if (status_str == "pending") event.status = AlertStatus::Pending;
+            else if (status_str == "firing") event.status = AlertStatus::Firing;
+            else if (status_str == "resolved") event.status = AlertStatus::Resolved;
             else event.status = AlertStatus::Inactive;
             
             // 转换 severity 字符串为枚举

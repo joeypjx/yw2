@@ -52,8 +52,9 @@ AlertManager::AlertManager() {
     evaluator_     = std::make_shared<BasicAlertEvaluator>(ts_);
     state_manager_ = std::make_shared<BasicAlertStateManager>(alert_repo_, event_repo_, fp_);
     scheduler_     = std::make_shared<BasicScheduler>();
+    
     // 启动内部 WebSocket 推送（默认端口 18999）
-    (void)pusher_.start(":18999");
+    (void)pusher_.start(":8081");
 
     // 为每条规则注册调度任务
     scheduler_->start();
@@ -77,8 +78,7 @@ AlertManager::AlertManager() {
 AlertManager::~AlertManager() = default;
 
 bool AlertManager::startPusher(const std::string& ip_port) {
-    // return pusher_.start(ip_port.empty() ? ":18999" : ip_port.c_str());
-    return true;
+    return pusher_.start(ip_port.empty() ? ":8081" : ip_port.c_str());
 }
 
 // 规则管理（占位实现）
@@ -110,9 +110,9 @@ bool AlertManager::deleteRule(const std::string& id) {
 // 删除静默/抑制/路由/通道相关：不实现
 
 // 告警查询与操作（占位实现）
-std::vector<AlertState> AlertManager::listActiveAlerts(const LabelSet& matcher) const { return state_manager_->listActive(matcher); }
 std::vector<AlertEvent> AlertManager::queryEvents(const std::string& duration) const { return event_repo_->query(duration); }
 bool AlertManager::ackAlert(const std::string& fingerprint, const std::string& user, const std::string& comment) { return state_manager_->ack(fingerprint, user, comment); }
+bool AlertManager::appendAlertEvent(const AlertEvent& event) { return event_repo_->append(event); }
 
 } // namespace alert
 } // namespace yw

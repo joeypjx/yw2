@@ -10,7 +10,7 @@
 
 #include <pqxx/pqxx>
 
-#include "yw/alert_services.h"
+#include "alert_services.h"
 
 namespace yw {
 namespace alert {
