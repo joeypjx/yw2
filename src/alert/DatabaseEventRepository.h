@@ -14,6 +14,7 @@ public:
     
     bool append(const AlertEvent& event) override;
     std::vector<AlertEvent> query(const std::string& duration) const override;
+    std::size_t countByStatus(AlertStatus status) const override;
 
 private:
     std::shared_ptr<pqxx::connection> conn_;

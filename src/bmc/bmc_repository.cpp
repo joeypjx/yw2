@@ -130,13 +130,15 @@ std::unordered_map<std::string, std::vector<BMCSensorRow>> BMCRepository::queryB
     const char* bmc_query = R"SQL(
 WITH bucket_series AS (
   SELECT generate_series(
-    date_trunc('second', now() - $2::interval),
-    date_trunc('second', now()),
+    time_bucket('10 seconds', now() - $2::interval),
+    time_bucket('10 seconds', now()),
     '10 seconds'::interval
   ) AS bucket
 ),
 sensor_dims AS (
-  SELECT DISTINCT sensorname, sensorseq, sensortype FROM bmc_sensor WHERE host_ip = $1::inet
+  SELECT DISTINCT sensorname, sensorseq, sensortype FROM bmc_sensor
+  WHERE host_ip = $1::inet
+    AND "time" >= now() - $2::interval AND "time" <= now()
 )
 SELECT
     dims.sensorname,

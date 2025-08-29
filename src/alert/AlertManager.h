@@ -12,7 +12,7 @@
 
 #include "yw/alert.h"
 #include "AlertServices.h"
-#include "AlertPusher.h"
+#include <functional>
 
 
 namespace yw {
@@ -39,14 +39,15 @@ public:
 
     // 告警查询与操作
     std::vector<AlertEvent> queryEvents(const std::string& duration) const override;
+    std::size_t countEventsByStatus(AlertStatus status) const override;
     bool appendAlertEvent(const AlertEvent& event) override;
     bool ackAlert(const std::string& fingerprint, const std::string& user, const std::string& comment) override;
 
     // 事件调度器访问（订阅方可注册回调）
     EventDispatcher& dispatcher() { return dispatcher_; }
 
-    // 启动 WebSocket 推送服务（可选调用）
-    bool startPusher(const std::string& ip_port);
+    // 设置外部推送回调（由 Web 层提供 push(event)）
+    void setPushCallback(std::function<void(const AlertEvent&)> cb) override { push_cb_ = std::move(cb); }
 
 private:
     std::shared_ptr<pqxx::connection> conn_;
@@ -65,8 +66,8 @@ private:
     // 事件分发器
     EventDispatcher dispatcher_;
 
-    // WebSocket 推送（内部自持有 server）
-    AlertPusher pusher_;
+    // 外部推送回调
+    std::function<void(const AlertEvent&)> push_cb_;
 };
 
 } // namespace alert

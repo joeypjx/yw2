@@ -4,7 +4,6 @@ add_library(yw_alert STATIC
     alert_factory.cpp
     DatabaseEventRepository.cpp
     DatabaseRuleRepository.cpp
-    AlertPusher.cpp
 )
 
 target_include_directories(yw_alert PUBLIC

@@ -24,10 +24,21 @@ WebController::WebController(std::shared_ptr<hv::HttpService> service,
       node_module_(std::move(node_module)),
       monitor_module_(std::move(monitor_module)),
       bmc_module_(std::move(bmc_module)),
-      alert_module_(std::move(alert_module)) {
+      alert_module_(std::move(alert_module)),
+      pusher_(std::make_unique<AlertPusher>()) {
     if (service_) {
         service_->AllowCORS();
         setupRoutes();
+    }
+
+    // 将 Web 层推送能力注入到告警模块（直接使用 pusher_）
+    if (alert_module_) {
+        alert_module_->setPushCallback([this](const alert::AlertEvent& e){
+            if (pusher_) {
+                pusher_->start(":8081");
+                pusher_->push(e);
+            }
+        });
     }
 }
 
@@ -577,8 +588,48 @@ void WebController::setupRoutes() {
         return ctx->send(resp.dump(2));
     });
 
+    // 统计指定状态的告警事件总数（不限时间）
+    service_->GET("/alarm/count", [this](const HttpContextPtr& ctx) {
+        if (!alert_module_) return 500;
+
+        std::string status_str = ctx->param("status");
+        if (status_str.empty()) {
+            return ctx->send("{\"error\":\"missing status\"}");
+        }
+
+        // 小写化
+        for (auto& ch : status_str) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+
+        alert::AlertStatus st;
+        if (status_str == "pending") st = alert::AlertStatus::Pending;
+        else if (status_str == "firing") st = alert::AlertStatus::Firing;
+        else if (status_str == "resolved") st = alert::AlertStatus::Resolved;
+        else if (status_str == "inactive") st = alert::AlertStatus::Inactive;
+        else {
+            return ctx->send("{\"error\":\"invalid status (pending|firing|resolved|inactive)\"}");
+        }
+
+        std::size_t count = 0;
+        try {
+            count = alert_module_->countEventsByStatus(st);
+        } catch (...) {
+            return ctx->send("{\"error\":\"internal error\"}");
+        }
+
+        nlohmann::json resp = {
+            {"api_version", 1},
+            {"data", {
+                {"status", status_str},
+                {"count", count}
+            }},
+            {"status", "success"}
+        };
+        ctx->setContentType("application/json");
+        return ctx->send(resp.dump(2));
+    });
+
     // 手动告警组件状态
-    service_->POST("/alert/component", [this](const HttpContextPtr& ctx) {
+    service_->POST("/alarm/component", [this](const HttpContextPtr& ctx) {
         if (!alert_module_) return 500;
         auto body = ctx->body();
         if (body.empty()) {
@@ -602,6 +653,8 @@ void WebController::setupRoutes() {
         return ctx->send("{\"status\":\"success\"}");
     });
 }
+
+
 
 } // namespace web
 } // namespace yw

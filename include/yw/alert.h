@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <optional>
 #include <nlohmann/json.hpp>
+#include <functional>
 
 #include "alert_model.h"
 
@@ -28,11 +29,16 @@ public:
 
     // 告警查询与操作
     virtual std::vector<AlertEvent> queryEvents(const std::string& duration) const = 0; // e.g. "1h"
+    // 统计：返回指定状态的事件总量（全量，不限时间）
+    virtual std::size_t countEventsByStatus(AlertStatus status) const = 0;
 
     // 手动处理告警事件
     virtual bool appendAlertEvent(const AlertEvent& event) = 0;
 
     virtual bool ackAlert(const std::string& fingerprint, const std::string& user, const std::string& comment) = 0;
+
+    // 设置外部推送回调（由 Web 层提供）
+    virtual void setPushCallback(std::function<void(const AlertEvent&)> cb) = 0;
 };
 
 class AlertFactory {

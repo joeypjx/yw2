@@ -139,8 +139,20 @@ struct UserRuleExpression {
     std::vector<LabelSet>          tags;    // 新增：表达式中的 tags 数组（每个元素为一个对象）
 };
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(UserRuleExpression,
-    conditions, metric, stable, tags)
+inline void to_json(nlohmann::json& j, const UserRuleExpression& e) {
+    j = nlohmann::json{
+        {"conditions", e.conditions},
+        {"metric", e.metric},
+        {"stable", e.stable},
+        {"tags", e.tags}
+    };
+}
+inline void from_json(const nlohmann::json& j, UserRuleExpression& e) {
+    if (j.contains("conditions")) j.at("conditions").get_to(e.conditions); else e.conditions.clear();
+    e.metric = j.value("metric", std::string());
+    e.stable = j.value("stable", std::string());
+    e.tags = j.value("tags", std::vector<LabelSet>{});
+}
 
 struct UserAlertRule {
     std::string        alert_name;

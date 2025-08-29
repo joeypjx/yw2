@@ -52,6 +52,8 @@ public:
     virtual ~IEventRepository() = default;
     virtual bool append(const AlertEvent& event) = 0;
     virtual std::vector<AlertEvent> query(const std::string& duration) const = 0;
+    // 统计：返回指定状态的事件总量（全量，不限时间）
+    virtual std::size_t countByStatus(AlertStatus status) const = 0;
 };
 
 class IFingerprintGenerator {

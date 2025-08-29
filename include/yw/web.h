@@ -2,6 +2,8 @@
 
 #include <memory>
 
+#include "yw/alert_model.h"
+
 namespace hv { class HttpService; }
 
 namespace yw {

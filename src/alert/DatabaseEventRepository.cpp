@@ -207,6 +207,33 @@ std::vector<AlertEvent> DatabaseEventRepository::query(const std::string& durati
 }
 
 
+std::size_t DatabaseEventRepository::countByStatus(AlertStatus status) const {
+    if (!conn_) return 0;
+    std::lock_guard<std::mutex> lk(mu_);
+    try {
+        std::string status_str;
+        switch (status) {
+            case AlertStatus::Pending: status_str = "pending"; break;
+            case AlertStatus::Firing: status_str = "firing"; break;
+            case AlertStatus::Resolved: status_str = "resolved"; break;
+            case AlertStatus::Inactive: default: status_str = "inactive"; break;
+        }
+        const std::string sql = R"SQL(
+            SELECT COUNT(*) AS cnt
+            FROM alert_event
+            WHERE status = $1
+        )SQL";
+        pqxx::work tx(*conn_);
+        pqxx::result r = tx.exec_params(sql, status_str);
+        tx.commit();
+        if (!r.empty()) {
+            return static_cast<std::size_t>(r[0]["cnt"].as<long long>(0));
+        }
+    } catch (...) {
+    }
+    return 0;
+}
+
 
 std::string DatabaseEventRepository::parseDurationToInterval(const std::string& duration) const {
     if (duration.empty()) return "INTERVAL '1 hour'";

@@ -8,6 +8,7 @@
 #include "yw/bmc.h"
 #include "yw/alert.h"
 #include "web_model.h"
+#include "AlertPusher.h"
 
 namespace yw {
 namespace web {
@@ -24,12 +25,16 @@ public:
 
     void setupRoutes() override;
 
+    
+
 private:
     std::shared_ptr<hv::HttpService>         service_;
     std::shared_ptr<node::INodeModule>      node_module_;
     std::shared_ptr<monitor::IMonitorModule> monitor_module_;
     std::shared_ptr<bmc::IBMCModule>        bmc_module_;
     std::shared_ptr<alert::IAlertModule>    alert_module_;
+
+    std::unique_ptr<AlertPusher>            pusher_;
 };
 
 } // namespace web

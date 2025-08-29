@@ -209,13 +209,15 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
         const char* network_query = R"SQL(
 WITH bucket_series AS (
   SELECT generate_series(
-    date_trunc('second', now() - $2::interval),
-    date_trunc('second', now()),
+    time_bucket('10 seconds', now() - $2::interval),
+    time_bucket('10 seconds', now()),
     '10 seconds'::interval
   ) AS bucket
 ),
 interface_dims AS (
-  SELECT DISTINCT interface FROM resource_network WHERE host_ip = $1::inet
+  SELECT DISTINCT interface FROM resource_network
+  WHERE host_ip = $1::inet
+    AND time >= now() - $2::interval AND time <= now()
 )
 SELECT
     dims.interface,
@@ -267,13 +269,15 @@ ORDER BY
         const char* disk_query = R"SQL(
 WITH bucket_series AS (
   SELECT generate_series(
-    date_trunc('second', now() - $2::interval),
-    date_trunc('second', now()),
+    time_bucket('10 seconds', now() - $2::interval),
+    time_bucket('10 seconds', now()),
     '10 seconds'::interval
   ) AS bucket
 ),
 disk_dims AS (
-  SELECT DISTINCT device, mount_point FROM resource_disk WHERE host_ip = $1::inet
+  SELECT DISTINCT device, mount_point FROM resource_disk
+  WHERE host_ip = $1::inet
+    AND time >= now() - $2::interval AND time <= now()
 )
 SELECT
     dims.device,
@@ -298,8 +302,8 @@ ON
 GROUP BY
     dims.device, dims.mount_point, buckets.bucket
 ORDER BY
-    dims.device, ts ASC
-)SQL";
+   dims.device, ts ASC
+)SQL"; 
         pqxx::result r = tx.exec_params(disk_query, host_ip, duration);
         for (const auto& row : r) {
             DiskPoint p{};
@@ -320,13 +324,15 @@ ORDER BY
         const char* gpu_query = R"SQL(
 WITH bucket_series AS (
   SELECT generate_series(
-    date_trunc('second', now() - $2::interval),
-    date_trunc('second', now()),
+    time_bucket('10 seconds', now() - $2::interval),
+    time_bucket('10 seconds', now()),
     '10 seconds'::interval
   ) AS bucket
 ),
 gpu_dims AS (
-  SELECT DISTINCT gpu_index, name FROM resource_gpu WHERE host_ip = $1::inet
+  SELECT DISTINCT gpu_index, name FROM resource_gpu
+  WHERE host_ip = $1::inet
+    AND time >= now() - $2::interval AND time <= now()
 )
 SELECT
     dims.gpu_index,

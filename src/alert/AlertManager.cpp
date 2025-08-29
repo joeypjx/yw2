@@ -53,8 +53,7 @@ AlertManager::AlertManager() {
     state_manager_ = std::make_shared<BasicAlertStateManager>(alert_repo_, event_repo_, fp_);
     scheduler_     = std::make_shared<BasicScheduler>();
     
-    // 启动内部 WebSocket 推送（默认端口 18999）
-    (void)pusher_.start(":8081");
+    // 推送由 Web 层承接，此处不再启动内部 WebSocket 服务
 
     // 为每条规则注册调度任务
     scheduler_->start();
@@ -69,7 +68,7 @@ AlertManager::AlertManager() {
             auto events = state_manager_->apply(r, points, now_ms);
             for (const auto& ev : events) {
                 dispatcher_.dispatch(AlertManagerEvent::AlertEventAppended, ev);
-                pusher_.push(ev);
+                if (push_cb_) push_cb_(ev);
             }
         });
     }
@@ -77,9 +76,7 @@ AlertManager::AlertManager() {
 
 AlertManager::~AlertManager() = default;
 
-bool AlertManager::startPusher(const std::string& ip_port) {
-    return pusher_.start(ip_port.empty() ? ":8081" : ip_port.c_str());
-}
+// startPusher 已移除
 
 // 规则管理（占位实现）
 std::vector<Rule> AlertManager::listRules() const { return rule_repo_->listRules(); }
@@ -96,7 +93,7 @@ bool AlertManager::upsertRule(const Rule& rule) {
             auto events = state_manager_->apply(rule, points, now_ms);
             for (const auto& ev : events) {
                 dispatcher_.dispatch(AlertManagerEvent::AlertEventAppended, ev);
-                pusher_.push(ev);
+                if (push_cb_) push_cb_(ev);
             }
         });
     }
@@ -114,13 +111,17 @@ std::vector<AlertEvent> AlertManager::queryEvents(const std::string& duration) c
     return event_repo_->query(duration); 
 }
 
+std::size_t AlertManager::countEventsByStatus(AlertStatus status) const {
+    return event_repo_->countByStatus(status);
+}
+
 bool AlertManager::ackAlert(const std::string& fingerprint, const std::string& user, const std::string& comment) { return state_manager_->ack(fingerprint, user, comment); }
 
 bool AlertManager::appendAlertEvent(const AlertEvent& event) { 
     const bool ok = event_repo_->append(event);
     if (ok) {
         dispatcher_.dispatch(AlertManagerEvent::AlertEventAppended, event);
-        pusher_.push(event);
+        if (push_cb_) push_cb_(event);
     }
     return ok;
 }

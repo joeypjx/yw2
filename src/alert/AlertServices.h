@@ -44,6 +44,7 @@ class MemoryEventRepository : public IEventRepository {
 public:
     bool append(const AlertEvent& event) override;
     std::vector<AlertEvent> query(const std::string& duration) const override;
+    std::size_t countByStatus(AlertStatus status) const override;
 private:
     mutable std::mutex mu_;
     std::vector<AlertEvent> events_;

@@ -283,6 +283,13 @@ std::vector<AlertEvent> MemoryEventRepository::query(const std::string& /*durati
     return events_;
 }
 
+std::size_t MemoryEventRepository::countByStatus(AlertStatus status) const {
+    std::lock_guard<std::mutex> lk(mu_);
+    return static_cast<std::size_t>(std::count_if(events_.begin(), events_.end(), [status](const AlertEvent& e){
+        return e.status == status;
+    }));
+}
+
 // MemoryRuleRepository
 std::vector<Rule> MemoryRuleRepository::listRules() const {
     std::lock_guard<std::mutex> lk(mu_);
