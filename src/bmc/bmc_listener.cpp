@@ -42,8 +42,9 @@ void BMCListener::start() {
 
 void BMCListener::stop() {
     if (!running_.exchange(false)) return;
-    if (th_.joinable()) th_.join();
+    // 先关闭套接字，唤醒可能阻塞在 recvfrom 的线程
     closeSocket();
+    if (th_.joinable()) th_.join();
 }
 
 bool BMCListener::openSocket() {
@@ -65,6 +66,12 @@ bool BMCListener::openSocket() {
     if (bind(sock_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
         spdlog::error("bind() failed: {}", strerror(errno));
         return false;
+    }
+
+    // 设置接收超时，避免在停止时长期阻塞
+    timeval tv{}; tv.tv_sec = 1; tv.tv_usec = 0;
+    if (setsockopt(sock_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+        spdlog::warn("setsockopt(SO_RCVTIMEO) failed: {}", strerror(errno));
     }
 
     ip_mreq mreq{};
@@ -94,6 +101,16 @@ void BMCListener::runLoop() {
         ssize_t n = ::recvfrom(sock_, buffer, sizeof(buffer), 0, reinterpret_cast<sockaddr*>(&src), &slen);
         if (n < 0) {
             if (!running_) break;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // 超时，继续检查 running_
+                continue;
+            }
+            if (errno == EINTR) {
+                // 信号中断，重试
+                continue;
+            }
+            // 若套接字已关闭，直接退出
+            if (errno == EBADF) break;
             spdlog::error("recvfrom failed: {} (errno={})", strerror(errno), errno);
             continue;
         }

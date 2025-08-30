@@ -35,7 +35,7 @@ public:
 private:
     bool init();
 
-    std::shared_ptr<hv::HttpServer>                        server_;
+    hv::HttpServer*                                        server_;
     std::unique_ptr<hv::WebSocketService>                  ws_service_;
     
     std::mutex                                              mu_;

@@ -53,6 +53,9 @@ void AlertPusher::push(const alert::AlertEvent& event) {
 
 void AlertPusher::stop() {
     std::lock_guard<std::mutex> lk(mu_);
+    if (server_) {
+        server_->ws = nullptr;
+    }
     channels_.clear();
     ws_service_.reset();
 }
