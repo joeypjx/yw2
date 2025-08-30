@@ -1,13 +1,13 @@
-#include "alert_view_utils.h"
+#include "AlertMapper.h"
 
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
 #include <cctype>
-#include <vector>
 
 namespace yw {
 namespace web {
+namespace mapper {
 
 static std::string trimStr(std::string s){
     auto not_space = [](int ch){ return !std::isspace(ch); };
@@ -30,7 +30,6 @@ static std::string renderDescription(const std::string& tmpl, const alert::Label
         out.append(tmpl, i, l - i);
         size_t r = tmpl.find("}}", l + 2);
         if (r == std::string::npos) {
-            // 没有闭合，原样输出
             out.append(tmpl, l, std::string::npos);
             break;
         }
@@ -38,7 +37,7 @@ static std::string renderDescription(const std::string& tmpl, const alert::Label
         key = trimStr(key);
         auto it = labels.find(key);
         if (it != labels.end()) out.append(it->second);
-        else out.append(tmpl, l, r - l + 2); // 未找到则保留占位符
+        else out.append(tmpl, l, r - l + 2);
         i = r + 2;
     }
     return out;
@@ -91,7 +90,6 @@ nlohmann::json parseExpressionObject(const std::string& expr) {
     obj["tags"] = nlohmann::json::array();
     if (expr.empty()) return obj;
 
-    // 拆分条件 by &&
     auto split_conditions = [](const std::string& e){
         std::vector<std::string> parts; std::string cur;
         for (size_t i = 0; i < e.size(); ++i) {
@@ -110,7 +108,6 @@ nlohmann::json parseExpressionObject(const std::string& expr) {
         if (pos == std::string::npos) continue;
         std::string lhs = trimStr(c.substr(0, pos));
         std::string rhs = trimStr(c.substr(pos + op.size()));
-        // 以点分割，stable 为第1段，metric 为第2段（忽略其余后缀如 .last）
         std::vector<std::string> tokens; tokens.reserve(3);
         {
             std::string buf;
@@ -158,7 +155,6 @@ std::string extractMetricNameFromExpression(const std::string& expr) {
     for (const auto& o : ops) { auto p = expr.find(o); if (p != std::string::npos) { pos = p; break; } }
     std::string lhs = pos == std::string::npos ? expr : expr.substr(0, pos);
     lhs = trimStr(lhs);
-    // 取点分割的第二段作为 metric（若不足两段，则取最后一段）
     std::vector<std::string> tokens; tokens.reserve(3);
     {
         std::string buf;
@@ -173,16 +169,15 @@ std::string extractMetricNameFromExpression(const std::string& expr) {
     return tokens.back();
 }
 
-alert::UserAlertRule toUserAlertRule(const alert::Rule& r) {
-    alert::UserAlertRule ur;
+web::UserAlertRule toUserAlertRule(const alert::Rule& r) {
+    web::UserAlertRule ur;
     ur.alert_name = r.id;
     ur.alert_type = r.tag;
     ur.created_at = r.created_at;
     ur.description = r.description;
     ur.enabled = r.enabled;
-    ur.expression = alert::UserRuleExpression{};
-    ur.expression = parseExpressionObject(r.expression).get<alert::UserRuleExpression>();
-    // 将 Rule.selector 合并为 expression.tags（每个 kv 作为一个对象）
+    ur.expression = ::yw::web::UserRuleExpression{};
+    ur.expression = parseExpressionObject(r.expression).get<::yw::web::UserRuleExpression>();
     if (!r.selector.empty()) {
         ur.expression.tags.clear();
         ur.expression.tags.reserve(1);
@@ -194,7 +189,6 @@ alert::UserAlertRule toUserAlertRule(const alert::Rule& r) {
     long long total = (every <= 0 ? 0 : every * (r.for_times <= 0 ? 1 : r.for_times));
     ur.for_duration = formatSecondsCompact(total);
     ur.id = r.id;
-    // 使用中文严重级别字符串（与现有枚举序列化一致）
     try { ur.severity = nlohmann::json(r.severity).get<std::string>(); }
     catch (...) { ur.severity = ""; }
     ur.summary = r.name;
@@ -202,13 +196,12 @@ alert::UserAlertRule toUserAlertRule(const alert::Rule& r) {
     return ur;
 }
 
-alert::Rule fromUserAlertRule(const alert::UserAlertRule& ur) {
+alert::Rule fromUserAlertRule(const web::UserAlertRule& ur) {
     alert::Rule r;
     r.id = ur.id.empty() ? ur.alert_name : ur.id;
     r.name = ur.summary.empty() ? r.id : ur.summary;
     r.description = ur.description;
     r.enabled = ur.enabled;
-    // 表达式：由 expression 对象构建
     {
         nlohmann::json exprObj = nlohmann::json{
             {"stable", ur.expression.stable},
@@ -220,48 +213,38 @@ alert::Rule fromUserAlertRule(const alert::UserAlertRule& ur) {
         }
         r.expression = buildExpressionString(exprObj);
     }
-    // eval_every/for_times：由 "for" 与 eval_every 推导（此处仅保留 for 的秒数 / 1s，控制器已有换算）
     r.eval_every = "1s";
-    // selector ← tags（合并为一个对象）
     r.selector.clear();
     if (!ur.expression.tags.empty()) {
         for (const auto& obj : ur.expression.tags) {
             for (const auto& kv : obj) r.selector[kv.first] = kv.second;
         }
     }
-    // 其它
     r.tag = ur.alert_type;
-    // 严重级别（中文 → 枚举）
     if (ur.severity == "提示") r.severity = alert::Severity::Info;
     else if (ur.severity == "严重") r.severity = alert::Severity::Critical;
     else r.severity = alert::Severity::Warn;
-    // Window 默认
     r.window = "5m";
-    r.for_times = 1; // 具体 from "for" 的换算在控制器已有逻辑
+    r.for_times = 1;
     return r;
 }
 
-alert::UserAlertEventView toUserAlertEventView(const alert::AlertEvent& e) {
-    alert::UserAlertEventView v;
+web::UserAlertEventView toUserAlertEventView(const alert::AlertEvent& e) {
+    web::UserAlertEventView v;
     v.annotations.description = e.description;
     v.annotations.summary = e.title;
     v.created_at = formatTimestampMs(e.timestamp_ms);
     v.ends_at = formatTimestampMs(e.resolved_timestamp_ms);
     v.fingerprint = e.fingerprint;
-    v.id = e.fingerprint; // 暂未有独立ID，复用指纹
-    // labels
+    v.id = e.fingerprint;
     v.labels.clear();
-    // alert_type
     if (e.context.contains("tag") && e.context["tag"].is_string()) v.labels["alert_type"] = e.context["tag"].get<std::string>();
     else v.labels["alert_type"] = "metric";
-    // alertname
     if (e.context.contains("rule_id") && e.context["rule_id"].is_string()) v.labels["alertname"] = e.context["rule_id"].get<std::string>();
     else v.labels["alertname"] = e.rule_id;
-    // host_ip: labels 优先，其次 context
     auto it = e.labels.find("host_ip");
     if (it != e.labels.end()) v.labels["host_ip"] = it->second;
     else if (e.context.contains("host_ip") && e.context["host_ip"].is_string()) v.labels["host_ip"] = e.context["host_ip"].get<std::string>();
-    // 去掉可能的 /32 后缀
     {
         auto hip = v.labels.find("host_ip");
         if (hip != v.labels.end()) {
@@ -271,12 +254,10 @@ alert::UserAlertEventView toUserAlertEventView(const alert::AlertEvent& e) {
             }
         }
     }
-    // metrics
     {
         std::string metric_name = extractMetricNameFromExpression(e.context.value("metric", std::string()));
         if (!metric_name.empty()) v.labels["metrics"] = metric_name;
     }
-    // severity（需中文）
     std::string sev = "一般";
     switch (e.severity) {
         case alert::Severity::Info: sev = "提示"; break;
@@ -284,7 +265,6 @@ alert::UserAlertEventView toUserAlertEventView(const alert::AlertEvent& e) {
         case alert::Severity::Warn: default: sev = "一般"; break;
     }
     v.labels["severity"] = sev;
-    // value
     {
         std::ostringstream vss; vss << std::fixed << std::setprecision(6) << e.value;
         v.labels["value"] = vss.str();
@@ -299,7 +279,6 @@ alert::UserAlertEventView toUserAlertEventView(const alert::AlertEvent& e) {
 
     v.updated_at = v.ends_at.empty() ? v.created_at : v.ends_at;
 
-    // 占位符替换：使用 labels（并合并事件原始 labels 与 context 中的可序列化键）
     {
         alert::LabelSet placeholders = v.labels;
         for (const auto& kv : e.labels) {
@@ -317,14 +296,17 @@ alert::UserAlertEventView toUserAlertEventView(const alert::AlertEvent& e) {
     return v;
 }
 
-std::vector<alert::UserAlertEventView> toUserAlertEventViews(const std::vector<alert::AlertEvent>& es) {
-    std::vector<alert::UserAlertEventView> out;
+std::vector<web::UserAlertEventView> toUserAlertEventViews(const std::vector<alert::AlertEvent>& es) {
+    std::vector<web::UserAlertEventView> out;
     out.reserve(es.size());
     for (const auto& e : es) out.push_back(toUserAlertEventView(e));
     return out;
 }
 
+} // namespace mapper
 } // namespace web
 } // namespace yw
+
+
 
 

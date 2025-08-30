@@ -8,7 +8,7 @@
 #include "yw/monitor.h"
 #include "yw/bmc.h"
 #include "yw/alert.h"
-#include "web_model.h"
+#include "dto/node_dto.h"
 #include "AlertPusher.h"
 
 namespace yw {

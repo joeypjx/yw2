@@ -4,7 +4,7 @@
 #include <nlohmann/json.hpp>
 #include <hv/WebSocketServer.h>
 #include <hv/WebSocketChannel.h>
-#include "alert_view_utils.h"
+#include "mapper/AlertMapper.h"
 
 namespace yw {
 namespace web {
@@ -36,7 +36,7 @@ bool AlertPusher::init() {
 }
 
 void AlertPusher::push(const alert::AlertEvent& event) {
-    auto view = toUserAlertEventView(event);
+    auto view = mapper::toUserAlertEventView(event);
     nlohmann::json j = view;
     std::string payload = j.dump();
     std::lock_guard<std::mutex> lk(mu_);

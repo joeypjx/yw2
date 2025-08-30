@@ -11,6 +11,22 @@ namespace yw {
 namespace web {
 
 // --------------------
+// /node 列表视图 DTO
+// --------------------
+
+struct NodeView {
+    int          box_id = 0;
+    int          slot_id = 0;
+    int          cpu_id = 0;
+    std::string  host_ip;
+    std::string  hostname;
+    std::string  status;
+    std::int64_t updated_at = 0;
+
+    nlohmann::json component = nlohmann::json::array();
+};
+
+// --------------------
 // latest_* 明细结构
 // --------------------
 
@@ -266,7 +282,41 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(NodeMetrics,
     updated_at
 )
 
+// /node 列表项视图 JSON 映射
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(NodeView,
+    box_id, slot_id, cpu_id, host_ip, hostname, status, updated_at, component)
+
+// --------------------
+// /node/historical-metrics 视图 DTO
+// --------------------
+
+struct MetricsSeriesView {
+    std::vector<monitor::CpuPoint> cpu;
+    std::unordered_map<std::string, std::vector<monitor::DiskPoint>> disk;
+    std::unordered_map<std::string, std::vector<monitor::GpuPoint>>  gpu;
+    std::unordered_map<std::string, std::vector<monitor::NetworkPoint>> network;
+    std::vector<monitor::MemoryPoint> memory;
+    nlohmann::json sensor = nlohmann::json::object();
+};
+
+struct HistoricalMetricsView {
+    int         box_id = 0;
+    int         cpu_id = 0;
+    std::string host_ip;
+    int         slot_id = 0;
+    std::string time_range;
+    MetricsSeriesView metrics;
+};
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MetricsSeriesView,
+    cpu, disk, gpu, network, memory, sensor)
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(HistoricalMetricsView,
+    box_id, cpu_id, host_ip, slot_id, time_range, metrics)
+
 } // namespace web
 } // namespace yw
+
+
 
 
