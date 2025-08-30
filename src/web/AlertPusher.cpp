@@ -9,13 +9,16 @@
 namespace yw {
 namespace web {
 
-AlertPusher::AlertPusher()
-    : server_(std::make_unique<hv::WebSocketServer>()),
-      ws_service_(std::make_unique<hv::WebSocketService>()) {}
+AlertPusher::AlertPusher(hv::HttpServer* server)
+    : server_(server),
+      ws_service_(std::make_unique<hv::WebSocketService>()) {
 
-bool AlertPusher::start(const char* ip_port) {
+        server_->ws = ws_service_.get();
+        init();
+    }
+
+bool AlertPusher::init() {
     std::lock_guard<std::mutex> lk(mu_);
-    if (started_) return true;
 
     ws_service_->onopen = [this](const WebSocketChannelPtr& channel, const HttpRequestPtr&){
         std::lock_guard<std::mutex> g(mu_);
@@ -29,9 +32,6 @@ bool AlertPusher::start(const char* ip_port) {
         channel->send(msg);
     };
 
-    server_->registerWebSocketService(ws_service_.get());
-    server_->run(ip_port, false);
-    started_ = true;
     return true;
 }
 
@@ -49,6 +49,12 @@ void AlertPusher::push(const alert::AlertEvent& event) {
         ch->send(payload);
         ++it;
     }
+}
+
+void AlertPusher::stop() {
+    std::lock_guard<std::mutex> lk(mu_);
+    channels_.clear();
+    ws_service_.reset();
 }
 
 } // namespace web

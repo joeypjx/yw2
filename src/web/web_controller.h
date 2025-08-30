@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <hv/HttpService.h>
+#include <hv/HttpServer.h>
 #include "yw/web.h"
 #include "yw/node.h"
 #include "yw/monitor.h"
@@ -15,7 +16,8 @@ namespace web {
 
 class WebController : public IWebModule {
 public:
-    WebController(std::shared_ptr<hv::HttpService> service,
+    WebController(std::shared_ptr<hv::HttpServer> server,
+                  std::shared_ptr<hv::HttpService> service,
                   std::shared_ptr<node::INodeModule> node_module,
                   std::shared_ptr<monitor::IMonitorModule> monitor_module,
                   std::shared_ptr<bmc::IBMCModule> bmc_module,
@@ -28,7 +30,8 @@ public:
     
 
 private:
-    std::shared_ptr<hv::HttpService>         service_;
+    std::shared_ptr<hv::HttpServer>         server_;
+    std::shared_ptr<hv::HttpService>        service_;
     std::shared_ptr<node::INodeModule>      node_module_;
     std::shared_ptr<monitor::IMonitorModule> monitor_module_;
     std::shared_ptr<bmc::IBMCModule>        bmc_module_;

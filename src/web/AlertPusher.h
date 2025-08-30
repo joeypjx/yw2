@@ -17,6 +17,7 @@
 #endif
 
 #include "yw/alert_model.h"
+#include <hv/HttpServer.h>
 #include <hv/WebSocketServer.h>
 #include <hv/WebSocketChannel.h>
 
@@ -25,19 +26,20 @@ namespace web {
 
 class AlertPusher {
 public:
-    AlertPusher();
-
-    bool start(const char* ip_port = ":8081");
+    AlertPusher(hv::HttpServer* server);
 
     void push(const alert::AlertEvent& event);
 
+    void stop();
+
 private:
-    std::unique_ptr<hv::WebSocketServer>                   server_;
+    bool init();
+
+    std::shared_ptr<hv::HttpServer>                        server_;
     std::unique_ptr<hv::WebSocketService>                  ws_service_;
     
     std::mutex                                              mu_;
     std::unordered_set<std::shared_ptr<hv::WebSocketChannel>> channels_;
-    bool                                                    started_ {false};
 };
 
 } // namespace web

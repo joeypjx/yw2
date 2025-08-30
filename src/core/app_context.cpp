@@ -1,6 +1,10 @@
 #include "yw/app_context.h"
-#include <iostream>
+#include <spdlog/spdlog.h>
 #include "yw/JsonConfig.h"
+#include "yw/node.h"
+#include "yw/monitor.h"
+#include "yw/bmc.h"
+#include "yw/alert.h"
 
 namespace yw {
 namespace core {
@@ -13,24 +17,27 @@ bool AppContext::initialize() {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (http_server_) {
-        std::cout << "AppContext already initialized" << std::endl;
+        spdlog::info("AppContext already initialized");
         return true;
     }
     
     try {
         // 创建并启动libhv HttpServer实例
-        http_server_ = std::make_unique<hv::HttpServer>();
+        http_server_ = std::make_shared<hv::HttpServer>();
         http_service_ = std::make_shared<hv::HttpService>();
         
-        // 配置服务器（硬编码配置）
-        http_server_->setHost("0.0.0.0");
-        http_server_->setPort(yw::utils::JsonConfig::Get<int>("port", 18888));
-        http_server_->setThreadNum(4);
+        // 配置服务器（从配置加载）
+        const std::string host = yw::utils::JsonConfig::Get<std::string>("host", "0.0.0.0");
+        const int port = yw::utils::JsonConfig::Get<int>("port", 18888);
+        const int threads = yw::utils::JsonConfig::Get<int>("thread_num", 4);
+        http_server_->setHost(host.c_str());
+        http_server_->setPort(port);
+        http_server_->setThreadNum(threads);
         
         return true;
         
     } catch (const std::exception& e) {
-        std::cerr << "Failed to initialize AppContext: " << e.what() << std::endl;
+        spdlog::error("Failed to initialize AppContext: {}", e.what());
         return false;
     }
 }
@@ -40,17 +47,24 @@ std::shared_ptr<hv::HttpService> AppContext::getHttpService() const {
     return http_service_;
 }
 
-hv::HttpServer* AppContext::getHttpServer() const {
+std::shared_ptr<hv::HttpServer> AppContext::getHttpServer() const {
     std::lock_guard<std::mutex> lock(mutex_);
-    return http_server_.get();
+    return http_server_;
 }
 
 void AppContext::cleanup() {
     std::lock_guard<std::mutex> lock(mutex_);
     
+    // 先停业务模块（若它们有 stop 可用，可在此扩展调用）
+    node_module_.reset();
+    monitor_module_.reset();
+    bmc_module_.reset();
+    alert_module_.reset();
+
     if (http_server_) {
         // 停止libhv服务器
         http_server_->stop();
+
         if (http_thread_.joinable()) {
             http_thread_.join();
         }
@@ -59,30 +73,67 @@ void AppContext::cleanup() {
         http_server_.reset();
         http_service_.reset();
         
-        std::cout << "HTTP server stopped and AppContext cleaned up" << std::endl;
+        spdlog::info("HTTP server stopped and AppContext cleaned up");
     }
 }
 
 void AppContext::runHttpServer() {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!http_server_) {
-        std::cerr << "HTTP server not initialized" << std::endl;
+        spdlog::error("HTTP server not initialized");
         return;
     }
     if (http_thread_.joinable()) {
-        std::cout << "HTTP server thread already running" << std::endl;
+        spdlog::warn("HTTP server thread already running");
         return;
     }
-    http_thread_ = std::thread([srv = http_server_.get(), svc = http_service_]() {
+    http_thread_ = std::thread([srv = http_server_, svc = http_service_]() {
         // 注册共享路由服务
         srv->registerHttpService(svc.get());
         int ret = srv->run();
         if (ret != 0) {
-            std::cerr << "Failed to start HTTP server, error code: " << ret << std::endl;
+            spdlog::error("Failed to start HTTP server, error code: {}", ret);
             return;
         }
-        std::cout << "HTTP server started on 0.0.0.0:" + std::to_string(yw::utils::JsonConfig::Get<int>("port", 18888)) << std::endl;
+        spdlog::info("HTTP server started on {}:{}",
+                     yw::utils::JsonConfig::Get<std::string>("host", "0.0.0.0"),
+                     yw::utils::JsonConfig::Get<int>("port", 18888));
     });
+}
+
+// 模块注入/获取
+void AppContext::setNodeModule(std::shared_ptr<yw::node::INodeModule> m) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    node_module_ = std::move(m);
+}
+void AppContext::setMonitorModule(std::shared_ptr<yw::monitor::IMonitorModule> m) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    monitor_module_ = std::move(m);
+}
+void AppContext::setBMCModule(std::shared_ptr<yw::bmc::IBMCModule> m) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    bmc_module_ = std::move(m);
+}
+void AppContext::setAlertModule(std::shared_ptr<yw::alert::IAlertModule> m) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    alert_module_ = std::move(m);
+}
+
+std::shared_ptr<yw::node::INodeModule> AppContext::getNodeModule() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return node_module_;
+}
+std::shared_ptr<yw::monitor::IMonitorModule> AppContext::getMonitorModule() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return monitor_module_;
+}
+std::shared_ptr<yw::bmc::IBMCModule> AppContext::getBMCModule() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return bmc_module_;
+}
+std::shared_ptr<yw::alert::IAlertModule> AppContext::getAlertModule() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return alert_module_;
 }
 
 } // namespace core

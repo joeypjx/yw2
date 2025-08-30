@@ -1,7 +1,7 @@
 #include "node_manager.h"
 #include "node_cache.h"
 #include "yw/node_model.h"
-#include <iostream>
+#include <spdlog/spdlog.h>
 #include <sstream>
 #include <hv/HttpServer.h>
 #include <hv/HttpService.h>
@@ -17,12 +17,16 @@ NodeManager::NodeManager(std::shared_ptr<hv::HttpService> service)
     node_cache_ = std::make_unique<NodeCache>();
     service_->AllowCORS();
 
-    // 启动节点扫描器（示例：以本机IP与HTTP端口启动）
-    // TODO: manager_ip 可从配置或探测获取
+    // 启动节点扫描器（参数改为从配置读取）
     scanner_ = std::make_unique<yw::utils::MulticastScanner>(
-        yw::utils::JsonConfig::Get<std::string>("ip", "192.168.60.5"),
-        yw::utils::JsonConfig::Get<int>("port", 18888),
-        "/heartbeat"         // url
+        yw::utils::JsonConfig::Get<std::string>("scanner.manager_ip",
+            yw::utils::JsonConfig::Get<std::string>("host", "0.0.0.0")),
+        yw::utils::JsonConfig::Get<int>("scanner.manager_port",
+            yw::utils::JsonConfig::Get<int>("port", 18888)),
+        yw::utils::JsonConfig::Get<std::string>("scanner.url_heartbeat", "/heartbeat"),
+        yw::utils::JsonConfig::Get<std::string>("scanner.multicast_ip", "239.192.168.80"),
+        yw::utils::JsonConfig::Get<int>("scanner.multicast_port", 3980),
+        yw::utils::JsonConfig::Get<int>("scanner.interval_ms", 3000)
     );
     scanner_->start();
 
@@ -58,7 +62,7 @@ std::optional<NodeExt> NodeManager::getNodeByIP(const std::string& ip) const {
 
 void NodeManager::setupRoutes() {
     if (!service_) {
-        std::cerr << "HttpService not available for route setup" << std::endl;
+        spdlog::error("HttpService not available for route setup");
         return;
     }
     

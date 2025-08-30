@@ -1,25 +1,20 @@
 #include "../../include/yw/bmc.h"
 #include "bmc_listener.h"
+#include "yw/JsonConfig.h"
 #include <mutex>
 
 namespace yw {
 namespace bmc {
 
 std::shared_ptr<IBMCModule> BMCFactory::getBMCModule() {
-    static std::shared_ptr<IBMCModule> instance;
-    static std::mutex mtx;
-    std::lock_guard<std::mutex> lock(mtx);
-    if (!instance) {
-        // 硬编码：监听任意网卡，固定组播与端口，数据库连接可按需调整
-        const std::string listen_ip = ""; // 0.0.0.0
-        const std::string mcast_group = "224.100.200.15";
-        const std::uint16_t mcast_port = 5715;
-        const std::string conninfo = "postgres://postgres:HZ715Net@localhost:5432/yw";
-        auto listener = std::make_shared<BMCListener>(listen_ip, mcast_group, mcast_port, conninfo);
-        listener->start();
-        instance = listener;
-    }
-    return instance;
+    // 从配置加载 BMC 与数据库参数
+    const std::string listen_ip   = yw::utils::JsonConfig::Get<std::string>("bmc.listen_ip", "");
+    const std::string mcast_group = yw::utils::JsonConfig::Get<std::string>("bmc.multicast_group", "224.100.200.15");
+    const std::uint16_t mcast_port = static_cast<std::uint16_t>(yw::utils::JsonConfig::Get<int>("bmc.multicast_port", 5715));
+    const std::string conninfo    = yw::utils::JsonConfig::Get<std::string>("db.conninfo", "postgres://postgres:HZ715Net@localhost:5432/yw");
+    auto listener = std::make_shared<BMCListener>(listen_ip, mcast_group, mcast_port, conninfo);
+    listener->start();
+    return listener;
 }
 
 } // namespace bmc

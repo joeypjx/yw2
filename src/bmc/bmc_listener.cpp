@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <cstring>
-#include <iostream>
+#include <spdlog/spdlog.h>
 #include "bmc_cache.h"
 
 namespace yw {
@@ -49,13 +49,13 @@ void BMCListener::stop() {
 bool BMCListener::openSocket() {
     sock_ = ::socket(AF_INET, SOCK_DGRAM, 0);
     if (sock_ < 0) {
-        std::perror("socket");
+        spdlog::error("socket() failed: {}", strerror(errno));
         return false;
     }
 
     int reuse = 1;
     if (setsockopt(sock_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
-        std::perror("setsockopt SO_REUSEADDR");
+        spdlog::warn("setsockopt(SO_REUSEADDR) failed: {}", strerror(errno));
     }
 
     sockaddr_in addr{};
@@ -63,7 +63,7 @@ bool BMCListener::openSocket() {
     addr.sin_port = htons(mcast_port_);
     addr.sin_addr.s_addr = INADDR_ANY;
     if (bind(sock_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
-        std::perror("bind");
+        spdlog::error("bind() failed: {}", strerror(errno));
         return false;
     }
 
@@ -71,7 +71,7 @@ bool BMCListener::openSocket() {
     mreq.imr_multiaddr.s_addr = inet_addr(mcast_group_.c_str());
     mreq.imr_interface.s_addr = listen_ip_.empty() ? htonl(INADDR_ANY) : inet_addr(listen_ip_.c_str());
     if (setsockopt(sock_, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
-        std::perror("setsockopt IP_ADD_MEMBERSHIP");
+        spdlog::error("setsockopt(IP_ADD_MEMBERSHIP) failed: {}", strerror(errno));
         return false;
     }
 
@@ -94,22 +94,21 @@ void BMCListener::runLoop() {
         ssize_t n = ::recvfrom(sock_, buffer, sizeof(buffer), 0, reinterpret_cast<sockaddr*>(&src), &slen);
         if (n < 0) {
             if (!running_) break;
-            std::perror("recvfrom");
-            std::cerr << "[BMCListener] recvfrom 失败，errno=" << errno << std::endl;
+            spdlog::error("recvfrom failed: {} (errno={})", strerror(errno), errno);
             continue;
         }
         if (static_cast<size_t>(n) < sizeof(UdpInfo)) {
             // 丢弃无效包
-            std::cerr << "[BMCListener] 收到包长度过小(" << n << "字节)，丢弃" << std::endl;
+            spdlog::warn("[BMCListener] 收到包长度过小({})，丢弃", n);
             continue;
         }
         const UdpInfo* pkt = reinterpret_cast<const UdpInfo*>(buffer);
         if (pkt->head != 0xA55A || pkt->tail != 0xA55A) {
-            std::cerr << "[BMCListener] 包头/包尾校验失败，丢弃" << std::endl;
+            spdlog::warn("[BMCListener] 包头/包尾校验失败，丢弃");
             continue;
         }
         if (handler_) {
-            std::cerr << "[BMCListener] 调用 handler 处理 box_id=" << pkt->boxid << std::endl;
+            spdlog::debug("[BMCListener] 调用 handler 处理 box_id={}", pkt->boxid);
             handler_(*pkt);
         }
         // 写入缓存（按 box_id）
@@ -121,7 +120,7 @@ void BMCListener::runLoop() {
                 repository_->save(*pkt);
             }
             catch (const std::exception& e) {
-                std::cerr << "[BMCListener] bmc save failed: " << e.what() << std::endl;
+                spdlog::error("[BMCListener] bmc save failed: {}", e.what());
             }
         }
     }

@@ -2,7 +2,7 @@
 #include <chrono>
 #include <sstream>
 #include <algorithm>
-#include <iostream>
+#include <spdlog/spdlog.h>
 
 namespace yw {
 namespace alert {
@@ -134,7 +134,7 @@ bool DatabaseRuleRepository::upsertRule(const Rule& rule) {
         
     } catch (const std::exception& e) {
         // 记录错误但不抛出异常
-        std::cout << "upsertRule error: " << e.what() << std::endl;
+        spdlog::error("upsertRule error: {}", e.what());
         return false;
     }
 }

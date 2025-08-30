@@ -4,6 +4,7 @@
 #include "DatabaseRuleRepository.h"
 #include <chrono>
 #include <cctype>
+#include "yw/JsonConfig.h"
 
 namespace yw {
 namespace alert {
@@ -37,7 +38,7 @@ static std::int64_t parseDurationMs(const std::string& s, std::int64_t default_m
 AlertManager::AlertManager() {
     // 创建数据库连接
     try {
-        conn_ = std::make_shared<pqxx::connection>("postgres://postgres:HZ715Net@localhost:5432/yw");
+        conn_ = std::make_shared<pqxx::connection>(yw::utils::JsonConfig::Get<std::string>("db.conninfo", "postgres://postgres:HZ715Net@localhost:5432/yw"));
     } catch (const std::exception& e) {
         // 如果数据库连接失败，conn_ 将为 nullptr
         // 后续服务初始化时会检查 conn_ 状态

@@ -9,23 +9,28 @@
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include <iomanip>
+#include <spdlog/spdlog.h>
 
 namespace yw {
 namespace web {
 
 using json = nlohmann::json;
 
-WebController::WebController(std::shared_ptr<hv::HttpService> service,
+WebController::WebController(std::shared_ptr<hv::HttpServer> server,
+                             std::shared_ptr<hv::HttpService> service,
                              std::shared_ptr<node::INodeModule> node_module,
                              std::shared_ptr<monitor::IMonitorModule> monitor_module,
                              std::shared_ptr<bmc::IBMCModule> bmc_module,
                              std::shared_ptr<alert::IAlertModule> alert_module)
-    : service_(std::move(service)),
+    : server_(std::move(server)),
+      service_(std::move(service)),
       node_module_(std::move(node_module)),
       monitor_module_(std::move(monitor_module)),
       bmc_module_(std::move(bmc_module)),
-      alert_module_(std::move(alert_module)),
-      pusher_(std::make_unique<AlertPusher>()) {
+      alert_module_(std::move(alert_module)) {
+
+    pusher_ = std::make_unique<AlertPusher>(server_.get());
+
     if (service_) {
         service_->AllowCORS();
         setupRoutes();
@@ -35,14 +40,17 @@ WebController::WebController(std::shared_ptr<hv::HttpService> service,
     if (alert_module_) {
         alert_module_->setPushCallback([this](const alert::AlertEvent& e){
             if (pusher_) {
-                pusher_->start(":8081");
                 pusher_->push(e);
             }
         });
     }
 }
 
-WebController::~WebController() = default;
+WebController::~WebController() {
+    if (pusher_) {
+        pusher_->stop();
+    }
+}
 
 void WebController::setupRoutes() {
 
@@ -244,7 +252,7 @@ void WebController::setupRoutes() {
             ctx->setContentType("application/json");
             return ctx->send(resp.dump(2));
         } catch (const std::exception& e) {
-            std::cerr << "query resource failed: " << e.what() << std::endl;
+            spdlog::error("query resource failed: {}", e.what());
             return 500;
         }
     });

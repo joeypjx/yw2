@@ -1,7 +1,7 @@
 #include "monitor_manager.h"
 #include "yw/monitor_model.h"
 #include <nlohmann/json.hpp>
-#include <iostream>
+#include <spdlog/spdlog.h>
 #include <chrono>
 #include <hv/HttpServer.h>
 #include <hv/HttpService.h>
@@ -19,17 +19,22 @@ MonitorManager::MonitorManager(std::shared_ptr<hv::HttpService> service,
     : service_(std::move(service)), node_module_(std::move(node_module)) {
     service_->AllowCORS();
     
-    // 启动资源扫描器（示例 manager_ip 与端口与 NodeManager 保持一致，路由改为 /resource）
+    // 启动资源扫描器（与 NodeManager 配置保持一致；从配置读取）
     scanner_ = std::make_unique<yw::utils::MulticastScanner>(
-        yw::utils::JsonConfig::Get<std::string>("ip", "192.168.60.5"),
-        yw::utils::JsonConfig::Get<int>("port", 18888),
-        "/resource"
+        yw::utils::JsonConfig::Get<std::string>("scanner.manager_ip",
+            yw::utils::JsonConfig::Get<std::string>("host", "0.0.0.0")),
+        yw::utils::JsonConfig::Get<int>("scanner.manager_port",
+            yw::utils::JsonConfig::Get<int>("port", 18888)),
+        yw::utils::JsonConfig::Get<std::string>("scanner.url_resource", "/resource"),
+        yw::utils::JsonConfig::Get<std::string>("scanner.multicast_ip", "239.192.168.80"),
+        yw::utils::JsonConfig::Get<int>("scanner.multicast_port", 3980),
+        yw::utils::JsonConfig::Get<int>("scanner.interval_ms", 3000)
     );
     scanner_->start();
 
-    // 初始化仓库（连接串可改为配置项）
+    // 初始化仓库（连接串改为配置项）
     repository_ = std::make_unique<ResourceRepository>(
-        "postgres://postgres:HZ715Net@localhost:5432/yw"
+        yw::utils::JsonConfig::Get<std::string>("db.conninfo", "postgres://postgres:HZ715Net@localhost:5432/yw")
     );
 
     // 初始化资源缓存
@@ -85,7 +90,7 @@ MetricsSeries MonitorManager::queryMetricsSeries(const std::string& host_ip,
 
 void MonitorManager::setupRoutes() {
     if (!service_) {
-        std::cerr << "HttpService not available for monitor routes" << std::endl;
+        spdlog::error("HttpService not available for monitor routes");
         return;
     }
 
@@ -105,7 +110,7 @@ void MonitorManager::setupRoutes() {
                 try {
                     repository_->save(res);
                 } catch (const std::exception& e) {
-                    std::cerr << "save resource failed: " << e.what() << std::endl;
+                    spdlog::error("save resource failed: {}", e.what());
                     return 500;
                 }
             }
