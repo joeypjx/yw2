@@ -169,7 +169,9 @@ ORDER BY
 )SQL";
     pqxx::result r = tx.exec_params(bmc_query, host_ip, duration);
 
-    for (const auto& row : r) {
+    for (std::size_t i = 0; i < r.size(); ++i) {
+        if (i == 0 || i + 1 == r.size()) continue;
+        const auto& row = r[i];
         BMCSensorRow e{};
         const std::string sensorname = row[0].as<std::string>("");
         e.timestamp      = row[1].as<long long>(0);
