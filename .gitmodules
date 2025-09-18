@@ -16,3 +16,6 @@
 [submodule "third_party/eventpp"]
 	path = third_party/eventpp
 	url = https://github.com/wqking/eventpp.git
+[submodule "third_party/libfreeipmi"]
+	path = third_party/libfreeipmi
+	url = https://git.savannah.gnu.org/git/freeipmi.git
