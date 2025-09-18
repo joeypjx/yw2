@@ -52,3 +52,36 @@ docker run -d -p 6030:6030 -p 6041:6041 -p 6043:6043 -p 6044-6049:6044-6049 -p 6
 
 test HZ715Net resource
 
+docker run -d --name mysql8 \
+  -e MYSQL_ROOT_PASSWORD=YourStrongPwd \
+  -e TZ=Asia/Shanghai \
+  -p 3306:3306 \
+  -v /data/mysql/data:/var/lib/mysql \
+  -v /data/mysql/conf.d:/etc/mysql/conf.d \
+  mysql:8.0.43 \
+  --default-authentication-plugin=mysql_native_password \
+  --character-set-server=utf8mb4 \
+  --collation-server=utf8mb4_0900_ai_ci
+
+
+
+mkdir -p /data/nginx/{conf.d,html,logs}
+cat >/data/nginx/conf.d/default.conf <<'EOF'
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+EOF
+echo 'OK' > /data/nginx/html/index.html
+
+docker run -d --name nginx \
+  -p 80:80 -p 443:443 \
+  -v /data/nginx/conf.d:/etc/nginx/conf.d \
+  -v /data/nginx/html:/usr/share/nginx/html \
+  -v /data/nginx/logs:/var/log/nginx \
+  nginx:1.27-alpine
