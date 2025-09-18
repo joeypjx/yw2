@@ -27,8 +27,15 @@ void registerNodeRoutes(hv::HttpService* service,
                 filter_box_id = std::stoi(params["box_id"]);
                 has_filter = true;
             } catch (...) {
+                nlohmann::json resp = {
+                    {"api_version", 1},
+                    {"status", "error"},
+                    {"message", "invalid box_id"},
+                    {"data", nlohmann::json::object()}
+                };
                 ctx->setContentType("application/json");
-                return ctx->send("{\"error\":\"invalid box_id\"}");
+                ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
+                return ctx->send(resp.dump(2));
             }
         }
         if (params.find("host_ip") != params.end()) {
@@ -51,12 +58,20 @@ void registerNodeRoutes(hv::HttpService* service,
         }
 
         nlohmann::json resp;
-        if (has_host_filter && !resp_nodes.empty()) {
-            resp = {
-                {"api_version", 1},
-                {"data", resp_nodes[0]},
-                {"status", "success"},
-            };
+        if (has_host_filter) {
+            if (!resp_nodes.empty()) {
+                resp = {
+                    {"api_version", 1},
+                    {"data", resp_nodes[0]},
+                    {"status", "success"},
+                };
+            } else {
+                resp = {
+                    {"api_version", 1},
+                    {"data", json::object()},
+                    {"status", "success"},
+                };
+            }
         } else {
             resp = {
                 {"api_version", 1},

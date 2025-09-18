@@ -20,7 +20,12 @@ void registerMetricsRoutes(hv::HttpService* service,
 
     // /node/metrics
     service->GET("/node/metrics", [node_module, monitor_module](const HttpContextPtr& ctx) {
-        if (!node_module) return 500;
+        if (!node_module) {
+            nlohmann::json resp = {{"api_version",1},{"status","error"},{"message","node module unavailable"},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_INTERNAL_SERVER_ERROR);
+            return ctx->send(resp.dump(2));
+        }
         const auto now_ms = std::chrono::time_point_cast<std::chrono::seconds>(
             std::chrono::system_clock::now()
         ).time_since_epoch().count();
@@ -51,7 +56,12 @@ void registerMetricsRoutes(hv::HttpService* service,
 
     // /node/historical-metrics
     service->GET("/node/historical-metrics", [node_module, monitor_module, bmc_module](const HttpContextPtr& ctx) {
-        if (!monitor_module) return 500;
+        if (!monitor_module) {
+            nlohmann::json resp = {{"api_version",1},{"status","error"},{"message","monitor module unavailable"},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_INTERNAL_SERVER_ERROR);
+            return ctx->send(resp.dump(2));
+        }
 
         std::string ip;
         std::string duration = "1m";
@@ -70,7 +80,10 @@ void registerMetricsRoutes(hv::HttpService* service,
         }
 
         if (ip.empty()) {
-            return ctx->send("{\"error\":\"missing ip\"}");
+            nlohmann::json resp = {{"api_version",1},{"status","error"},{"message","missing host_ip"},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
+            return ctx->send(resp.dump(2));
         }
 
         try {
@@ -110,7 +123,10 @@ void registerMetricsRoutes(hv::HttpService* service,
             return ctx->send(resp.dump(2));
         } catch (const std::exception& e) {
             spdlog::error("query resource failed: {}", e.what());
-            return 500;
+            nlohmann::json resp = {{"api_version",1},{"status","error"},{"message","internal error"},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_INTERNAL_SERVER_ERROR);
+            return ctx->send(resp.dump(2));
         }
     });
 }

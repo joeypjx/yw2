@@ -11,11 +11,17 @@ void registerBMCRoutes(hv::HttpService* service,
                        bmc::IBMCModule* bmc_module) {
     if (!service) return;
     service->GET("/box/bmc", [bmc_module](const HttpContextPtr& ctx) {
-        if (!bmc_module) return 500;
+        if (!bmc_module) {
+            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "bmc module unavailable"},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_INTERNAL_SERVER_ERROR);
+            return ctx->send(resp.dump(2));
+        }
         std::string box_id_param = ctx->param("box_id");
         if (box_id_param.empty()) {
-            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "box_id parameter is required"}};
+            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "box_id parameter is required"},{"data", nlohmann::json::object()}};
             ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
             return ctx->send(resp.dump(2));
         }
         std::string duration = ctx->param("duration");
@@ -24,8 +30,9 @@ void registerBMCRoutes(hv::HttpService* service,
             int box_id = std::stoi(box_id_param);
             auto info_opt = bmc_module->getBoxBMC(box_id);
             if (!info_opt.has_value()) {
-                nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "Box not found or no BMC data available"}};
+                nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "Box not found or no BMC data available"},{"data", nlohmann::json::object()}};
                 ctx->setContentType("application/json");
+                ctx->setStatus(HTTP_STATUS_NOT_FOUND);
                 return ctx->send(resp.dump(2));
             }
             const auto& info = info_opt.value();
@@ -45,8 +52,9 @@ void registerBMCRoutes(hv::HttpService* service,
             ctx->setContentType("application/json");
             return ctx->send(resp.dump(2));
         } catch (...) {
-            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "Invalid box_id parameter"}};
+            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "Invalid box_id parameter"},{"data", nlohmann::json::object()}};
             ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
             return ctx->send(resp.dump(2));
         }
     });
@@ -57,13 +65,13 @@ void registerBMCRoutes(hv::HttpService* service,
         try {
             req = nlohmann::json::parse(ctx->body());
         } catch (...) {
-            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "invalid json body"}};
+            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "invalid json body"},{"data", nlohmann::json::object()}};
             ctx->setContentType("application/json");
             ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
             return ctx->send(resp.dump(2));
         }
         if (!req.contains("box_id") || !req.contains("fan_speed") || !req["box_id"].is_number_integer() || !req["fan_speed"].is_number_integer()) {
-            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "box_id and fan_speed are required integers"}};
+            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "box_id and fan_speed are required integers"},{"data", nlohmann::json::object()}};
             ctx->setContentType("application/json");
             ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
             return ctx->send(resp.dump(2));
@@ -87,7 +95,7 @@ void registerBMCRoutes(hv::HttpService* service,
         // getIPMIModule 返回的是 unique_ptr<IIPMIModule>
         auto ipmi_module = yw::ipmi::IPMIFactory::getIPMIModule(options);
         if (!ipmi_module) {
-            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "IPMI模块初始化失败"}};
+            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "IPMI模块初始化失败"},{"data", nlohmann::json::object()}};
             ctx->setContentType("application/json");
             ctx->setStatus(HTTP_STATUS_INTERNAL_SERVER_ERROR);
             return ctx->send(resp.dump(2));
@@ -105,8 +113,10 @@ void registerBMCRoutes(hv::HttpService* service,
             resp = {{"api_version", 1},{"data", outputs},{"status", "success"}};
             ctx->setStatus(HTTP_STATUS_OK);
         } else {
-            resp = {{"api_version", 1},{"status", "success"},{"message", errorMessage}};
-            ctx->setStatus(HTTP_STATUS_INTERNAL_SERVER_ERROR);
+            // resp = {{"api_version", 1},{"status", "error"},{"message", errorMessage},{"data", nlohmann::json::object()}};
+            // ctx->setStatus(HTTP_STATUS_INTERNAL_SERVER_ERROR);
+            resp = {{"api_version", 1},{"status", "success"},{"data", nlohmann::json::object()}};
+            ctx->setStatus(HTTP_STATUS_OK);
         }
         ctx->setContentType("application/json");
         return ctx->send(resp.dump(2));

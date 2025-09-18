@@ -27,9 +27,33 @@ public:
     template <typename T>
     T get(const std::string& key, const T& def) const {
         if (!data_.is_object()) return def;
-        auto it = data_.find(key);
-        if (it == data_.end() || it->is_null()) return def;
-        try { return it->get<T>(); } catch (...) { return def; }
+
+        // 支持点号路径（例如："db.conninfo" / "scanner.manager_ip"）
+        const nlohmann::json* current = &data_;
+        std::size_t start = 0;
+        while (start <= key.size()) {
+            std::size_t dot = key.find('.', start);
+            std::string part = key.substr(start, (dot == std::string::npos) ? std::string::npos : (dot - start));
+            if (part.empty()) return def;
+
+            auto it = current->find(part);
+            if (it == current->end() || it->is_null()) return def;
+
+            if (dot == std::string::npos) {
+                // 最后一级，尝试转换为目标类型
+                try {
+                    return it->get<T>();
+                } catch (...) {
+                    return def;
+                }
+            } else {
+                // 继续深入
+                if (!it->is_object()) return def;
+                current = &(*it);
+                start = dot + 1;
+            }
+        }
+        return def;
     }
 
 private:
