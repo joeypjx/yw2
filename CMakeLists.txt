@@ -26,6 +26,9 @@ endif()
 
 # 设置全局包含目录
 include_directories(${CMAKE_SOURCE_DIR}/include)
+## libfreeipmi
+include_directories(${CMAKE_SOURCE_DIR}/third_party/libfreeipmi/libfreeipmi/include)
+link_directories(${CMAKE_SOURCE_DIR}/third_party/libfreeipmi/libfreeipmi/.libs)
 
 # 设置 libpq 构建输出目录
 # set(LIBPQ_BUILD_DIR "${CMAKE_BINARY_DIR}/third_party/postgres")
@@ -67,6 +70,13 @@ set(PostgreSQL_FOUND TRUE)
 set(PostgreSQL_VERSION "REL_15_STABLE")
 set(PostgreSQL_INCLUDE_DIRS ${PostgreSQL_INCLUDE_DIR})
 set(PostgreSQL_LIBRARIES ${PostgreSQL_LIBRARY})
+
+# 设置libfreeipmi选项
+set(FREEIPMI_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/third_party/libfreeipmi/libfreeipmi/include")
+set(FREEIPMI_LIBRARIES
+    "${CMAKE_SOURCE_DIR}/third_party/libfreeipmi/libfreeipmi/.libs/libfreeipmi.a"
+)
+set(FREEIPMI_FOUND TRUE)
 
 # 设置libhv构建选项
 set(BUILD_SHARED OFF CACHE BOOL "Build libhv shared library" FORCE)

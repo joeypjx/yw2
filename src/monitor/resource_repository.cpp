@@ -151,10 +151,8 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
             "ORDER BY ts ASC",
             host_ip, duration
         );
-        out.cpu.reserve(r.size() > 2 ? r.size() - 2 : 0);
-        for (std::size_t i = 0; i < r.size(); ++i) {
-            if (i == 0 || i + 1 == r.size()) continue;
-            const auto& row = r[i];
+        out.cpu.reserve(r.size());
+        for (const auto& row : r) {
             CpuPoint p{};
             p.timestamp      = row[0].as<long long>(0);
             p.usage_percent  = row[1].as<double>(0);
@@ -169,6 +167,10 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
             p.power          = row[10].as<double>(0);
             out.cpu.push_back(std::move(p));
         }
+
+        // delete the first and last element
+        out.cpu.erase(out.cpu.begin());
+        out.cpu.erase(out.cpu.end() - 1);
     }
 
     // Memory - 每10秒聚合平均值
@@ -194,10 +196,8 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
             "ORDER BY ts ASC",
             host_ip, duration
         );
-        out.memory.reserve(r.size() > 2 ? r.size() - 2 : 0);
-        for (std::size_t i = 0; i < r.size(); ++i) {
-            if (i == 0 || i + 1 == r.size()) continue;
-            const auto& row = r[i];
+        out.memory.reserve(r.size());
+        for (const auto& row : r) {
             MemoryPoint p{};
             p.timestamp     = row[0].as<long long>(0);
             p.total         = row[1].as<long long>(0);
@@ -206,6 +206,10 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
             p.usage_percent = row[4].as<double>(0);
             out.memory.push_back(std::move(p));
         }
+
+        // delete the first and last element
+        out.memory.erase(out.memory.begin());
+        out.memory.erase(out.memory.end() - 1);
     }
 
     // Network - 每10秒聚合平均值，按 interface 分组
@@ -251,9 +255,7 @@ ORDER BY
     dims.interface, ts ASC
 )SQL";
         pqxx::result r = tx.exec_params(network_query, host_ip, duration);
-        for (std::size_t i = 0; i < r.size(); ++i) {
-            if (i == 0 || i + 1 == r.size()) continue;
-            const auto& row = r[i];
+        for (const auto& row : r) {
             NetworkPoint p{};
             const std::string iface = row[0].as<std::string>("");
             p.timestamp   = row[1].as<long long>(0);
@@ -267,6 +269,11 @@ ORDER BY
             p.rx_rate     = row[8].as<long long>(0);
             p.tx_rate     = row[9].as<long long>(0);
             out.network[iface].push_back(std::move(p));
+        }
+
+        for (auto& [iface, points] : out.network) {
+            points.erase(points.begin());
+            points.erase(points.end() - 1);
         }
     }
 
@@ -311,9 +318,7 @@ ORDER BY
    dims.device, ts ASC
 )SQL"; 
         pqxx::result r = tx.exec_params(disk_query, host_ip, duration);
-        for (std::size_t i = 0; i < r.size(); ++i) {
-            if (i == 0 || i + 1 == r.size()) continue;
-            const auto& row = r[i];
+        for (const auto& row : r) {
             DiskPoint p{};
             const std::string device = row[0].as<std::string>("");
             p.device       = device;
@@ -324,6 +329,11 @@ ORDER BY
             p.free         = row[5].as<long long>(0);
             p.usage_percent= row[6].as<double>(0);
             out.disk[device].push_back(std::move(p));
+        }
+
+        for (auto& [device, points] : out.disk) {
+            points.erase(points.begin());
+            points.erase(points.end() - 1);
         }
     }
 
@@ -370,9 +380,7 @@ ORDER BY
     dims.gpu_index, ts ASC
 )SQL";
         pqxx::result r = tx.exec_params(gpu_query, host_ip, duration);
-        for (std::size_t i = 0; i < r.size(); ++i) {
-            if (i == 0 || i + 1 == r.size()) continue;
-            const auto& row = r[i];
+        for (const auto& row : r) {
             GpuPoint p{};
             const int index = row[0].as<int>(0);
             p.index         = index;
@@ -386,6 +394,11 @@ ORDER BY
             p.power         = row[8].as<double>(0);
             std::string key = std::string("gpu_") + std::to_string(index);
             out.gpu[key].push_back(std::move(p));
+        }
+
+        for (auto& [key, points] : out.gpu) {
+            points.erase(points.begin());
+            points.erase(points.end() - 1);
         }
     }
 

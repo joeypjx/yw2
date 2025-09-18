@@ -169,9 +169,7 @@ ORDER BY
 )SQL";
     pqxx::result r = tx.exec_params(bmc_query, host_ip, duration);
 
-    for (std::size_t i = 0; i < r.size(); ++i) {
-        if (i == 0 || i + 1 == r.size()) continue;
-        const auto& row = r[i];
+    for (const auto& row : r) {
         BMCSensorRow e{};
         const std::string sensorname = row[0].as<std::string>("");
         e.timestamp      = row[1].as<long long>(0);
@@ -184,6 +182,11 @@ ORDER BY
         e.sensor_value   = static_cast<std::double_t>(e.sensorvalue_H) + static_cast<std::double_t>(e.sensorvalue_L) * 0.01;
         e.sensoralmtype  = static_cast<std::uint16_t>(row[7].as<int>(0));
         out[sensorname].push_back(std::move(e));
+    }
+
+    for (auto& [sensorname, points] : out) {
+        points.erase(points.begin());
+        points.erase(points.end() - 1);
     }
 
     return out;
