@@ -248,8 +248,8 @@ void registerAlertRoutes(hv::HttpService* service,
         return ctx->send(resp.dump(2));
     });
 
-    // POST /alarm/component
-    service->POST("/alarm/component", [alert_module](const HttpContextPtr& ctx) {
+    // POST /alert/component
+    service->POST("/alert/component", [alert_module](const HttpContextPtr& ctx) {
         if (!alert_module) {
             json resp = {{"api_version",1},{"status","error"},{"message","alert module unavailable"},{"data", json::object()}};
             ctx->setContentType("application/json");

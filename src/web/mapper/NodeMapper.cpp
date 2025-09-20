@@ -12,7 +12,24 @@ NodeView toNodeView(const node::NodeExt& ext, const monitor::Resource* res) {
     v.host_ip = ext.host_ip;
     v.hostname = ext.hostname;
     v.status = ext.status;
+    v.board_type = ext.board_type;
+    v.box_type = ext.box_type;
+    v.cpu_type = ext.cpu_type;
+    v.os_type = ext.os_type;
+    v.resource_type = ext.resource_type;
+    v.cpu_arch = ext.cpu_arch;
     v.updated_at = ext.updated_at;
+    v.manufacturer = ext.manufacturer;
+    v.serial_number = ext.serial_number;
+    v.production_date = ext.production_date;
+
+    for (const auto& g : ext.gpu) {
+        GpuDevice gd;
+        gd.index = g.index;
+        gd.name = g.name;
+        v.gpu.push_back(std::move(gd));
+    }
+    
     if (res) {
         // 只填充 component，沿用现有 JSON 结构
         v.component = res->component;
