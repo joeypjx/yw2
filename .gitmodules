@@ -19,3 +19,6 @@
 [submodule "third_party/libfreeipmi"]
 	path = third_party/libfreeipmi
 	url = https://git.savannah.gnu.org/git/freeipmi.git
+[submodule "third_party/openipmi"]
+	path = third_party/openipmi
+	url = https://github.com/cminyard/openipmi
