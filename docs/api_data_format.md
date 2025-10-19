@@ -48,7 +48,6 @@
 {
   "alert_name": "string",
   "alert_type": "string",
-  "created_at": "string",
   "description": "string",
   "enabled": true,
   "expression": {
@@ -68,10 +67,8 @@
     ]
   },
   "for": "string",
-  "id": "string",
   "severity": "string",
   "summary": "string",
-  "updated_at": "string"
 }
 ```
 
@@ -1164,8 +1161,8 @@ curl -X POST http://localhost:8080/alarm/rules \
     "description": "节点 {{host_ip}} CPU 使用率过高，当前值：{{value}}",
     "enabled": true,
     "expression": {
-      "stable": "node",
-      "metric": "cpu",
+      "stable": "cpu",
+      "metric": "usa",
       "conditions": [
         {
           "operator": ">",

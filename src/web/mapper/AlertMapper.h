@@ -5,6 +5,7 @@
 #include <nlohmann/json.hpp>
 
 #include "yw/alert_model.h"
+#include "dto/alert_dto.h"
 
 namespace yw {
 namespace web {

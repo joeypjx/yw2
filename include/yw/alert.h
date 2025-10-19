@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 #include <functional>
 
+#include "alert_types.h"
 #include "alert_model.h"
 
 namespace hv {
@@ -35,7 +36,6 @@ public:
     // 手动处理告警事件
     virtual bool appendAlertEvent(const AlertEvent& event) = 0;
 
-    virtual bool ackAlert(const std::string& fingerprint, const std::string& user, const std::string& comment) = 0;
 
     // 设置外部推送回调（由 Web 层提供）
     virtual void setPushCallback(std::function<void(const AlertEvent&)> cb) = 0;

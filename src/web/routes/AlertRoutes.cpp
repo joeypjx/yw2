@@ -1,6 +1,7 @@
 #include "AlertRoutes.h"
 
 #include <nlohmann/json.hpp>
+#include <iomanip>
 #include "mapper/AlertMapper.h"
 
 namespace yw {
@@ -39,17 +40,16 @@ void registerAlertRoutes(hv::HttpService* service,
                 return ctx->send(resp.dump(2));
             }
             alert::Rule rule = yw::web::mapper::fromUserAlertRule(ur);
-            rule.window = rule_json.value("window", rule.window);
-            rule.eval_every = rule_json.value("eval_every", rule.eval_every);
+            // 新结构中不再有 window 和 eval_every 字段
             int ft = rule_json.value("for_times", 0);
             if (rule_json.contains("for") && rule_json["for"].is_string()) {
                 long long for_seconds = yw::web::mapper::parseDurationSeconds(rule_json["for"].get<std::string>());
-                long long every_seconds = yw::web::mapper::parseDurationSeconds(rule.eval_every);
+                long long every_seconds = 1; // 使用默认值
                 if (every_seconds <= 0) every_seconds = 1;
                 long long quotient = (for_seconds + every_seconds - 1) / every_seconds;
                 ft = static_cast<int>(quotient);
             }
-            if (ft <= 0) ft = 1; rule.for_times = ft;
+            if (ft <= 0) ft = 1; // 新结构中不再有 for_times 字段
             rule.enabled = ur.enabled;
             if (alert_module->upsertRule(rule)) {
                 json resp = {{"api_version",1},{"data",{{"id",rule.id},{"message","Rule created/updated successfully"}}},{"status","success"}};
@@ -135,17 +135,17 @@ void registerAlertRoutes(hv::HttpService* service,
             if (ur.alert_name.empty() && ur.id.empty()) { ur.id = rid; ur.alert_name = rid; }
             alert::Rule rule = yw::web::mapper::fromUserAlertRule(ur);
             rule.id = rid;
-            rule.window = rule_json.value("window", rule.window);
-            rule.eval_every = rule_json.value("eval_every", rule.eval_every);
+            // 新结构中不再有 window 字段
+            // 新结构中不再有 eval_every 字段
             int ft = rule_json.value("for_times", 0);
             if (rule_json.contains("for") && rule_json["for"].is_string()) {
                 long long for_seconds = yw::web::mapper::parseDurationSeconds(rule_json["for"].get<std::string>());
-                long long every_seconds = yw::web::mapper::parseDurationSeconds(rule.eval_every);
+                long long every_seconds = 1; // 使用默认值
                 if (every_seconds <= 0) every_seconds = 1;
                 long long quotient = (for_seconds + every_seconds - 1) / every_seconds;
                 ft = static_cast<int>(quotient);
             }
-            if (ft <= 0) ft = 1; rule.for_times = ft;
+            if (ft <= 0) ft = 1; // 新结构中不再有 for_times 字段
             rule.enabled = ur.enabled;
             if (alert_module->upsertRule(rule)) {
                 nlohmann::json resp = {{"api_version",1},{"data",{{"id",rule.id},{"message","Rule updated successfully"}}},{"status","success"}};
@@ -266,14 +266,18 @@ void registerAlertRoutes(hv::HttpService* service,
         auto j = nlohmann::json::parse(body);
         alert::AlertEvent event;
         event.fingerprint = j.value("host_ip", "") + "_" + j.value("instance_id", "") + "_" + j.value("uuid", "") + "_" + j.value("index", "");
-        event.rule_id = j.value("rule_id", "component");
-        event.action = "firing";
-        event.status = alert::AlertStatus::Firing;
-        event.severity = alert::Severity::Warn;
-        event.context = j;
-        event.title = "业务组件状态异常";
+        // 新结构中不再有 rule_id 字段
+        event.status = "firing";
+        event.summary = "业务组件状态异常";
+        event.description = "业务组件状态异常";
         event.description = j.value("host_ip", "") + " 节点上 " + j.value("instance_id", "") + " 组件状态为 " + j.value("status", "unknown");
-        event.timestamp_ms = std::chrono::system_clock::now().time_since_epoch().count();
+        // 设置时间字段
+        auto now = std::chrono::system_clock::now();
+        auto time_t = std::chrono::system_clock::to_time_t(now);
+        std::stringstream ss;
+        ss << std::put_time(std::gmtime(&time_t), "%Y-%m-%dT%H:%M:%SZ");
+        event.created_at = ss.str();
+        event.starts_at = event.created_at;
         alert_module->appendAlertEvent(event);
         json resp2 = {{"api_version",1},{"status","success"},{"data", {{"fingerprint", event.fingerprint}}}};
         ctx->setContentType("application/json");

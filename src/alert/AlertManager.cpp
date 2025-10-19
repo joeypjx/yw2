@@ -1,53 +1,33 @@
 // 1. 先包含 AlertManager.h
 #include "AlertManager.h"
+#include "AlertServices.h"  // 包含所有服务实现
 #include "DatabaseEventRepository.h"
 #include "DatabaseRuleRepository.h"
 #include <chrono>
 #include <cctype>
 #include "yw/JsonConfig.h"
+#include "yw/DurationUtils.h"
 
 namespace yw {
 namespace alert {
 
-namespace {
-static std::int64_t parseDurationMs(const std::string& s, std::int64_t default_ms) {
-    if (s.empty()) return default_ms;
-    // 仅支持 123s/123m/123h
-    char unit = s.back();
-    std::size_t len = s.size();
-    if (std::isalpha(static_cast<unsigned char>(unit))) {
-        len -= 1;
-    } else {
-        unit = 's';
-    }
-    std::int64_t val = 0;
-    try {
-        val = std::stoll(s.substr(0, len));
-    } catch (...) {
-        return default_ms;
-    }
-    switch (unit) {
-        case 's': return val * 1000;
-        case 'm': return val * 60 * 1000;
-        case 'h': return val * 60 * 60 * 1000;
-        default:  return default_ms;
-    }
-}
-}
 
 AlertManager::AlertManager() {
     // 创建数据库连接
     try {
         conn_ = std::make_shared<pqxx::connection>(yw::utils::JsonConfig::Get<std::string>("db.conninfo", "postgres://postgres:HZ715Net@localhost:5432/yw"));
+        spdlog::info("Database connection established successfully");
     } catch (const std::exception& e) {
-        // 如果数据库连接失败，conn_ 将为 nullptr
-        // 后续服务初始化时会检查 conn_ 状态
+        spdlog::error("Failed to connect to database: {}", e.what());
+        conn_ = nullptr;
     }
     
     // 组装最小运行所需服务（数据库实现 + 简易提供者）
     rule_repo_     = std::make_shared<DatabaseRuleRepository>(conn_);
     alert_repo_    = std::make_shared<MemoryAlertRepository>();
     event_repo_    = std::make_shared<DatabaseEventRepository>(conn_);
+    // 注意：这里使用 DatabaseEventRepository，如果需要使用 MemoryEventRepository，可以这样创建：
+    // event_repo_ = std::make_shared<MemoryEventRepository>(10000, 7 * 24 * 60 * 60 * 1000); // 10000个事件，7天
     fp_            = std::make_shared<SimpleFingerprintGenerator>();
     ts_            = std::make_shared<SimpleTimeseriesProvider>(conn_);
     evaluator_     = std::make_shared<BasicAlertEvaluator>(ts_);
@@ -57,11 +37,10 @@ AlertManager::AlertManager() {
     // 推送由 Web 层承接，此处不再启动内部 WebSocket 服务
 
     // 为每条规则注册调度任务
-    scheduler_->start();
-
     for (const auto& r : rule_repo_->listRules()) {
         if (!r.enabled) continue;
-        const auto interval_ms = parseDurationMs(r.eval_every, 30000);
+        // 使用默认的评估间隔，因为新结构中可能没有 eval_every 字段
+        const auto interval_ms = 30000; // 30秒默认间隔
         scheduler_->registerTask(r.id, interval_ms, [this, r]{
             const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
@@ -73,9 +52,22 @@ AlertManager::AlertManager() {
             }
         });
     }
+    
+    // 注册定期清理任务（每小时清理一次）
+    scheduler_->registerTask("cleanup_events", 60 * 60 * 1000, [this]{
+        cleanupExpiredEvents();
+    });
+    
+    // 注册完所有任务后再启动调度器
+    scheduler_->start();
+    spdlog::info("AlertManager initialized with {} rules", rule_repo_->listRules().size());
 }
 
-AlertManager::~AlertManager() = default;
+AlertManager::~AlertManager() {
+    if (scheduler_) {
+        scheduler_->stop();
+    }
+}
 
 // startPusher 已移除
 
@@ -86,7 +78,8 @@ bool AlertManager::upsertRule(const Rule& rule) {
     scheduler_->unregisterTask(rule.id);
     const bool ok = rule_repo_->upsertRule(rule);
     if (ok && rule.enabled) {
-        const auto interval_ms = parseDurationMs(rule.eval_every, 30000);
+        // 使用默认的评估间隔
+        const auto interval_ms = 30000; // 30秒默认间隔
         scheduler_->registerTask(rule.id, interval_ms, [this, rule]{
             const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
@@ -116,7 +109,6 @@ std::size_t AlertManager::countEventsByStatus(AlertStatus status) const {
     return event_repo_->countByStatus(status);
 }
 
-bool AlertManager::ackAlert(const std::string& fingerprint, const std::string& user, const std::string& comment) { return state_manager_->ack(fingerprint, user, comment); }
 
 bool AlertManager::appendAlertEvent(const AlertEvent& event) { 
     const bool ok = event_repo_->append(event);
@@ -125,6 +117,14 @@ bool AlertManager::appendAlertEvent(const AlertEvent& event) {
         if (push_cb_) push_cb_(event);
     }
     return ok;
+}
+
+void AlertManager::cleanupExpiredEvents() {
+    // 如果使用的是 MemoryEventRepository，执行清理
+    if (auto mem_repo = std::dynamic_pointer_cast<MemoryEventRepository>(event_repo_)) {
+        mem_repo->cleanup();
+        spdlog::debug("Cleaned up expired events, current size: {}", mem_repo->size());
+    }
 }
 
 } // namespace alert

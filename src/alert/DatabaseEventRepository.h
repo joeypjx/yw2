@@ -15,6 +15,13 @@ public:
     bool append(const AlertEvent& event) override;
     std::vector<AlertEvent> query(const std::string& duration) const override;
     std::size_t countByStatus(AlertStatus status) const override;
+    
+    // 单事件模式：检查事件是否存在
+    bool hasEvent(const std::string& fingerprint) const override;
+    // 单事件模式：获取事件
+    std::optional<AlertEvent> getEvent(const std::string& fingerprint) const override;
+    // 单事件模式：更新事件
+    bool updateEvent(const AlertEvent& event) override;
 
 private:
     std::shared_ptr<pqxx::connection> conn_;

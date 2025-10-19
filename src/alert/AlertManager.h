@@ -41,13 +41,15 @@ public:
     std::vector<AlertEvent> queryEvents(const std::string& duration) const override;
     std::size_t countEventsByStatus(AlertStatus status) const override;
     bool appendAlertEvent(const AlertEvent& event) override;
-    bool ackAlert(const std::string& fingerprint, const std::string& user, const std::string& comment) override;
 
     // 事件调度器访问（订阅方可注册回调）
     EventDispatcher& dispatcher() { return dispatcher_; }
 
     // 设置外部推送回调（由 Web 层提供 push(event)）
     void setPushCallback(std::function<void(const AlertEvent&)> cb) override { push_cb_ = std::move(cb); }
+    
+    // 清理过期事件（如果使用 MemoryEventRepository）
+    void cleanupExpiredEvents();
 
 private:
     std::shared_ptr<pqxx::connection> conn_;

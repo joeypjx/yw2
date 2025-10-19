@@ -24,10 +24,13 @@ struct EvaluationPoint {
 class ITimeseriesProvider {
 public:
     virtual ~ITimeseriesProvider() = default;
-    // 执行表达式（SQL/DSL），按选择器与窗口返回上下文结果。
-    virtual nlohmann::json evaluate(const std::string& expression,
-                                    const LabelSet& selector,
-                                    const std::string& window) = 0;
+    // 执行表达式查询，返回时间窗口内的所有数据点
+    // expression: 表达式对象
+    // window: 时间窗口（如 30s, 5m）
+    // now_ms: 当前时间戳（毫秒）
+    virtual nlohmann::json evaluate(const Expression& expression,
+                                    const std::string& window,
+                                    std::int64_t now_ms) = 0;
 };
 
 class IRuleRepository {
@@ -54,6 +57,12 @@ public:
     virtual std::vector<AlertEvent> query(const std::string& duration) const = 0;
     // 统计：返回指定状态的事件总量（全量，不限时间）
     virtual std::size_t countByStatus(AlertStatus status) const = 0;
+    // 单事件模式：检查事件是否存在
+    virtual bool hasEvent(const std::string& fingerprint) const = 0;
+    // 单事件模式：获取事件
+    virtual std::optional<AlertEvent> getEvent(const std::string& fingerprint) const = 0;
+    // 单事件模式：更新事件
+    virtual bool updateEvent(const AlertEvent& event) = 0;
 };
 
 class IFingerprintGenerator {
@@ -75,7 +84,6 @@ public:
                                           const std::vector<EvaluationPoint>& points,
                                           std::int64_t now_ms) = 0;
     virtual std::vector<AlertState> listActive(const LabelSet& matcher) const = 0;
-    virtual bool ack(const std::string& fingerprint, const std::string& user, const std::string& comment) = 0;
 };
 
 class IScheduler {

@@ -16,6 +16,7 @@ target_include_directories(yw_monitor PRIVATE
 
 target_link_libraries(yw_monitor PRIVATE
     yw_core
+    yw_utils
     pqxx
 )
 

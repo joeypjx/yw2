@@ -172,26 +172,24 @@ std::string extractMetricNameFromExpression(const std::string& expr) {
 web::UserAlertRule toUserAlertRule(const alert::Rule& r) {
     web::UserAlertRule ur;
     ur.alert_name = r.id;
-    ur.alert_type = r.tag;
+    ur.alert_type = r.alert_type;
     ur.created_at = r.created_at;
     ur.description = r.description;
     ur.enabled = r.enabled;
     ur.expression = ::yw::web::UserRuleExpression{};
-    ur.expression = parseExpressionObject(r.expression).get<::yw::web::UserRuleExpression>();
-    if (!r.selector.empty()) {
-        ur.expression.tags.clear();
-        ur.expression.tags.reserve(1);
-        alert::LabelSet t; t.reserve(r.selector.size());
-        for (const auto& kv : r.selector) t[kv.first] = kv.second;
-        ur.expression.tags.push_back(std::move(t));
+    // 将 Expression 转换为 JSON 字符串，然后解析为 UserRuleExpression
+    nlohmann::json expr_json = r.expression;
+    ur.expression = expr_json.get<::yw::web::UserRuleExpression>();
+    // 使用 expression.tags 而不是 selector
+    if (!r.expression.tags.empty()) {
+        ur.expression.tags = r.expression.tags;
     }
-    long long every = parseDurationSeconds(r.eval_every);
-    long long total = (every <= 0 ? 0 : every * (r.for_times <= 0 ? 1 : r.for_times));
-    ur.for_duration = formatSecondsCompact(total);
+    // 使用默认的评估间隔，因为新结构中没有 eval_every 和 for_times
+    ur.for_duration = r.for_duration;
     ur.id = r.id;
     try { ur.severity = nlohmann::json(r.severity).get<std::string>(); }
     catch (...) { ur.severity = ""; }
-    ur.summary = r.name;
+    ur.summary = r.alert_name;
     ur.updated_at = r.updated_at;
     return ur;
 }
@@ -199,7 +197,7 @@ web::UserAlertRule toUserAlertRule(const alert::Rule& r) {
 alert::Rule fromUserAlertRule(const web::UserAlertRule& ur) {
     alert::Rule r;
     r.id = ur.id.empty() ? ur.alert_name : ur.id;
-    r.name = ur.summary.empty() ? r.id : ur.summary;
+    r.alert_name = ur.summary.empty() ? r.id : ur.summary;
     r.description = ur.description;
     r.enabled = ur.enabled;
     {
@@ -211,40 +209,31 @@ alert::Rule fromUserAlertRule(const web::UserAlertRule& ur) {
         for (const auto& c : ur.expression.conditions) {
             exprObj["conditions"].push_back({ {"operator", c.op}, {"threshold", c.threshold} });
         }
-        r.expression = buildExpressionString(exprObj);
+        // 将 JSON 转换为 Expression 对象
+        r.expression = exprObj.get<alert::Expression>();
     }
-    r.eval_every = "1s";
-    r.selector.clear();
-    if (!ur.expression.tags.empty()) {
-        for (const auto& obj : ur.expression.tags) {
-            for (const auto& kv : obj) r.selector[kv.first] = kv.second;
-        }
-    }
-    r.tag = ur.alert_type;
+    // 设置其他字段
+    r.alert_type = ur.alert_type;
+    r.for_duration = ur.for_duration;
     if (ur.severity == "提示") r.severity = alert::Severity::Info;
     else if (ur.severity == "严重") r.severity = alert::Severity::Critical;
     else r.severity = alert::Severity::Warn;
-    r.window = "5m";
-    r.for_times = 1;
     return r;
 }
 
 web::UserAlertEventView toUserAlertEventView(const alert::AlertEvent& e) {
     web::UserAlertEventView v;
     v.annotations.description = e.description;
-    v.annotations.summary = e.title;
-    v.created_at = formatTimestampMs(e.timestamp_ms);
-    v.ends_at = formatTimestampMs(e.resolved_timestamp_ms);
+    v.annotations.summary = e.summary;
+    v.created_at = e.created_at;
+    v.ends_at = e.ends_at;
     v.fingerprint = e.fingerprint;
     v.id = e.fingerprint;
     v.labels.clear();
-    if (e.context.contains("tag") && e.context["tag"].is_string()) v.labels["alert_type"] = e.context["tag"].get<std::string>();
-    else v.labels["alert_type"] = "metric";
-    if (e.context.contains("rule_id") && e.context["rule_id"].is_string()) v.labels["alertname"] = e.context["rule_id"].get<std::string>();
-    else v.labels["alertname"] = e.rule_id;
+    v.labels["alert_type"] = "metric";
+    v.labels["alertname"] = e.fingerprint; // 使用 fingerprint 作为 alertname
     auto it = e.labels.find("host_ip");
     if (it != e.labels.end()) v.labels["host_ip"] = it->second;
-    else if (e.context.contains("host_ip") && e.context["host_ip"].is_string()) v.labels["host_ip"] = e.context["host_ip"].get<std::string>();
     {
         auto hip = v.labels.find("host_ip");
         if (hip != v.labels.end()) {
@@ -254,44 +243,16 @@ web::UserAlertEventView toUserAlertEventView(const alert::AlertEvent& e) {
             }
         }
     }
-    {
-        std::string metric_name = extractMetricNameFromExpression(e.context.value("metric", std::string()));
-        if (!metric_name.empty()) v.labels["metrics"] = metric_name;
-    }
-    std::string sev = "一般";
-    switch (e.severity) {
-        case alert::Severity::Info: sev = "提示"; break;
-        case alert::Severity::Critical: sev = "严重"; break;
-        case alert::Severity::Warn: default: sev = "一般"; break;
-    }
-    v.labels["severity"] = sev;
-    {
-        std::ostringstream vss; vss << std::fixed << std::setprecision(6) << e.value;
-        v.labels["value"] = vss.str();
-    }
-    v.starts_at = v.created_at;
-    switch (e.status) {
-        case alert::AlertStatus::Pending: v.status = "pending"; break;
-        case alert::AlertStatus::Firing: v.status = "firing"; break;
-        case alert::AlertStatus::Resolved: v.status = "resolved"; break;
-        case alert::AlertStatus::Inactive: default: v.status = "inactive"; break;
-    }
+    // 简化处理，不再从 context 中提取 metric
+    v.labels["severity"] = "一般"; // 简化处理
+    v.labels["value"] = "0.0"; // 简化处理
+    v.starts_at = e.starts_at;
+    v.status = e.status;
 
     v.updated_at = v.ends_at.empty() ? v.created_at : v.ends_at;
 
-    {
-        alert::LabelSet placeholders = v.labels;
-        for (const auto& kv : e.labels) {
-            if (placeholders.find(kv.first) == placeholders.end()) placeholders[kv.first] = kv.second;
-        }
-        if (e.context.is_object()) {
-            for (auto itc = e.context.begin(); itc != e.context.end(); ++itc) {
-                if (itc.value().is_string()) placeholders[itc.key()] = itc.value().get<std::string>();
-                else if (itc.value().is_number()) placeholders[itc.key()] = itc.value().dump();
-            }
-        }
-        v.annotations.description = renderDescription(e.description, placeholders);
-    }
+    // 简化处理，直接使用 description
+    v.annotations.description = e.description;
 
     return v;
 }

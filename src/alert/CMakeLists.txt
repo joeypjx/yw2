@@ -13,6 +13,7 @@ target_include_directories(yw_alert PUBLIC
 
 target_link_libraries(yw_alert PRIVATE
     yw_core
+    yw_utils
     hv_static
     nlohmann_json::nlohmann_json
     pqxx

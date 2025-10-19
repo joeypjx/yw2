@@ -8,6 +8,7 @@
 #include "yw/MulticastScanner.h"
 #include "yw/node.h"
 #include "yw/JsonConfig.h"
+#include "yw/DurationUtils.h"
 
 namespace yw {
 namespace monitor {
@@ -58,32 +59,7 @@ MetricsSeries MonitorManager::queryMetricsSeries(const std::string& host_ip,
     MetricsSeries empty;
     if (!repository_) return empty;
 
-    auto normalizeDuration = [](std::string in) -> std::string {
-        if (in.empty()) return std::string("1 minute");
-        auto trim = [](std::string& s){
-            size_t a = s.find_first_not_of(" \t\n\r");
-            size_t b = s.find_last_not_of(" \t\n\r");
-            if (a == std::string::npos) { s.clear(); return; }
-            s = s.substr(a, b - a + 1);
-        };
-        trim(in);
-        if (in.empty()) return std::string("1 minute");
-        char u = in.back();
-        if (u=='s' || u=='S' || u=='m' || u=='M' || u=='h' || u=='H') {
-            std::string num = in.substr(0, in.size()-1);
-            trim(num);
-            if (num.empty()) return std::string("1 minute");
-            bool ok = true; for (char ch : num) { if (ch<'0'||ch>'9') { ok=false; break; } }
-            if (!ok) return in;
-            switch (u) {
-                case 's': case 'S': return num + " seconds";
-                case 'm': case 'M': return num + " minutes";
-                case 'h': case 'H': return num + " hours";
-            }
-        }
-        return in;
-    };
-    std::string intervalStr = normalizeDuration(duration);
+    std::string intervalStr = yw::utils::DurationUtils::parseToPgStandard(duration, "1 minute");
 
     return repository_->queryMetricsSeries(host_ip, intervalStr, kinds);
 }

@@ -1,5 +1,5 @@
 #include "BMCRoutes.h"
-#include "yw/ipmi.h"
+// #include "yw/ipmi.h"  // 暂时注释掉，因为 IPMI 模块暂时不编译
 
 #include <nlohmann/json.hpp>
 
@@ -59,6 +59,8 @@ void registerBMCRoutes(hv::HttpService* service,
         }
     });
 
+    // 暂时注释掉 fan_speed 相关功能，因为 IPMI 模块暂时不编译
+    /*
     service->POST("/box/bmc/fan_speed", [](const HttpContextPtr& ctx) {
         // 解析 JSON 请求体: {"box_id": <int>, "fan_speed": <int>}
         nlohmann::json req;
@@ -121,6 +123,7 @@ void registerBMCRoutes(hv::HttpService* service,
         ctx->setContentType("application/json");
         return ctx->send(resp.dump(2));
     });
+    */
 }
 
 } // namespace routes

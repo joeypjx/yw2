@@ -1,6 +1,7 @@
 add_library(yw_utils STATIC
     MulticastScanner.cpp
     JsonConfig.cpp
+    DurationUtils.cpp
 )
 
 target_include_directories(yw_utils PUBLIC

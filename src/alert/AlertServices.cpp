@@ -5,9 +5,36 @@
 #include <iostream>
 #include <numeric>
 #include <iterator>
+#include "yw/DurationUtils.h"
 
 namespace yw {
 namespace alert {
+
+namespace {
+// 评估单个条件
+static bool eval_condition(double value, const Condition& cond) {
+    const auto& op = cond.op;
+    const auto& th = cond.threshold;
+    if (op == ">=") return value >= th;
+    if (op == "<=") return value <= th;
+    if (op == "==") return value == th;
+    if (op == "!=") return value != th;
+    if (op == ">")  return value >  th;
+    if (op == "<")  return value <  th;
+    return false;
+}
+
+// 检查标签是否匹配
+static bool match_tags(const LabelSet& labels, const LabelSet& tag_filter) {
+    for (const auto& [key, value] : tag_filter) {
+        auto it = labels.find(key);
+        if (it == labels.end() || it->second != value) {
+            return false; // 标签不匹配
+        }
+    }
+    return true; // 所有标签都匹配
+}
+}
 
 // SimpleFingerprintGenerator
 std::string SimpleFingerprintGenerator::generate(const std::string& rule_id, const LabelSet& labels) const {
@@ -23,104 +50,73 @@ std::string SimpleFingerprintGenerator::generate(const std::string& rule_id, con
 SimpleTimeseriesProvider::SimpleTimeseriesProvider(std::shared_ptr<pqxx::connection> conn)
     : conn_(std::move(conn)) {}
 
-nlohmann::json SimpleTimeseriesProvider::evaluate(const std::string& expression,
-                                                  const LabelSet& selector,
-                                                  const std::string& window) {
+nlohmann::json SimpleTimeseriesProvider::evaluate(const Expression& expr,
+                                                   const std::string& window,
+                                                   std::int64_t /*now_ms*/) {
     nlohmann::json out;
     out["rows"] = nlohmann::json::array();
 
     if (!conn_) return out;
 
-    // 提取 metric 左侧（去掉比较符及右侧）
-    auto expr_lhs = expression;
-    for (auto op : {std::string(">="), std::string("<="), std::string("=="), std::string("!="), std::string(">"), std::string("<")}) {
-        auto pos = expr_lhs.find(op);
-        if (pos != std::string::npos) { expr_lhs = expr_lhs.substr(0, pos); break; }
-    }
-    // 去空白
-    auto trim = [](std::string s){
-        auto not_space = [](int ch){ return !std::isspace(ch); };
-        s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
-        s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
-        return s;
-    };
-    expr_lhs = trim(expr_lhs);
+    const std::string& stable = expr.stable;
+    const std::string& metric = expr.metric;
 
-    // 解析 metric: domain.field.agg
-    std::vector<std::string> tokens;
-    {
-        std::stringstream ss(expr_lhs);
-        std::string tok;
-        while (std::getline(ss, tok, '.')) { if (!tok.empty()) tokens.push_back(tok); }
-    }
-    if (tokens.size() < 2) {
-        return out; // 未知表达式
-    }
-    std::string domain = tokens[0];
-    std::string field  = tokens[1];
-    std::string agg    = tokens.size() >= 3 ? tokens[2] : std::string("avg");
-    std::transform(agg.begin(), agg.end(), agg.begin(), ::tolower);
-
-    auto to_pg_interval = [](const std::string& w){
-        if (w.empty()) return std::string("INTERVAL '1 minutes'");
-        char unit = w.back();
-        std::string num = w.substr(0, w.size() - (std::isalpha(static_cast<unsigned char>(unit)) ? 1 : 0));
-        if (num.empty()) num = "1";
-        switch (unit) {
-            case 's': return "INTERVAL '" + num + " seconds'";
-            case 'h': return "INTERVAL '" + num + " hours'";
-            case 'm': default: return "INTERVAL '" + num + " minutes'";
-        }
-    };
-    const std::string interval_sql = to_pg_interval(window);
+    const std::string interval_sql = yw::utils::DurationUtils::parseToPgInterval(window);
 
     std::string table;
-    std::string value_col;
+    std::string value_col = metric;
     std::vector<std::string> partition_cols;
 
-    if (domain == "cpu") {
+    // 根据 stable 确定表名
+    if (stable == "cpu") {
         table = "resource_cpu";
-        value_col = field;
-    } else if (domain == "memory") {
+    } else if (stable == "memory") {
         table = "resource_memory";
-        value_col = field;
-    } else if (domain == "disk") {
+    } else if (stable == "disk") {
         table = "resource_disk";
-        value_col = field;
         partition_cols = {"device", "mount_point"};
-    } else if (domain == "network") {
+    } else if (stable == "network") {
         table = "resource_network";
-        value_col = field;
         partition_cols = {"interface"};
-    } else if (domain == "gpu") {
+    } else if (stable == "gpu") {
         table = "resource_gpu";
-        value_col = field;
         partition_cols = {"gpu_index"};
-    } else if (domain == "alive") {
+    } else if (stable == "alive") {
         table = "resource_alive";
-        value_col = field; // alive
+        value_col = "alive";
     } else {
-        return out; // Unsupported domain
+        return out; // Unsupported stable
     }
 
-    std::string sql;
+    // 构建 WHERE 条件（基于 tags）
     std::vector<std::string> where_conditions;
     std::vector<std::string> params;
     int param_count = 0;
 
-    // Build WHERE conditions for selectors
-    for (const auto& [key, value] : selector) {
-        if (key == "host_ip") {
-            where_conditions.push_back("host_ip = $" + std::to_string(++param_count) + "::inet");
-        } else {
-            where_conditions.push_back(key + " = $" + std::to_string(++param_count));
+    // 如果有 tags 过滤，构建 WHERE 条件
+    // 注意：多个 tags 集合是 OR 关系，但这里简化为查询所有匹配的数据
+    // 实际过滤在评估器中进行
+    if (!expr.tags.empty()) {
+        // 提取所有可能的 host_ip
+        std::vector<std::string> host_ips;
+        for (const auto& tag_set : expr.tags) {
+            auto it = tag_set.find("host_ip");
+            if (it != tag_set.end()) {
+                host_ips.push_back(it->second);
+            }
         }
-        params.push_back(value);
+
+        if (!host_ips.empty() && host_ips.size() == 1) {
+            // 只有一个 host_ip
+            where_conditions.push_back("host_ip = $" + std::to_string(++param_count) + "::inet");
+            params.push_back(host_ips[0]);
+        }
+        // 如果有多个 host_ip 或其他复杂条件，暂时查询所有数据，在内存中过滤
     }
 
     auto join_str = [](const std::vector<std::string>& vec, const std::string& delim) {
         if (vec.empty()) return std::string();
-        return std::accumulate(std::next(vec.begin()), vec.end(), vec[0], 
+        return std::accumulate(std::next(vec.begin()), vec.end(), vec[0],
             [&delim](const std::string& a, const std::string& b) {
                 return a + delim + b;
             });
@@ -133,96 +129,60 @@ nlohmann::json SimpleTimeseriesProvider::evaluate(const std::string& expression,
 
     std::vector<std::string> select_cols = {"host_ip::text AS host_ip"};
     std::vector<std::string> group_by_cols = {"host_ip"};
+    std::vector<std::string> order_by_cols = {"host_ip", "time DESC"};
+
     for (const auto& col : partition_cols) {
-        // Cast integer gpu_index to text for consistent label handling
         if (col == "gpu_index") {
             select_cols.push_back(col + "::text AS " + col);
         } else {
             select_cols.push_back(col);
         }
         group_by_cols.push_back(col);
+        order_by_cols.insert(order_by_cols.begin() + order_by_cols.size() - 1, col);
     }
-    
+
     std::string select_list = join_str(select_cols, ", ");
     std::string group_by_list = join_str(group_by_cols, ", ");
+    std::string order_by_list = join_str(order_by_cols, ", ");
 
-    if (domain == "alive") {
-        // 特殊处理：心跳离线检测
-        // 需求：窗口内若无记录，按 0 处理；有记录取聚合（默认 max）
-        std::string agg_fn = "AVG";
-        if (agg == "max") agg_fn = "MAX";
-        else if (agg == "min") agg_fn = "MIN";
+    std::string sql;
 
-        // 如果 selector 指定 host_ip，则只对该主机做 LEFT JOIN，以保证无样本时也返回一行 value=0
-        auto it_host = selector.find("host_ip");
-        if (it_host != selector.end()) {
-            // 重置参数，仅包含 host_ip
-            params.clear();
-            params.push_back(it_host->second);
+    if (stable == "alive") {
+        // 特殊处理：心跳检测
+        if (!expr.tags.empty() && expr.tags[0].count("host_ip")) {
             sql = "SELECT host(h.host_ip) AS host_ip, "
-                  "COALESCE(" + agg_fn + "(a.alive), 0) AS value, "
+                  "COALESCE(MAX(a.alive), 0) AS value, "
                   "COALESCE(COUNT(a.alive), 0) AS samples, MAX(a.time) AS last_ts "
                   "FROM (SELECT $1::inet AS host_ip) h "
                   "LEFT JOIN resource_alive a ON a.host_ip = h.host_ip AND a.time > now() - " + interval_sql + " "
                   "GROUP BY h.host_ip";
         } else {
-            // 未指定 host，则取所有出现过的主机作为维度，LEFT JOIN 当前窗口
             sql = "WITH dims AS (SELECT DISTINCT host_ip FROM resource_alive) "
                   "SELECT host(d.host_ip) AS host_ip, "
-                  "COALESCE(" + agg_fn + "(a.alive), 0) AS value, "
+                  "COALESCE(MAX(a.alive), 0) AS value, "
                   "COALESCE(COUNT(a.alive), 0) AS samples, MAX(a.time) AS last_ts "
                   "FROM dims d "
                   "LEFT JOIN resource_alive a ON a.host_ip = d.host_ip AND a.time > now() - " + interval_sql + " "
                   "GROUP BY d.host_ip";
         }
-    } else if (agg == "last" || agg == "latest") {
-        sql = "SELECT DISTINCT ON (" + group_by_list + ") " + select_list + ", " + value_col + " AS value, "
-              "1 AS samples, time AS last_ts FROM " + table +
-              " WHERE time > now() - " + interval_sql + where_clause +
-              " ORDER BY " + group_by_list + ", time DESC";
     } else {
-        std::string agg_fn = "AVG";
-        if (agg == "max") agg_fn = "MAX";
-        else if (agg == "min") agg_fn = "MIN";
-        sql = "SELECT " + select_list + ", " + agg_fn + "(" + value_col + ") AS value, "
-              "COUNT(*) AS samples, MAX(time) AS last_ts FROM " + table +
+        // 查询时间窗口内的所有数据点（不聚合，用于检查持续时间）
+        sql = "SELECT " + select_list + ", " + value_col + " AS value, time "
+              "FROM " + table +
               " WHERE time > now() - " + interval_sql + where_clause +
-              " GROUP BY " + group_by_list;
+              " ORDER BY " + order_by_list;
     }
 
     try {
         pqxx::work tx(*conn_);
         pqxx::result r;
-        
+
         if (!params.empty()) {
-            // 动态构建参数数组
-            std::vector<const char*> param_ptrs;
-            for (const auto& param : params) {
-                param_ptrs.push_back(param.c_str());
-            }
-            
-            // 根据参数数量动态调用 exec_params
-            switch (params.size()) {
-                case 1:
-                    r = tx.exec_params(sql, param_ptrs[0]);
-                    break;
-                case 2:
-                    r = tx.exec_params(sql, param_ptrs[0], param_ptrs[1]);
-                    break;
-                case 3:
-                    r = tx.exec_params(sql, param_ptrs[0], param_ptrs[1], param_ptrs[2]);
-                    break;
-                case 4:
-                    r = tx.exec_params(sql, param_ptrs[0], param_ptrs[1], param_ptrs[2], param_ptrs[3]);
-                    break;
-                default:
-                    // 如果参数太多，暂时不支持
-                    return out;
-            }
+            r = tx.exec_params(sql, params[0]);
         } else {
             r = tx.exec(sql);
         }
-        
+
         tx.commit();
         auto& arr = out["rows"];
         for (const auto& row : r) {
@@ -236,12 +196,22 @@ nlohmann::json SimpleTimeseriesProvider::evaluate(const std::string& expression,
             }
             item["labels"] = std::move(labels);
             item["value"] = row["value"].is_null() ? 0.0 : row["value"].as<double>();
-            item["samples"] = row["samples"].as<long long>(0);
-            item["last_ts"] = row["last_ts"].as<std::string>("");
+
+            if (row.column_number("time") >= 0 && !row["time"].is_null()) {
+                item["time"] = row["time"].as<std::string>();
+            }
+            if (row.column_number("samples") >= 0) {
+                item["samples"] = row["samples"].as<long long>(1);
+            }
+            if (row.column_number("last_ts") >= 0 && !row["last_ts"].is_null()) {
+                item["last_ts"] = row["last_ts"].as<std::string>();
+            }
+
             arr.push_back(std::move(item));
         }
-    } catch (...) {
-        // 返回空 rows 即可
+    } catch (const std::exception& e) {
+        // 记录错误但返回空结果
+        out["error"] = e.what();
     }
 
     return out;
@@ -272,8 +242,24 @@ std::vector<AlertState> MemoryAlertRepository::listActive(const LabelSet& /*matc
 }
 
 // MemoryEventRepository
+MemoryEventRepository::MemoryEventRepository(std::size_t max_events, std::int64_t max_age_ms)
+    : max_events_(max_events), max_age_ms_(max_age_ms) {
+    events_.reserve(max_events_); // 预分配空间
+}
+
 bool MemoryEventRepository::append(const AlertEvent& event) {
     std::lock_guard<std::mutex> lk(mu_);
+    
+    // 如果超过最大容量，先清理过期事件
+    if (events_.size() >= max_events_) {
+        cleanupInternal();
+    }
+    
+    // 如果清理后仍然超过容量，删除最旧的事件
+    if (events_.size() >= max_events_) {
+        events_.erase(events_.begin(), events_.begin() + (events_.size() - max_events_ + 1));
+    }
+    
     events_.push_back(event);
     return true;
 }
@@ -286,8 +272,79 @@ std::vector<AlertEvent> MemoryEventRepository::query(const std::string& /*durati
 std::size_t MemoryEventRepository::countByStatus(AlertStatus status) const {
     std::lock_guard<std::mutex> lk(mu_);
     return static_cast<std::size_t>(std::count_if(events_.begin(), events_.end(), [status](const AlertEvent& e){
-        return e.status == status;
+        // 将 AlertStatus 枚举转换为字符串进行比较
+        std::string status_str;
+        switch (status) {
+            case AlertStatus::Inactive: status_str = "inactive"; break;
+            case AlertStatus::Pending: status_str = "pending"; break;
+            case AlertStatus::Firing: status_str = "firing"; break;
+            case AlertStatus::Resolved: status_str = "resolved"; break;
+        }
+        return e.status == status_str;
     }));
+}
+
+void MemoryEventRepository::cleanup() {
+    std::lock_guard<std::mutex> lk(mu_);
+    cleanupInternal();
+}
+
+std::size_t MemoryEventRepository::size() const {
+    std::lock_guard<std::mutex> lk(mu_);
+    return events_.size();
+}
+
+bool MemoryEventRepository::hasEvent(const std::string& fingerprint) const {
+    std::lock_guard<std::mutex> lk(mu_);
+    return std::any_of(events_.begin(), events_.end(), [&fingerprint](const AlertEvent& event) {
+        return event.fingerprint == fingerprint;
+    });
+}
+
+std::optional<AlertEvent> MemoryEventRepository::getEvent(const std::string& fingerprint) const {
+    std::lock_guard<std::mutex> lk(mu_);
+    auto it = std::find_if(events_.begin(), events_.end(), [&fingerprint](const AlertEvent& event) {
+        return event.fingerprint == fingerprint;
+    });
+    if (it != events_.end()) {
+        return *it;
+    }
+    return std::nullopt;
+}
+
+bool MemoryEventRepository::updateEvent(const AlertEvent& event) {
+    std::lock_guard<std::mutex> lk(mu_);
+    auto it = std::find_if(events_.begin(), events_.end(), [&event](const AlertEvent& e) {
+        return e.fingerprint == event.fingerprint;
+    });
+    if (it != events_.end()) {
+        *it = event;
+        return true;
+    }
+    return false;
+}
+
+void MemoryEventRepository::cleanupInternal() {
+    const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    
+    // 删除过期事件
+    events_.erase(
+        std::remove_if(events_.begin(), events_.end(), [this, now_ms](const AlertEvent& event) {
+            // 尝试解析时间戳
+            try {
+                if (!event.created_at.empty()) {
+                    // 假设 created_at 是毫秒时间戳字符串
+                    std::int64_t created_ms = std::stoll(event.created_at);
+                    return (now_ms - created_ms) > max_age_ms_;
+                }
+                return false; // 如果没有时间戳，保留事件
+            } catch (...) {
+                return false; // 解析失败，保留事件
+            }
+        }),
+        events_.end()
+    );
 }
 
 // MemoryRuleRepository
@@ -408,71 +465,124 @@ static bool eval_match(double v, const std::string& op, double th) {
 }
 }
 
-std::vector<EvaluationPoint> BasicAlertEvaluator::evaluate(const Rule& rule, std::int64_t /*now_ms*/) {
+std::vector<EvaluationPoint> BasicAlertEvaluator::evaluate(const Rule& rule, std::int64_t now_ms) {
     std::vector<EvaluationPoint> out;
 
-    // 解析表达式：支持单一比较与区间（使用 && 拼接两个比较）
-    const auto pcs = parse_conditions(rule.expression);
+    const auto& expr = rule.expression;
 
-    // 调用时序提供者：约定返回 JSON 对象，包含 rows 数组
-    nlohmann::json res = ts_ ? ts_->evaluate(rule.expression, rule.selector, rule.window) : nlohmann::json();
+    // 调用时序提供者获取数据
+    nlohmann::json res = ts_ ? ts_->evaluate(expr, rule.for_duration, now_ms) : nlohmann::json();
     if (!res.is_object() || !res.contains("rows") || !res["rows"].is_array()) {
         return out; // 无数据
     }
 
+    // 按标签分组数据点（用于检查持续时间）
+    std::unordered_map<std::string, std::vector<nlohmann::json>> grouped_data;
+
     for (const auto& row : res["rows"]) {
-        EvaluationPoint p;
-        // labels
-        if (row.contains("labels") && row["labels"].is_object()) {
-            for (auto it = row["labels"].begin(); it != row["labels"].end(); ++it) {
-                if (it.value().is_string()) {
-                    p.labels[it.key()] = it.value().get<std::string>();
-                } else if (it.value().is_number()) {
-                    p.labels[it.key()] = it.value().dump();
-                } else {
-                    p.labels[it.key()] = it.value().dump();
+        if (!row.contains("labels") || !row["labels"].is_object()) {
+            continue;
+        }
+
+        // 提取标签
+        LabelSet labels;
+        for (auto it = row["labels"].begin(); it != row["labels"].end(); ++it) {
+            if (it.value().is_string()) {
+                labels[it.key()] = it.value().get<std::string>();
+            } else {
+                labels[it.key()] = it.value().dump();
+            }
+        }
+
+        // 检查 tags 过滤条件
+        bool tag_matched = false;
+        if (expr.tags.empty()) {
+            // 没有指定 tags，匹配所有
+            tag_matched = true;
+        } else {
+            // 只要匹配任意一个 tag 集合即可
+            for (const auto& tag_filter : expr.tags) {
+                if (match_tags(labels, tag_filter)) {
+                    tag_matched = true;
+                    break;
                 }
             }
         }
 
-        // value
-        double v = 0.0;
-        if (row.contains("value") && (row["value"].is_number_float() || row["value"].is_number_integer())) {
-            v = row["value"].get<double>();
+        if (!tag_matched) {
+            continue; // 不符合 tags 过滤条件，跳过
         }
-        p.value = v;
 
-        // matched：优先使用 provider 结果，否则本地依据阈值/区间计算
-        if (row.contains("matched") && row["matched"].is_boolean()) {
-            p.matched = row["matched"].get<bool>();
-        } else if (pcs.ok) {
-            bool all_ok = true;
-            for (const auto& c : pcs.conds) {
-                if (!eval_match(v, c.op, c.threshold)) { all_ok = false; break; }
+        // 生成标签指纹（用于分组）
+        std::string fingerprint;
+        for (const auto& [k, v] : labels) {
+            fingerprint += k + "=" + v + "|";
+        }
+
+        grouped_data[fingerprint].push_back(row);
+    }
+
+    // 对每个分组检查是否所有数据点都满足条件
+    for (const auto& [fingerprint, rows] : grouped_data) {
+        if (rows.empty()) continue;
+
+        // 检查该分组的所有数据点是否都满足条件
+        bool all_matched = true;
+        double latest_value = 0.0;
+        LabelSet labels;
+
+        for (const auto& row : rows) {
+            // 提取值
+            double value = 0.0;
+            if (row.contains("value") && (row["value"].is_number_float() || row["value"].is_number_integer())) {
+                value = row["value"].get<double>();
             }
-            p.matched = all_ok;
-        } else {
-            p.matched = false;
+            latest_value = value; // 记录最新值
+
+            // 检查所有条件
+            bool row_matched = true;
+            for (const auto& cond : expr.conditions) {
+                if (!eval_condition(value, cond)) {
+                    row_matched = false;
+                    break;
+                }
+            }
+
+            if (!row_matched) {
+                all_matched = false;
+                break; // 有一个点不满足，整个分组就不满足
+            }
+
+            // 提取标签（从第一个 row）
+            if (labels.empty() && row.contains("labels") && row["labels"].is_object()) {
+                for (auto it = row["labels"].begin(); it != row["labels"].end(); ++it) {
+                    if (it.value().is_string()) {
+                        labels[it.key()] = it.value().get<std::string>();
+                    } else {
+                        labels[it.key()] = it.value().dump();
+                    }
+                }
+            }
         }
 
-        // context：合并窗口、metric 与 provider 返回的上下文
-        p.context["window"] = rule.window;
-        p.context["metric"] = rule.expression;
-        if (row.contains("context")) {
-            p.context["detail"] = row["context"]; // 嵌入 provider 明细
-        }
-        if (row.contains("samples")) {
-            p.context["samples"] = row["samples"];
-        }
-        if (row.contains("last_ts")) {
-            p.context["last_ts"] = row["last_ts"];
-        }
+        // 构建评估点
+        EvaluationPoint p;
+        p.labels = labels;
+        p.value = latest_value;
+        p.matched = all_matched;
 
-        // 追加 Rule 的关键信息到 context，便于事件落库与展示
+        // 构建上下文信息
         p.context["rule_id"] = rule.id;
-        p.context["rule_name"] = rule.name;
-        p.context["rule_description"] = rule.description;
-        // 严重级别统一为英文串，便于与事件表保持一致
+        p.context["alert_name"] = rule.alert_name;
+        p.context["summary"] = rule.summary;
+        p.context["description"] = rule.description;
+        p.context["alert_type"] = rule.alert_type;
+        p.context["for_duration"] = rule.for_duration;
+        p.context["stable"] = expr.stable;
+        p.context["metric"] = expr.metric;
+        p.context["sample_count"] = rows.size();
+
+        // 严重级别
         std::string severity_str;
         switch (rule.severity) {
             case Severity::Info: severity_str = "提示"; break;
@@ -480,12 +590,10 @@ std::vector<EvaluationPoint> BasicAlertEvaluator::evaluate(const Rule& rule, std
             case Severity::Warn: default: severity_str = "一般"; break;
         }
         p.context["severity"] = severity_str;
-        p.context["tag"] = rule.tag;
-        p.context["for_times"] = rule.for_times;
-        p.context["eval_every"] = rule.eval_every;
-        // 将 selector 的每个元素直接并入 context，便于下游直接读取
-        for (const auto& kv : rule.selector) {
-            p.context[kv.first] = kv.second;
+
+        // 将标签并入 context（用于模板替换）
+        for (const auto& [key, value] : labels) {
+            p.context[key] = value;
         }
 
         out.push_back(std::move(p));
@@ -506,59 +614,71 @@ std::vector<AlertEvent> BasicAlertStateManager::apply(const Rule& rule,
     std::vector<AlertEvent> out;
     for (const auto& pt : points) {
         auto fingerprint = fp_->generate(rule.id, pt.labels);
-        auto st = repo_->getState(fingerprint).value_or(AlertState{ fingerprint, rule.id });
-        st.rule_id = rule.id;
-        st.severity = rule.severity;
+        auto st = repo_->getState(fingerprint).value_or(AlertState{ fingerprint });
         st.labels = pt.labels;
-        st.last_eval_ms = now_ms;
 
+        // 检查是否已存在事件，且事件状态不是 resolved
+        bool event_exists = event_repo_->hasEvent(fingerprint);
+        bool should_update_existing = false;
         AlertEvent ev;
-        ev.timestamp_ms = now_ms;
-        ev.fingerprint = fingerprint;
-        ev.rule_id = rule.id;
-        ev.severity = rule.severity;
-        ev.labels = pt.labels;
-        ev.title = rule.name;           // 从规则名称获取标题
-        ev.description = rule.description; // 从规则描述获取描述
-        ev.value = pt.value;
-        ev.context = pt.context;
+        
+        if (event_exists) {
+            // 获取现有事件
+            ev = event_repo_->getEvent(fingerprint).value();
+            // 只有当事件状态不是 resolved 时才更新现有事件
+            should_update_existing = (ev.status != "resolved");
+        }
+        
+        if (!should_update_existing) {
+            // 创建新事件（首次创建或重新触发）
+            ev.fingerprint = fingerprint;
+            ev.labels = pt.labels;
+            ev.summary = rule.summary;
+            ev.description = rule.description;
+            ev.created_at = std::to_string(now_ms);
+            ev.status = ""; // 清空状态，后续会设置
+        }
+
+        bool status_changed = false;
+        std::string old_status = ev.status;
 
         if (pt.matched) {
-            // 增加命中计数
-            st.occurrences++;
-            
             if (st.status == AlertStatus::Inactive || st.status == AlertStatus::Resolved) {
                 // 首次命中，进入 Pending 状态
                 st.status = AlertStatus::Pending;
-                st.first_firing_ms = now_ms;
-                st.last_change_ms = now_ms;
-                ev.action = "pending";
-                ev.status = AlertStatus::Pending;
-                out.push_back(ev);
-                event_repo_->append(ev);
-            } else if (st.status == AlertStatus::Pending && st.occurrences >= rule.for_times) {
-                // 达到 for_times 阈值，进入 Firing 状态
+                ev.status = "pending";
+                ev.starts_at = std::to_string(now_ms);
+                status_changed = true;
+            } else if (st.status == AlertStatus::Pending) {
+                // 达到阈值，进入 Firing 状态（简化：直接进入 firing）
                 st.status = AlertStatus::Firing;
-                st.last_change_ms = now_ms;
-                ev.action = "firing";
-                ev.status = AlertStatus::Firing;
-                out.push_back(ev);
-                event_repo_->append(ev);
+                ev.status = "firing";
+                status_changed = true;
             }
-            // 如果已经是 Firing 状态，继续更新计数但不产生新事件
+            // 如果已经是 Firing 状态，继续更新计数但不改变状态
         } else {
-            // 不匹配，重置计数
-            st.occurrences = 0;
-            
             if (st.status == AlertStatus::Firing || st.status == AlertStatus::Pending) {
                 // 从 Firing/Pending 状态恢复
                 st.status = AlertStatus::Resolved;
-                st.last_change_ms = now_ms;
-                ev.action = "resolved";
-                ev.status = AlertStatus::Resolved;
-                out.push_back(ev);
+                ev.status = "resolved";
+                ev.ends_at = std::to_string(now_ms);
+                status_changed = true;
+            }
+        }
+
+        // 更新事件时间戳
+        ev.updated_at = std::to_string(now_ms);
+
+        // 只有状态变化时才处理事件
+        if (status_changed) {
+            if (should_update_existing) {
+                // 更新现有事件
+                event_repo_->updateEvent(ev);
+            } else {
+                // 创建新事件
                 event_repo_->append(ev);
             }
+            out.push_back(ev);
         }
 
         repo_->upsertState(st);
@@ -570,16 +690,6 @@ std::vector<AlertState> BasicAlertStateManager::listActive(const LabelSet& match
     return repo_->listActive(matcher);
 }
 
-bool BasicAlertStateManager::ack(const std::string& fingerprint, const std::string& user, const std::string& comment) {
-    auto st_opt = repo_->getState(fingerprint);
-    if (!st_opt) return false;
-    auto st = *st_opt;
-    st.acked = true;
-    st.acked_by = user;
-    st.acked_at_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-    return repo_->upsertState(st);
-}
 
 // BasicScheduler（单线程轮询）
 BasicScheduler::BasicScheduler() = default;
@@ -624,5 +734,6 @@ void BasicScheduler::unregisterTask(const std::string& id) {
 
 } // namespace alert
 } // namespace yw
+
 
 

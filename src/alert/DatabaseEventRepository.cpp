@@ -2,118 +2,90 @@
 #include <chrono>
 #include <sstream>
 #include <algorithm>
+#include <optional>
+#include <spdlog/spdlog.h>
 
 namespace yw {
 namespace alert {
 
 DatabaseEventRepository::DatabaseEventRepository(std::shared_ptr<pqxx::connection> conn)
     : conn_(std::move(conn)) {
-    // 不再自动创建表，需要手动执行 alert_event_setup.sql
+    // 不再自动创建表，需要手动执行 alert_event_setup_v2.sql
 }
 
 bool DatabaseEventRepository::append(const AlertEvent& event) {
     if (!conn_) return false;
-    
-    std::lock_guard<std::mutex> lk(mu_);
-    
-    try {
-        // 准备 SQL 语句
-        const std::string insert_sql = R"(
-            INSERT INTO alert_event (
-                time, resolved_time, fingerprint, rule_id, action, status, severity,
-                labels, title, description, value, unit, context
-            ) VALUES (
-                to_timestamp($1), CASE WHEN $2 THEN to_timestamp($1) ELSE NULL END,
-                $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
-            )
-        )";
-        const std::string update_resolved_sql = R"(
-            UPDATE alert_event AS ae
-            SET resolved_time = to_timestamp($1), status = 'resolved', action = 'resolved'
-            WHERE ae.ctid IN (
-                SELECT ctid FROM alert_event
-                WHERE fingerprint = $2 AND rule_id = $3 AND status != 'resolved' AND resolved_time IS NULL
-                ORDER BY time DESC
-                LIMIT 1
-            )
-        )";
-        
-        // 转换时间戳（毫秒转秒）
-        const auto timestamp_s = event.timestamp_ms / 1000;
-        
-        // 转换 severity 枚举为字符串
-        std::string severity_str;
-        switch (event.severity) {
-            case Severity::Info: severity_str = "提示"; break;
-            case Severity::Warn: severity_str = "一般"; break;
-            case Severity::Critical: severity_str = "严重"; break;
-            default: severity_str = "一般"; break;
-        }
-        
-        // 转换 status 枚举为字符串
-        std::string status_str;
-        switch (event.status) {
-            case AlertStatus::Inactive: status_str = "inactive"; break;
-            case AlertStatus::Pending: status_str = "pending"; break;
-            case AlertStatus::Firing: status_str = "firing"; break;
-            case AlertStatus::Resolved: status_str = "resolved"; break;
-            default: status_str = "inactive"; break;
-        }
-        
-        // 当 action 为 resolved：不新增事件，改为更新最近一条 firing 记录的 resolved_time
-        if (event.action == "resolved") {
-            pqxx::work tx(*conn_);
-            tx.exec_params(update_resolved_sql,
-                timestamp_s,       // $1: resolved_time (epoch seconds)
-                event.fingerprint, // $2: fingerprint
-                event.rule_id      // $3: rule_id
-            );
-            tx.commit();
-            return true;
-        }
-        // 仅当 action 为 firing 时插入记录；其他 action 忽略
-        if (event.action != "firing") {
-            return true;
-        }
 
+    std::lock_guard<std::mutex> lk(mu_);
+
+    try {
         // 转换 labels 为 JSON 字符串
         std::string labels_json = "{}";
         if (!event.labels.empty()) {
             nlohmann::json labels_obj = event.labels;
             labels_json = labels_obj.dump();
         }
-        
-        // 转换 context 为 JSON 字符串
-        std::string context_json = "{}";
-        if (!event.context.empty()) {
-            context_json = event.context.dump();
-        }
-        
-        const bool is_resolved = (status_str == "resolved");
 
-        // 执行插入（参数化）
+        // 解析时间字符串为 PostgreSQL TIMESTAMPTZ
+        // 假设时间格式为 ISO8601 或已经是数据库可识别的格式
+
+        // 检查是否已存在相同的记录（使用 fingerprint + starts_at）
+        const std::string check_sql = R"(
+            SELECT fingerprint FROM alert_event
+            WHERE fingerprint = $1 AND starts_at = $2
+        )";
+
         pqxx::work tx(*conn_);
-        tx.exec_params(insert_sql,
-            timestamp_s,                    // $1: time (epoch seconds)
-            is_resolved,                    // $2: resolved flag
-            event.fingerprint,              // $3: fingerprint
-            event.rule_id,                  // $4: rule_id
-            event.action,                   // $5: action
-            status_str,                     // $6: status
-            severity_str,                   // $7: severity
-            labels_json,                    // $8: labels
-            event.title,                    // $9: title
-            event.description,              // $10: description
-            event.value,                    // $11: value
-            event.unit,                     // $12: unit
-            context_json                    // $13: context
+        pqxx::result check_result = tx.exec_params(check_sql,
+            event.fingerprint,
+            event.starts_at
         );
+
+        if (!check_result.empty()) {
+            // 记录已存在，执行更新
+            const std::string update_sql = R"(
+                UPDATE alert_event
+                SET labels = $1, status = $2, summary = $3, description = $4,
+                    ends_at = $5, updated_at = now()
+                WHERE fingerprint = $6 AND starts_at = $7
+            )";
+
+            tx.exec_params(update_sql,
+                labels_json,            // $1: labels
+                event.status,           // $2: status
+                event.summary,          // $3: summary
+                event.description,      // $4: description
+                event.ends_at.empty() ? std::nullopt : std::optional<std::string>(event.ends_at),  // $5: ends_at
+                event.fingerprint,      // $6: fingerprint
+                event.starts_at         // $7: starts_at
+            );
+        } else {
+            // 记录不存在，执行插入
+            const std::string insert_sql = R"(
+                INSERT INTO alert_event (
+                    fingerprint, labels, status, summary, description,
+                    starts_at, ends_at
+                ) VALUES (
+                    $1, $2, $3, $4, $5, $6, $7
+                )
+            )";
+
+            tx.exec_params(insert_sql,
+                event.fingerprint,      // $1: fingerprint
+                labels_json,            // $2: labels
+                event.status,           // $3: status
+                event.summary,          // $4: summary
+                event.description,      // $5: description
+                event.starts_at,        // $6: starts_at
+                event.ends_at.empty() ? std::nullopt : std::optional<std::string>(event.ends_at)  // $7: ends_at
+            );
+        }
+
         tx.commit();
-        
         return true;
-        
+
     } catch (const std::exception& e) {
-        // 记录错误但不抛出异常
+        spdlog::error("DatabaseEventRepository::append error: {}", e.what());
         return false;
     }
 }
@@ -121,53 +93,47 @@ bool DatabaseEventRepository::append(const AlertEvent& event) {
 std::vector<AlertEvent> DatabaseEventRepository::query(const std::string& duration) const {
     std::vector<AlertEvent> events;
     if (!conn_) return events;
-    
+
     std::lock_guard<std::mutex> lk(mu_);
-    
+
     try {
         // 解析时间范围
         std::string interval_sql = parseDurationToInterval(duration);
-        
+
         // 查询 SQL
         const std::string sql = R"(
-            SELECT 
-                EXTRACT(EPOCH FROM time) * 1000 as timestamp_ms,
-                EXTRACT(EPOCH FROM resolved_time) * 1000 as resolved_timestamp_ms,
-                fingerprint, rule_id, action, status, severity,
-                labels, title, description, value, unit, context
-            FROM alert_event 
-            WHERE time > now() - )" + interval_sql + R"(
-            ORDER BY time DESC
+            SELECT
+                fingerprint,
+                labels,
+                status,
+                summary,
+                description,
+                starts_at,
+                ends_at,
+                created_at,
+                updated_at
+            FROM alert_event
+            WHERE starts_at > now() - )" + interval_sql + R"(
+            ORDER BY starts_at DESC
         )";
-        
+
         pqxx::work tx(*conn_);
         pqxx::result r = tx.exec(sql);
         tx.commit();
-        
+
         // 转换结果
         for (const auto& row : r) {
             AlertEvent event;
-            
-            // 转换时间戳（秒转毫秒）
-            event.timestamp_ms = static_cast<std::int64_t>(row["timestamp_ms"].as<double>());
-            event.resolved_timestamp_ms = row["resolved_timestamp_ms"].is_null() ? 0 : static_cast<std::int64_t>(row["resolved_timestamp_ms"].as<double>());
+
             event.fingerprint = row["fingerprint"].as<std::string>();
-            event.rule_id = row["rule_id"].as<std::string>();
-            event.action = row["action"].as<std::string>();
-            
-            // 转换 status 字符串为枚举
-            std::string status_str = row["status"].as<std::string>();
-            if (status_str == "pending") event.status = AlertStatus::Pending;
-            else if (status_str == "firing") event.status = AlertStatus::Firing;
-            else if (status_str == "resolved") event.status = AlertStatus::Resolved;
-            else event.status = AlertStatus::Inactive;
-            
-            // 转换 severity 字符串为枚举
-            std::string severity_str = row["severity"].as<std::string>();
-            if (severity_str == "提示") event.severity = Severity::Info;
-            else if (severity_str == "严重") event.severity = Severity::Critical;
-            else event.severity = Severity::Warn;
-            
+            event.status = row["status"].as<std::string>();
+            event.summary = row["summary"].is_null() ? "" : row["summary"].as<std::string>();
+            event.description = row["description"].is_null() ? "" : row["description"].as<std::string>();
+            event.starts_at = row["starts_at"].is_null() ? "" : row["starts_at"].as<std::string>();
+            event.ends_at = row["ends_at"].is_null() ? "" : row["ends_at"].as<std::string>();
+            event.created_at = row["created_at"].is_null() ? "" : row["created_at"].as<std::string>();
+            event.updated_at = row["updated_at"].is_null() ? "" : row["updated_at"].as<std::string>();
+
             // 解析 labels JSON
             if (!row["labels"].is_null()) {
                 try {
@@ -177,39 +143,26 @@ std::vector<AlertEvent> DatabaseEventRepository::query(const std::string& durati
                             event.labels[it.key()] = it.value().get<std::string>();
                         }
                     }
-                } catch (...) {
-                    // 忽略 JSON 解析错误
+                } catch (const std::exception& e) {
+                    spdlog::error("Failed to parse labels JSON: {}", e.what());
                 }
             }
-            
-            event.title = row["title"].as<std::string>();
-            event.description = row["description"].as<std::string>();
-            event.value = row["value"].is_null() ? 0.0 : row["value"].as<double>();
-            event.unit = row["unit"].as<std::string>();
-            
-            // 解析 context JSON
-            if (!row["context"].is_null()) {
-                try {
-                    event.context = nlohmann::json::parse(row["context"].as<std::string>());
-                } catch (...) {
-                    // 忽略 JSON 解析错误
-                }
-            }
-            
+
             events.push_back(std::move(event));
         }
-        
+
     } catch (const std::exception& e) {
-        // 记录错误但不抛出异常
+        spdlog::error("DatabaseEventRepository::query error: {}", e.what());
     }
-    
+
     return events;
 }
 
-
 std::size_t DatabaseEventRepository::countByStatus(AlertStatus status) const {
     if (!conn_) return 0;
+
     std::lock_guard<std::mutex> lk(mu_);
+
     try {
         std::string status_str;
         switch (status) {
@@ -218,32 +171,149 @@ std::size_t DatabaseEventRepository::countByStatus(AlertStatus status) const {
             case AlertStatus::Resolved: status_str = "resolved"; break;
             case AlertStatus::Inactive: default: status_str = "inactive"; break;
         }
-        const std::string sql = R"SQL(
+
+        const std::string sql = R"(
             SELECT COUNT(*) AS cnt
             FROM alert_event
             WHERE status = $1
-        )SQL";
+        )";
+
         pqxx::work tx(*conn_);
         pqxx::result r = tx.exec_params(sql, status_str);
         tx.commit();
+
         if (!r.empty()) {
             return static_cast<std::size_t>(r[0]["cnt"].as<long long>(0));
         }
-    } catch (...) {
+    } catch (const std::exception& e) {
+        spdlog::error("DatabaseEventRepository::countByStatus error: {}", e.what());
     }
+
     return 0;
 }
 
+bool DatabaseEventRepository::hasEvent(const std::string& fingerprint) const {
+    if (!conn_) return false;
+
+    std::lock_guard<std::mutex> lk(mu_);
+
+    try {
+        pqxx::work tx(*conn_);
+        const std::string sql = "SELECT 1 FROM alert_event WHERE fingerprint = $1 LIMIT 1";
+        pqxx::result r = tx.exec_params(sql, fingerprint);
+        tx.commit();
+        return !r.empty();
+    } catch (const std::exception& e) {
+        spdlog::error("DatabaseEventRepository::hasEvent error: {}", e.what());
+        return false;
+    }
+}
+
+std::optional<AlertEvent> DatabaseEventRepository::getEvent(const std::string& fingerprint) const {
+    if (!conn_) return std::nullopt;
+
+    std::lock_guard<std::mutex> lk(mu_);
+
+    try {
+        pqxx::work tx(*conn_);
+        const std::string sql = R"(
+            SELECT
+                fingerprint,
+                labels,
+                status,
+                summary,
+                description,
+                starts_at,
+                ends_at,
+                created_at,
+                updated_at
+            FROM alert_event
+            WHERE fingerprint = $1
+            LIMIT 1
+        )";
+        pqxx::result r = tx.exec_params(sql, fingerprint);
+        tx.commit();
+
+        if (r.empty()) return std::nullopt;
+
+        const auto& row = r[0];
+        AlertEvent event;
+        event.fingerprint = row["fingerprint"].as<std::string>();
+        
+        // 解析 labels JSON
+        if (!row["labels"].is_null()) {
+            nlohmann::json labels_json = nlohmann::json::parse(row["labels"].as<std::string>());
+            event.labels = labels_json.get<LabelSet>();
+        }
+        
+        event.status = row["status"].as<std::string>();
+        event.summary = row["summary"].as<std::string>();
+        event.description = row["description"].as<std::string>();
+        event.starts_at = row["starts_at"].is_null() ? "" : row["starts_at"].as<std::string>();
+        event.ends_at = row["ends_at"].is_null() ? "" : row["ends_at"].as<std::string>();
+        event.created_at = row["created_at"].is_null() ? "" : row["created_at"].as<std::string>();
+        event.updated_at = row["updated_at"].is_null() ? "" : row["updated_at"].as<std::string>();
+
+        return event;
+    } catch (const std::exception& e) {
+        spdlog::error("DatabaseEventRepository::getEvent error: {}", e.what());
+        return std::nullopt;
+    }
+}
+
+bool DatabaseEventRepository::updateEvent(const AlertEvent& event) {
+    if (!conn_) return false;
+
+    std::lock_guard<std::mutex> lk(mu_);
+
+    try {
+        pqxx::work tx(*conn_);
+        
+        // 将 labels 转换为 JSON 字符串
+        nlohmann::json labels_json = event.labels;
+        std::string labels_str = labels_json.dump();
+
+        const std::string sql = R"(
+            UPDATE alert_event SET
+                labels = $2,
+                status = $3,
+                summary = $4,
+                description = $5,
+                starts_at = $6,
+                ends_at = $7,
+                updated_at = $8
+            WHERE fingerprint = $1
+        )";
+
+        pqxx::result r = tx.exec_params(sql,
+            event.fingerprint,                    // $1: fingerprint
+            labels_str,                          // $2: labels
+            event.status,                        // $3: status
+            event.summary,                       // $4: summary
+            event.description,                   // $5: description
+            event.starts_at.empty() ? std::nullopt : std::optional<std::string>(event.starts_at),  // $6: starts_at
+            event.ends_at.empty() ? std::nullopt : std::optional<std::string>(event.ends_at),      // $7: ends_at
+            event.updated_at                     // $8: updated_at
+        );
+
+        tx.commit();
+        return r.affected_rows() > 0;
+
+    } catch (const std::exception& e) {
+        spdlog::error("DatabaseEventRepository::updateEvent error: {}", e.what());
+        return false;
+    }
+}
 
 std::string DatabaseEventRepository::parseDurationToInterval(const std::string& duration) const {
     if (duration.empty()) return "INTERVAL '1 hour'";
-    
+
     // 支持 1h, 30m, 5s 等格式
     char unit = duration.back();
     std::string num = duration.substr(0, duration.size() - 1);
-    
+
     if (num.empty()) num = "1";
-    
+
     switch (unit) {
         case 's': return "INTERVAL '" + num + " seconds'";
         case 'm': return "INTERVAL '" + num + " minutes'";
