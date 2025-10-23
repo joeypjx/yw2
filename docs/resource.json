@@ -1,0 +1,180 @@
+{
+    "api_version": 1,
+    "data": {
+        "component": [
+            {
+                "config": {
+                    "id": "acb5c64aa2f2644cc957fc3261d52f3dbe5749b7edb481c540ce6be51c3c987a",
+                    "name": "192.168.10.58:5000/pts1:latest"
+                },
+                "index": 1,
+                "instance_id": "4c398af4-44df-4c1a-8e30-04ea9412c0c1",
+                "resource": {
+                    "cpu": {
+                        "load": 15.869938032786884
+                    },
+                    "gpu": {
+                        "mem_usage": 0
+                    },
+                    "memory": {
+                        "mem_limit": 15645540352,
+                        "mem_usage": 0.6647621600790845,
+                        "mem_used": 104005632
+                    },
+                    "network": {
+                        "rx": 0,
+                        "rx_rate": 0,
+                        "tx": 0,
+                        "tx_rate": 0
+                    }
+                },
+                "state": "RUNNING",
+                "type": "docker",
+                "uuid": "1233211234567"
+            },
+            {
+                "config": {
+                    "id": "991b5d00f243ccd93f13435612666aeec2d50e6567320d63ae87fab22d1bc2e4",
+                    "name": "192.168.10.58:5000/ship:latest"
+                },
+                "index": 2,
+                "instance_id": "4c398af4-44df-4c1a-8e30-04ea9412c0c1",
+                "resource": {
+                    "cpu": {
+                        "load": 0.2713152327044025
+                    },
+                    "gpu": {
+                        "mem_usage": 0
+                    },
+                    "memory": {
+                        "mem_limit": 15645540352,
+                        "mem_usage": 0.042306854548196306,
+                        "mem_used": 6619136
+                    },
+                    "network": {
+                        "rx": 0,
+                        "rx_rate": 0,
+                        "tx": 0,
+                        "tx_rate": 0
+                    }
+                },
+                "state": "RUNNING",
+                "type": "docker",
+                "uuid": "1233211234568"
+            },
+            {
+                "config": {
+                    "id": "fa592766cc99646c85dc84adf2948a0a5621e30284e87758f866a6d51ccbcb93",
+                    "name": "192.168.10.58:5000/ship:latest"
+                },
+                "index": 2,
+                "instance_id": "4c398af4-44df-4c1a-8e30-04ea9412c0c1",
+                "resource": {
+                    "cpu": {
+                        "load": 0.13880665413533835
+                    },
+                    "gpu": {
+                        "mem_usage": 0
+                    },
+                    "memory": {
+                        "mem_limit": 15645540352,
+                        "mem_usage": 0.07372283564834207,
+                        "mem_used": 11534336
+                    },
+                    "network": {
+                        "rx": 0,
+                        "rx_rate": 0,
+                        "tx": 0,
+                        "tx_rate": 0
+                    }
+                },
+                "state": "RUNNING",
+                "type": "docker",
+                "uuid": "1233211234568"
+            }
+        ],
+        "host_ip": "192.168.10.58",
+        "resource": {
+            "cpu": {
+                "core_allocated": 12,
+                "core_count": 8,
+                "core_unbound": [
+                    {
+                        "node": 0
+                    }
+                ],
+                "current": 0,
+                "load_avg_15m": 6.58,
+                "load_avg_1m": 11.68,
+                "load_avg_5m": 9.46,
+                "power": 0,
+                "temperature": 0,
+                "usage_percent": 75.4072308303536,
+                "voltage": 0
+            },
+            "disk": [
+                {
+                    "device": "/dev/sda4",
+                    "free": 46964264960,
+                    "mount_point": "/",
+                    "total": 75125227520,
+                    "usage_percent": 37.48536076313769,
+                    "used": 28160962560
+                },
+                {
+                    "device": "/dev/sda5",
+                    "free": 351925264384,
+                    "mount_point": "/data",
+                    "total": 426474012672,
+                    "usage_percent": 17.480255788841053,
+                    "used": 74548748288
+                }
+            ],
+            "gpu": [
+                {
+                    "compute_usage": 0,
+                    "free": 1,
+                    "index": 0,
+                    "mem_total": 17179869184,
+                    "mem_usage": 1,
+                    "mem_used": 119537664,
+                    "name": " Iluvatar MR-V50A",
+                    "power": 20,
+                    "temperature": 44
+                }
+            ],
+            "gpu_allocated": 0,
+            "gpu_num": 1,
+            "memory": {
+                "free": 8404271104,
+                "total": 15645540352,
+                "usage_percent": 46.28327999597875,
+                "used": 7241269248
+            },
+            "network": [
+                {
+                    "interface": "enaphyt4i0",
+                    "rx_bytes": 9183683391,
+                    "rx_errors": 0,
+                    "rx_packets": 13738817,
+                    "rx_rate": 20340.333333333332,
+                    "tx_bytes": 1975762894,
+                    "tx_errors": 0,
+                    "tx_packets": 3245933,
+                    "tx_rate": 12002.166666666666
+                },
+                {
+                    "interface": "docker0",
+                    "rx_bytes": 58634862,
+                    "rx_errors": 0,
+                    "rx_packets": 472155,
+                    "rx_rate": 2432.8333333333335,
+                    "tx_bytes": 109122371,
+                    "tx_errors": 0,
+                    "tx_packets": 573438,
+                    "tx_rate": 5623.333333333333
+                }
+            ]
+        }
+    }
+}

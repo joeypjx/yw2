@@ -4,6 +4,8 @@
 #include <iomanip>
 #include <algorithm>
 #include <cctype>
+#include <string>
+#include <vector>
 
 namespace yw {
 namespace web {
@@ -204,7 +206,8 @@ alert::Rule fromUserAlertRule(const web::UserAlertRule& ur) {
         nlohmann::json exprObj = nlohmann::json{
             {"stable", ur.expression.stable},
             {"metric", ur.expression.metric},
-            {"conditions", nlohmann::json::array()}
+            {"conditions", nlohmann::json::array()},
+            {"tags", ur.expression.tags}
         };
         for (const auto& c : ur.expression.conditions) {
             exprObj["conditions"].push_back({ {"operator", c.op}, {"threshold", c.threshold} });

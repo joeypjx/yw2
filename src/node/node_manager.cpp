@@ -8,6 +8,7 @@
 #include <chrono>
 #include "yw/MulticastScanner.h"
 #include "yw/JsonConfig.h"
+#include <fstream>
 
 namespace yw {
 namespace node {
@@ -71,6 +72,11 @@ void NodeManager::setupRoutes() {
 
         // 解析请求体 -> 提取 data 字段并转换为 Node（仅转换，不做其他处理）
         const auto j = nlohmann::json::parse(ctx->body());
+        // save to file
+        std::ofstream ofs("heartbeat.json");
+        ofs << j.dump();
+        ofs.close();
+
         if (j.contains("data")) {
             const Node node = j["data"].get<Node>();
             node_cache_->addOrUpdateNode(node);
