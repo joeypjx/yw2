@@ -9,6 +9,12 @@
 #include "yw/app_context.h"
 #include "yw/JsonConfig.h"
 
+// AlertV2 includes
+#include "../alertv2/application/AlertEngine.h"
+#include "../alertv2/infrastructure/DatabaseQueryInterface.h"
+#include "../alertv2/infrastructure/AlertRuleRepository.h"
+#include "../alertv2/infrastructure/AlertRepository.h"
+
 #include <csignal>
 #include <atomic>
 #include <chrono>
@@ -86,16 +92,50 @@ int main() {
     // 创建告警模块（内部管理数据库连接）
     std::shared_ptr<yw::alert::IAlertModule> alert_module = yw::alert::AlertFactory::getAlertModule();
     
+    // 创建AlertV2引擎（可选）
+    std::shared_ptr<yw::alertv2::AlertEngine> alertv2_engine = nullptr;
+    try {
+        spdlog::info("Initializing AlertV2 engine...");
+        
+        // 创建数据库连接
+        auto dbInterface = std::make_shared<yw::alertv2::PostgreSQLQueryInterface>(
+            "host=127.0.0.1 port=5432 dbname=yw user=postgres password=HZ715Net"
+        );
+        
+        // 创建Repository
+        auto alertRuleRepo = std::make_shared<yw::alertv2::DatabaseAlertRuleRepository>(dbInterface);
+        auto alertRepo = std::make_shared<yw::alertv2::DatabaseAlertRepository>(dbInterface);
+        
+        // 创建告警引擎
+        alertv2_engine = std::make_shared<yw::alertv2::AlertEngine>(dbInterface, alertRuleRepo, alertRepo);
+        
+        // 启动告警引擎
+        alertv2_engine->start(5); // 5秒评估间隔
+        
+        spdlog::info("AlertV2 engine initialized and started successfully");
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to initialize AlertV2 engine: {}", e.what());
+        spdlog::warn("Continuing without AlertV2 engine");
+        alertv2_engine = nullptr;
+    }
+    
     // 注入到 AppContext 托管（共享实例持有）
     app_context->setNodeModule(node_module);
     app_context->setMonitorModule(monitor_module);
     app_context->setBMCModule(bmc_module);
     app_context->setAlertModule(alert_module);
 
-    std::shared_ptr<yw::web::IWebModule> web_module = yw::web::WebFactory::getWebModule(app_context->getHttpServer(), app_context->getHttpService(), node_module, monitor_module, bmc_module, alert_module);
+    std::shared_ptr<yw::web::IWebModule> web_module = yw::web::WebFactory::getWebModule(app_context->getHttpServer(), app_context->getHttpService(), node_module, monitor_module, bmc_module, alert_module, alertv2_engine);
 
     while (g_running) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    // 停止AlertV2引擎
+    if (alertv2_engine) {
+        spdlog::info("Stopping AlertV2 engine...");
+        alertv2_engine->stop();
+        spdlog::info("AlertV2 engine stopped");
     }
 
     app_context->cleanup();

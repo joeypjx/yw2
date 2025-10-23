@@ -11,6 +11,13 @@
 #include "dto/node_dto.h"
 #include "AlertPusher.h"
 
+// Forward declaration for AlertV2
+namespace yw {
+namespace alertv2 {
+    class AlertEngine;
+}
+}
+
 namespace yw {
 namespace web {
 
@@ -21,7 +28,8 @@ public:
                   std::shared_ptr<node::INodeModule> node_module,
                   std::shared_ptr<monitor::IMonitorModule> monitor_module,
                   std::shared_ptr<bmc::IBMCModule> bmc_module,
-                  std::shared_ptr<alert::IAlertModule> alert_module);
+                  std::shared_ptr<alert::IAlertModule> alert_module,
+                  std::shared_ptr<alertv2::AlertEngine> alertv2_engine = nullptr);
 
     ~WebController() override;
 
@@ -36,6 +44,7 @@ private:
     std::shared_ptr<monitor::IMonitorModule> monitor_module_;
     std::shared_ptr<bmc::IBMCModule>        bmc_module_;
     std::shared_ptr<alert::IAlertModule>    alert_module_;
+    std::shared_ptr<alertv2::AlertEngine>  alertv2_engine_;
 
     std::unique_ptr<AlertPusher>            pusher_;
 };

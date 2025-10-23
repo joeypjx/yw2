@@ -28,6 +28,10 @@ public:
     MetricsSeries queryMetricsSeries(const std::string& host_ip,
                                      const std::string& duration,
                                      const std::vector<std::string>& kinds) const override;
+    ExportData exportNodeData(const std::string& host_ip,
+                              std::int64_t start_time,
+                              std::int64_t end_time,
+                              const std::vector<std::string>& types) const override;
 
 private:
     void setupRoutes();

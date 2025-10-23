@@ -11,6 +11,7 @@
 #include "routes/MetricsRoutes.h"
 #include "routes/BMCRoutes.h"
 #include "routes/AlertRoutes.h"
+#include "routes/AlertV2Routes.h"
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include <iomanip>
@@ -26,13 +27,15 @@ WebController::WebController(std::shared_ptr<hv::HttpServer> server,
                              std::shared_ptr<node::INodeModule> node_module,
                              std::shared_ptr<monitor::IMonitorModule> monitor_module,
                              std::shared_ptr<bmc::IBMCModule> bmc_module,
-                             std::shared_ptr<alert::IAlertModule> alert_module)
+                             std::shared_ptr<alert::IAlertModule> alert_module,
+                             std::shared_ptr<alertv2::AlertEngine> alertv2_engine)
     : server_(std::move(server)),
       service_(std::move(service)),
       node_module_(std::move(node_module)),
       monitor_module_(std::move(monitor_module)),
       bmc_module_(std::move(bmc_module)),
-      alert_module_(std::move(alert_module)) {
+      alert_module_(std::move(alert_module)),
+      alertv2_engine_(std::move(alertv2_engine)) {
 
     pusher_ = std::make_unique<AlertPusher>(server_.get());
 
@@ -63,6 +66,14 @@ void WebController::setupRoutes() {
     routes::registerMetricsRoutes(service_.get(), node_module_.get(), monitor_module_.get(), bmc_module_.get());
     routes::registerBMCRoutes(service_.get(), bmc_module_.get());
     routes::registerAlertRoutes(service_.get(), alert_module_.get(), pusher_.get());
+    
+    // 注册AlertV2路由（如果AlertV2引擎可用）
+    if (alertv2_engine_) {
+        routes::registerAlertV2Routes(service_.get(), alertv2_engine_);
+        spdlog::info("AlertV2 routes registered successfully");
+    } else {
+        spdlog::warn("AlertV2 engine not available, skipping AlertV2 routes");
+    }
 }
 
 
