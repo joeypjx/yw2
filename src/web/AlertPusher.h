@@ -16,7 +16,6 @@
 #undef HAVE_SYS_STAT_H
 #endif
 
-#include "yw/alert_model.h"
 #include <hv/HttpServer.h>
 #include <hv/WebSocketServer.h>
 #include <hv/WebSocketChannel.h>
@@ -34,8 +33,6 @@ namespace web {
 class AlertPusher {
 public:
     AlertPusher(hv::HttpServer* server);
-
-    void push(const alert::AlertEvent& event);
 
     void pushV2(const alertv2::Alert& alert);
 

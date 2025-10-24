@@ -1,12 +1,10 @@
 add_library(yw_web STATIC
     web_controller.cpp
     web_factory.cpp
-    mapper/AlertMapper.cpp
     mapper/NodeMapper.cpp
     routes/NodeRoutes.cpp
     routes/MetricsRoutes.cpp
     routes/BMCRoutes.cpp
-    routes/AlertRoutes.cpp
     routes/AlertV2Routes.cpp
     AlertPusher.cpp
 )

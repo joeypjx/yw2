@@ -4,9 +4,8 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <map>
 #include <nlohmann/json.hpp>
-
-#include "yw/alert_types.h"
 
 namespace yw {
 namespace web {
@@ -22,7 +21,7 @@ struct UserAlertEventView {
     std::string           ends_at;      // YYYY-MM-DD HH:MM:SS 或空串
     std::string           fingerprint;
     std::string           id;           // 暂时使用 fingerprint 作为 id
-    yw::alert::LabelSet   labels;
+    std::map<std::string, std::string> labels;
     std::string           starts_at;    // YYYY-MM-DD HH:MM:SS
     std::string           status;       // inactive/pending/firing/resolved
     std::string           updated_at;   // YYYY-MM-DD HH:MM:SS
@@ -55,7 +54,7 @@ struct UserRuleExpression {
     std::vector<UserRuleCondition> conditions;
     std::string                    metric;
     std::string                    stable;
-    std::vector<yw::alert::LabelSet>          tags;    // 新增：表达式中的 tags 数组（每个元素为一个对象）
+    std::vector<std::map<std::string, std::string>> tags;    // 新增：表达式中的 tags 数组（每个元素为一个对象）
 };
 
 inline void to_json(nlohmann::json& j, const UserRuleExpression& e) {
@@ -70,7 +69,7 @@ inline void from_json(const nlohmann::json& j, UserRuleExpression& e) {
     if (j.contains("conditions")) j.at("conditions").get_to(e.conditions); else e.conditions.clear();
     e.metric = j.value("metric", std::string());
     e.stable = j.value("stable", std::string());
-    e.tags = j.value("tags", std::vector<yw::alert::LabelSet>{});
+    e.tags = j.value("tags", std::vector<std::map<std::string, std::string>>{});
 }
 
 struct UserAlertRule {

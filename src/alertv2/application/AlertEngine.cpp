@@ -275,27 +275,71 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<Alert>& alerts) {
             // 创建非const副本以调用updateInDatabase方法
             Alert alertCopy = alert;
             
-            // 检查是否需要处理Pending状态的持续时间
-            bool statusChangedToFiring = false;
-            if (alertCopy.getStatus() == AlertStatus::Pending) {
-                // 检查数据库中是否存在相同指纹的Pending告警
-                auto existingAlert = alertRepo_->getAlertByFingerprint(alertCopy.getFingerprint());
-                if (existingAlert && existingAlert->getStatus() == AlertStatus::Pending) {
-                    // 检查是否满足持续时间条件
-                    if (shouldTransitionToFiring(*existingAlert)) {
-                        alertCopy.transitionToFiring();
-                        statusChangedToFiring = true; // 标记状态变更
-                        std::cout << "Pending告警转为Firing: " << alertCopy.getFingerprint() << std::endl;
+            // 检查数据库中是否已存在相同指纹的告警
+            auto existingAlert = alertRepo_->getAlertByFingerprint(alertCopy.getFingerprint());
+            
+            if (existingAlert) {
+                // 如果已存在告警，根据状态进行不同处理
+                if (existingAlert->getStatus() == AlertStatus::Pending) {
+                    if (alertCopy.getStatus() == AlertStatus::Pending) {
+                        // 如果数据库中已有pending告警，且新告警也是pending，则跳过创建
+                        // 只检查是否需要转为firing
+                        if (shouldTransitionToFiring(*existingAlert)) {
+                            existingAlert->transitionToFiring();
+                            bool success = existingAlert->updateInDatabase(alertRepo_);
+                            if (success) {
+                                successCount++;
+                                std::cout << "Pending告警转为Firing: " << alertCopy.getFingerprint() << std::endl;
+                                
+                                // 状态转换时调用推送回调
+                                if (pushCallback_) {
+                                    pushCallback_(*existingAlert);
+                                }
+                            }
+                        } else {
+                            // 保持pending状态，不需要更新数据库
+                            std::cout << "Pending告警继续等待: " << alertCopy.getFingerprint() << std::endl;
+                        }
+                        continue; // 跳过创建新告警
+                    } else if (alertCopy.getStatus() == AlertStatus::Firing) {
+                        // 如果数据库中已有pending告警，但新告警是firing，则转为firing
+                        existingAlert->transitionToFiring();
+                        bool success = existingAlert->updateInDatabase(alertRepo_);
+                        if (success) {
+                            successCount++;
+                            std::cout << "Pending告警转为Firing: " << alertCopy.getFingerprint() << std::endl;
+                            
+                            // 状态转换时调用推送回调
+                            if (pushCallback_) {
+                                pushCallback_(*existingAlert);
+                            }
+                        }
+                        continue; // 跳过创建新告警
+                    }
+                } else if (existingAlert->getStatus() == AlertStatus::Firing) {
+                    if (alertCopy.getStatus() == AlertStatus::Firing) {
+                        // 如果数据库中已有firing告警，且新告警也是firing，则更新现有告警
+                        existingAlert->setUpdatedNow();
+                        bool success = existingAlert->updateInDatabase(alertRepo_);
+                        if (success) {
+                            successCount++;
+                            std::cout << "更新现有Firing告警: " << alertCopy.getFingerprint() << std::endl;
+                        }
+                        continue; // 跳过创建新告警
                     }
                 }
             }
             
+            // 如果不存在现有告警，或者需要创建新告警，则正常处理
+            // Alert::updateInDatabase 方法会处理重复检查，所以这里可以安全调用
             bool success = alertCopy.updateInDatabase(alertRepo_);
             if (success) {
                 successCount++;
+                std::cout << "创建/更新告警: " << alertCopy.getFingerprint() << " (状态: " 
+                         << (alertCopy.getStatus() == AlertStatus::Pending ? "Pending" : "Firing") << ")" << std::endl;
                 
-                // 只在 Pending → Firing 状态转换时调用推送回调
-                if (statusChangedToFiring && pushCallback_) {
+                // 只有新创建的firing告警才调用推送回调
+                if (alertCopy.getStatus() == AlertStatus::Firing && pushCallback_) {
                     pushCallback_(alertCopy);
                 }
             }

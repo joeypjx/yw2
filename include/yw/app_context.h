@@ -12,7 +12,6 @@
 namespace yw { namespace node { class INodeModule; } }
 namespace yw { namespace monitor { class IMonitorModule; } }
 namespace yw { namespace bmc { class IBMCModule; } }
-namespace yw { namespace alert { class IAlertModule; } }
 
 namespace yw {
 namespace core {
@@ -77,19 +76,16 @@ private:
     std::shared_ptr<yw::node::INodeModule>       node_module_;
     std::shared_ptr<yw::monitor::IMonitorModule> monitor_module_;
     std::shared_ptr<yw::bmc::IBMCModule>         bmc_module_;
-    std::shared_ptr<yw::alert::IAlertModule>     alert_module_;
 
 public:
     // 注入/获取模块实例（线程安全，浅持有）
     void setNodeModule(std::shared_ptr<yw::node::INodeModule> m);
     void setMonitorModule(std::shared_ptr<yw::monitor::IMonitorModule> m);
     void setBMCModule(std::shared_ptr<yw::bmc::IBMCModule> m);
-    void setAlertModule(std::shared_ptr<yw::alert::IAlertModule> m);
 
     std::shared_ptr<yw::node::INodeModule> getNodeModule() const;
     std::shared_ptr<yw::monitor::IMonitorModule> getMonitorModule() const;
     std::shared_ptr<yw::bmc::IBMCModule> getBMCModule() const;
-    std::shared_ptr<yw::alert::IAlertModule> getAlertModule() const;
 };
 
 } // namespace core

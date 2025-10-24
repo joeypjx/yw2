@@ -4,8 +4,8 @@
 #include <nlohmann/json.hpp>
 #include <hv/WebSocketServer.h>
 #include <hv/WebSocketChannel.h>
-#include "mapper/AlertMapper.h"
 #include "../../alertv2/domain/Alert.h"
+#include "dto/alert_dto.h"
 
 namespace yw {
 namespace web {
@@ -34,22 +34,6 @@ bool AlertPusher::init() {
     };
 
     return true;
-}
-
-void AlertPusher::push(const alert::AlertEvent& event) {
-    auto view = mapper::toUserAlertEventView(event);
-    nlohmann::json j = view;
-    std::string payload = j.dump();
-    std::lock_guard<std::mutex> lk(mu_);
-    for (auto it = channels_.begin(); it != channels_.end(); ) {
-        auto ch = *it;
-        if (!ch || !ch->isConnected()) {
-            it = channels_.erase(it);
-            continue;
-        }
-        ch->send(payload);
-        ++it;
-    }
 }
 
 void AlertPusher::pushV2(const alertv2::Alert& alert) {
@@ -84,7 +68,8 @@ void AlertPusher::pushV2(const alertv2::Alert& alert) {
     view.updated_at = alert.getUpdatedAt();
     
     // 设置标签
-    view.labels = alert.getLabels();
+    const auto& alertLabels = alert.getLabels();
+    view.labels = std::map<std::string, std::string>(alertLabels.begin(), alertLabels.end());
     
     // 设置注释
     view.annotations.description = alert.getAnnotations().count("description") ? 

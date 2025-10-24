@@ -4,7 +4,6 @@
 #include "yw/node.h"
 #include "yw/monitor.h"
 #include "yw/bmc.h"
-#include "yw/alert.h"
 
 namespace yw {
 namespace core {
@@ -59,7 +58,6 @@ void AppContext::cleanup() {
     node_module_.reset();
     monitor_module_.reset();
     bmc_module_.reset();
-    alert_module_.reset();
 
     if (http_server_) {
         // 停止libhv服务器
@@ -114,10 +112,6 @@ void AppContext::setBMCModule(std::shared_ptr<yw::bmc::IBMCModule> m) {
     std::lock_guard<std::mutex> lock(mutex_);
     bmc_module_ = std::move(m);
 }
-void AppContext::setAlertModule(std::shared_ptr<yw::alert::IAlertModule> m) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    alert_module_ = std::move(m);
-}
 
 std::shared_ptr<yw::node::INodeModule> AppContext::getNodeModule() const {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -130,10 +124,6 @@ std::shared_ptr<yw::monitor::IMonitorModule> AppContext::getMonitorModule() cons
 std::shared_ptr<yw::bmc::IBMCModule> AppContext::getBMCModule() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return bmc_module_;
-}
-std::shared_ptr<yw::alert::IAlertModule> AppContext::getAlertModule() const {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return alert_module_;
 }
 
 } // namespace core
