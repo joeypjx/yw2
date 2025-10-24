@@ -1,6 +1,11 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/rotating_file_sink.h>
+#include <hv/hlog.h>  // 添加libhv日志头文件
+#include <string>
+#include <vector>
+#include <memory>
+#include <atomic>
 #include "yw/node.h"
 #include "yw/monitor.h"
 #include "yw/web.h"
@@ -60,6 +65,13 @@ int main() {
         return spdlog::level::info;
     };
     spdlog::set_level(to_level(log_level));
+
+    // 根据配置禁用libhv的日志输出
+    const bool disable_libhv_log = yw::utils::JsonConfig::Get<bool>("logger.disable_libhv_log", true);
+    if (disable_libhv_log) {
+        hlog_disable();
+        spdlog::info("libhv logging disabled");
+    }
 
     spdlog::info("Starting yw application...");
 

@@ -46,8 +46,8 @@ void Alert::setCreatedNow() {
         now.time_since_epoch()) % 1000;
     
     std::ostringstream oss;
-    oss << std::put_time(std::gmtime(&time_t), "%Y-%m-%dT%H:%M:%S");
-    oss << "." << std::setfill('0') << std::setw(3) << ms.count() << "Z";
+    oss << std::put_time(std::localtime(&time_t), "%Y-%m-%dT%H:%M:%S");
+    oss << "." << std::setfill('0') << std::setw(3) << ms.count();
     
     created_at_ = oss.str();
 }
@@ -59,8 +59,8 @@ void Alert::setUpdatedNow() {
         now.time_since_epoch()) % 1000;
     
     std::ostringstream oss;
-    oss << std::put_time(std::gmtime(&time_t), "%Y-%m-%dT%H:%M:%S");
-    oss << "." << std::setfill('0') << std::setw(3) << ms.count() << "Z";
+    oss << std::put_time(std::localtime(&time_t), "%Y-%m-%dT%H:%M:%S");
+    oss << "." << std::setfill('0') << std::setw(3) << ms.count();
     
     updated_at_ = oss.str();
 }
@@ -72,8 +72,8 @@ void Alert::setStartsNow() {
         now.time_since_epoch()) % 1000;
     
     std::ostringstream oss;
-    oss << std::put_time(std::gmtime(&time_t), "%Y-%m-%dT%H:%M:%S");
-    oss << "." << std::setfill('0') << std::setw(3) << ms.count() << "Z";
+    oss << std::put_time(std::localtime(&time_t), "%Y-%m-%dT%H:%M:%S");
+    oss << "." << std::setfill('0') << std::setw(3) << ms.count();
     
     starts_at_ = oss.str();
 }
@@ -85,8 +85,8 @@ void Alert::setEndsNow() {
         now.time_since_epoch()) % 1000;
     
     std::ostringstream oss;
-    oss << std::put_time(std::gmtime(&time_t), "%Y-%m-%dT%H:%M:%S");
-    oss << "." << std::setfill('0') << std::setw(3) << ms.count() << "Z";
+    oss << std::put_time(std::localtime(&time_t), "%Y-%m-%dT%H:%M:%S");
+    oss << "." << std::setfill('0') << std::setw(3) << ms.count();
     
     ends_at_ = oss.str();
 }

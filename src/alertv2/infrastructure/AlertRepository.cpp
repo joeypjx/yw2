@@ -518,9 +518,9 @@ std::string DatabaseAlertRepository::buildInsertSql() {
             updated_at, ends_at, status, alert_rule_id, host_ip
         ) VALUES (
             $1, $2, $3, $4, $5, 
-            NULLIF($6, '')::timestamptz,
+            NULLIF($6, '')::timestamp,
             $7, 
-            NULLIF($8, '')::timestamptz,
+            NULLIF($8, '')::timestamp,
             $9, $10, $11
         )
     )";
@@ -533,9 +533,9 @@ std::string DatabaseAlertRepository::buildUpdateSql() {
             labels = $2,
             annotations = $3,
             created_at = $4,
-            starts_at = NULLIF($5, '')::timestamptz,
+            starts_at = NULLIF($5, '')::timestamp,
             updated_at = $6,
-            ends_at = NULLIF($7, '')::timestamptz,
+            ends_at = NULLIF($7, '')::timestamp,
             status = $8
         WHERE id = $9
     )";

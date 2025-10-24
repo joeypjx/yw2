@@ -1104,37 +1104,21 @@ int AlertEngine::parseDuration(const std::string& duration) {
 
 std::chrono::system_clock::time_point AlertEngine::parseISOTime(const std::string& isoTime) {
     try {
-        std::cout << "开始解析ISO时间: " << isoTime << std::endl;
+        std::cout << "开始解析时间: " << isoTime << std::endl;
         
-        // 解析ISO格式时间字符串 (例如: 2024-01-01T12:00:00.000Z)
+        // 解析时间字符串 (例如: 2024-01-01T12:00:00.000)
         std::tm tm = {};
         std::istringstream ss(isoTime);
         
-        // 处理不同的时间格式
+        // 处理时间字符串，移除Z后缀（如果存在）
         std::string timeStr = isoTime;
-        bool isUTC = false;
-        
-        // 检查是否是PostgreSQL时间戳格式 (如: 2025-10-24 01:27:39.398+00)
-        if (timeStr.find('+') != std::string::npos) {
-            // 移除时区部分 (如: +00)
-            size_t plusPos = timeStr.find('+');
-            if (plusPos != std::string::npos) {
-                timeStr = timeStr.substr(0, plusPos);
-                isUTC = true;
-                std::cout << "检测到PostgreSQL时间戳格式，移除时区部分" << std::endl;
-            }
-        } else if (timeStr.back() == 'Z') {
-            // 处理标准ISO格式 (如: 2025-10-24T01:27:39.398Z)
+        if (timeStr.back() == 'Z') {
             timeStr.pop_back();
-            isUTC = true;
-            std::cout << "检测到标准ISO时间格式" << std::endl;
         }
         
         std::cout << "处理后的时间字符串: " << timeStr << std::endl;
         
         // 解析时间（支持毫秒）
-        // 重新创建istringstream使用处理后的时间字符串
-        ss.clear();
         ss.str(timeStr);
         
         // 尝试解析不同的时间格式
@@ -1145,7 +1129,7 @@ std::chrono::system_clock::time_point AlertEngine::parseISOTime(const std::strin
             ss.str(timeStr);
             ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
             if (ss.fail()) {
-                std::cerr << "解析ISO时间失败，格式错误: " << isoTime << " (处理后: " << timeStr << ")" << std::endl;
+                std::cerr << "解析时间失败，格式错误: " << isoTime << " (处理后: " << timeStr << ")" << std::endl;
                 return std::chrono::system_clock::time_point{};
             }
         }
@@ -1161,10 +1145,10 @@ std::chrono::system_clock::time_point AlertEngine::parseISOTime(const std::strin
             std::cout << "解析到毫秒: " << milliseconds << std::endl;
         }
         
-        // 转换为time_point
+        // 转换为time_point（使用本地时间）
         auto time_t = std::mktime(&tm);
         if (time_t == -1) {
-            std::cerr << "解析ISO时间失败，mktime返回-1: " << isoTime << std::endl;
+            std::cerr << "解析时间失败，mktime返回-1: " << isoTime << std::endl;
             return std::chrono::system_clock::time_point{};
         }
         
@@ -1175,19 +1159,10 @@ std::chrono::system_clock::time_point AlertEngine::parseISOTime(const std::strin
         // 添加毫秒
         result += std::chrono::milliseconds(milliseconds);
         
-        // 如果是UTC时间，需要调整时区偏移
-        if (isUTC) {
-            // 获取本地时区偏移
-            auto localTime = std::mktime(&tm);
-            auto utcTime = std::mktime(std::gmtime(&time_t));
-            auto offset = localTime - utcTime;
-            result += std::chrono::seconds(offset);
-        }
-        
         return result;
         
     } catch (const std::exception& e) {
-        std::cerr << "解析ISO时间失败: " << isoTime << " - " << e.what() << std::endl;
+        std::cerr << "解析时间失败: " << isoTime << " - " << e.what() << std::endl;
         return std::chrono::system_clock::time_point{};
     }
 }

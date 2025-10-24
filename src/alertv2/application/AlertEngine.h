@@ -442,8 +442,8 @@ private:
     int parseDuration(const std::string& duration);
     
     /**
-     * @brief 解析ISO格式时间字符串
-     * @param isoTime ISO格式时间字符串
+     * @brief 解析时间字符串（本地时间）
+     * @param isoTime 时间字符串，格式如：2024-01-01T12:00:00.000
      * @return 解析后的时间点
      */
     std::chrono::system_clock::time_point parseISOTime(const std::string& isoTime);

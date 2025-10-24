@@ -29,6 +29,7 @@
         "console": true,
         "file": "logs/yw.log",
         "max_size": 10485760,
-        "max_files": 5
+        "max_files": 5,
+        "disable_libhv_log": true
     }
 }

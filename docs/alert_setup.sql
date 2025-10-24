@@ -13,10 +13,10 @@ CREATE TABLE IF NOT EXISTS alert (
     annotations         JSONB           NOT NULL,                       -- 告警注释，JSON格式
     
     -- 时间戳
-    created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),         -- 第一次匹配时间
-    starts_at           TIMESTAMPTZ,                                    -- 第一次正式触发告警时间
-    updated_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),         -- 触发中持续匹配的更新时间
-    ends_at             TIMESTAMPTZ,                                    -- 告警已解决的时间
+    created_at          TIMESTAMP       NOT NULL DEFAULT NOW(),         -- 第一次匹配时间
+    starts_at           TIMESTAMP,                                      -- 第一次正式触发告警时间
+    updated_at          TIMESTAMP       NOT NULL DEFAULT NOW(),         -- 触发中持续匹配的更新时间
+    ends_at             TIMESTAMP,                                      -- 告警已解决的时间
     
     -- 告警状态
     status              VARCHAR(20)     NOT NULL DEFAULT 'pending',     -- 告警状态：pending/firing/resolved

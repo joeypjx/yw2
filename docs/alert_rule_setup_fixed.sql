@@ -18,8 +18,8 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     enabled             BOOLEAN         NOT NULL DEFAULT TRUE,          -- 是否启用，默认为true
     
     -- 时间戳
-    created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),         -- 创建时间，系统自动生成
-    updated_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW()          -- 更新时间，系统自动生成
+    created_at          TIMESTAMP       NOT NULL DEFAULT NOW(),         -- 创建时间，系统自动生成
+    updated_at          TIMESTAMP       NOT NULL DEFAULT NOW()          -- 更新时间，系统自动生成
 );
 
 -- 创建基础索引
