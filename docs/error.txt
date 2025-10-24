@@ -1,0 +1,58 @@
+=== 开始告警评估 ===
+规则 '节点离线告警' 生成了 0 个告警
+规则 'CPU使用率告警' 生成了 1 个告警
+规则 '磁盘使用率告警' 生成了 0 个告警
+生成了 1 个告警
+数据库中当前firing告警数量: 0
+数据库中当前pending告警数量: 1
+处理了 0 个告警状态更新
+检查Pending告警是否应该转为Firing: CPU使用率告警 (指纹: CPU使用率告警|host_ip=192.168.10.58)
+告警规则的for字段: '10s'
+解析的持续时间: 10 秒
+告警创建时间: 2025-10-24 01:27:39.398+00
+开始解析ISO时间: 2025-10-24 01:27:39.398+00
+解析ISO时间失败，格式错误: 2025-10-24 01:27:39.398+00
+解析创建时间失败
+更新了 1 个告警到数据库
+告警评估完成，耗时: 198 毫秒
+
+[ 67%] Building CXX object src/alertv2/CMakeFiles/yw_alertv2.dir/application/AlertEngine.cpp.o
+/data/pjx/yw2/src/alertv2/application/AlertEngine.cpp: 在成员函数‘std::chrono::_V2::system_clock::time_point yw::alertv2::AlertEngine::parseISOTime(const string&)’中:
+/data/pjx/yw2/src/alertv2/application/AlertEngine.cpp:1049:38: 错误：‘std::istringstream ss’重声明
+         std::istringstream ss(timeStr);
+                                      ^
+/data/pjx/yw2/src/alertv2/application/AlertEngine.cpp:1023:28: 附注：‘std::istringstream ss’ previously declared here
+         std::istringstream ss(isoTime);
+                            ^~
+make[2]: *** [src/alertv2/CMakeFiles/yw_alertv2.dir/build.make:102：src/alertv2/CMakeFiles/yw_alertv2.dir/application/AlertEngine.cpp.o] 错误 1
+make[2]: 离开目录“/data/pjx/yw2/build”
+make[1]: *** [CMakeFiles/Makefile2:778：src/alertv2/CMakeFiles/yw_alertv2.dir/all] 错误 2
+make[1]: 离开目录“/data/pjx/yw2/build”
+make: *** [Makefile:152：all] 错误 2
+
+[ 95%] Built target yw_alert
+/data/pjx/yw2/src/web/AlertPusher.cpp: 在成员函数‘void yw::web::AlertPusher::pushV2(const yw::alertv2::Alert&)’中:
+/data/pjx/yw2/src/web/AlertPusher.cpp:62:25: 错误：‘const class yw::alertv2::Alert’ has no member named ‘getStatusString’; did you mean ‘getStatus’?
+     view.status = alert.getStatusString();
+                         ^~~~~~~~~~~~~~~
+                         getStatus
+/data/pjx/yw2/src/web/web_controller.cpp: 在构造函数‘yw::web::WebController::WebController(std::shared_ptr<hv::HttpServer>, std::shared_ptr<hv::HttpService>, std::shared_ptr<yw::node::INodeModule>, std::shared_ptr<yw::monitor::IMonitorModule>, std::shared_ptr<yw::bmc::IBMCModule>, std::shared_ptr<yw::alert::IAlertModule>, std::shared_ptr<yw::alertv2::AlertEngine>)’中:
+/data/pjx/yw2/src/web/web_controller.cpp:58:24: 错误：对不完全的类型‘using element_type = class yw::alertv2::AlertEngine {aka class yw::alertv2::AlertEngine}’的非法使用
+         alertv2_engine_->setPushCallback([this](const alertv2::Alert& alert){
+                        ^~
+In file included from /data/pjx/yw2/src/web/web_controller.h:6:0,
+                 from /data/pjx/yw2/src/web/web_controller.cpp:1:
+/data/pjx/yw2/include/yw/web.h:12:27: 附注：forward declaration of ‘using element_type = class yw::alertv2::AlertEngine {aka class yw::alertv2::AlertEngine}’
+ namespace alertv2 { class AlertEngine; }
+                           ^~~~~~~~~~~
+/data/pjx/yw2/src/web/web_controller.cpp:58:26: 错误：对不完全的类型‘using element_type = class yw::alertv2::AlertEngine {aka class yw::alertv2::AlertEngine}’的非法使用
+         alertv2_engine_->setPushCallback([this](const alertv2::Alert& alert){
+                          ^~~~~~~~~~~~~~~
+In file included from /data/pjx/yw2/src/web/web_controller.h:6:0,
+                 from /data/pjx/yw2/src/web/web_controller.cpp:1:
+/data/pjx/yw2/include/yw/web.h:12:27: 附注：forward declaration of ‘using element_type = class yw::alertv2::AlertEngine {aka class yw::alertv2::AlertEngine}’
+ namespace alertv2 { class AlertEngine; }
+                           ^~~~~~~~~~~
+make[2]: *** [src/web/CMakeFiles/yw_web.dir/build.make:180：src/web/CMakeFiles/yw_web.dir/AlertPusher.cpp.o] 错误 1
+make[2]: *** 正在等待未完成的任务....
+make[2]: *** [src/web/CMakeFiles/yw_web.dir/build.make:63：src/web/CMakeFiles/yw_web.dir/web_controller.cpp.o] 错误 1

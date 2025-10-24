@@ -11,6 +11,7 @@
 #include <atomic>
 #include <chrono>
 #include <unordered_set>
+#include <functional>
 
 namespace yw {
 namespace alertv2 {
@@ -196,6 +197,12 @@ public:
     std::vector<Alert> getAllAlerts();
     
     /**
+     * @brief 获取除Pending状态外的所有告警（Firing和Resolved）
+     * @return 告警列表
+     */
+    std::vector<Alert> getAlertsExceptPending();
+    
+    /**
      * @brief 获取告警统计信息
      * @return 告警统计信息字符串
      */
@@ -326,6 +333,13 @@ public:
      * @return 已解决告警数量
      */
     size_t getResolvedAlertCount();
+    
+    // 推送回调接口
+    /**
+     * @brief 设置告警推送回调函数
+     * @param callback 推送回调函数，参数为 alertv2::Alert 对象
+     */
+    void setPushCallback(std::function<void(const Alert&)> callback);
 
 private:
     std::shared_ptr<DatabaseQueryInterface> dbInterface_;
@@ -348,6 +362,9 @@ private:
     std::atomic<int> totalAlertsGenerated_;
     std::chrono::system_clock::time_point lastEvaluationTime_;
     std::chrono::system_clock::time_point startTime_;
+    
+    // 推送回调
+    std::function<void(const Alert&)> pushCallback_;
     
     /**
      * @brief 工作线程主循环

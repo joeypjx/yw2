@@ -38,6 +38,7 @@ public:
     virtual std::vector<Alert> getActiveAlerts() = 0;
     virtual std::vector<Alert> getPendingAlerts() = 0;
     virtual std::vector<Alert> getResolvedAlerts() = 0;
+    virtual std::vector<Alert> getAlertsExceptPending() = 0;
     
     // 统计操作
     virtual size_t getAlertCount() = 0;
@@ -97,6 +98,7 @@ public:
     std::vector<Alert> getActiveAlerts() override;
     std::vector<Alert> getPendingAlerts() override;
     std::vector<Alert> getResolvedAlerts() override;
+    std::vector<Alert> getAlertsExceptPending() override;
     bool deleteAlert(const std::string& id) override;
     bool alertExists(const std::string& id) override;
     size_t getAlertCount() override;

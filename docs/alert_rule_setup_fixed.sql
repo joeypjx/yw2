@@ -1,9 +1,9 @@
 -- AlertV2 告警规则表创建脚本（修复版本）
 -- 用于在PostgreSQL数据库中创建告警规则存储表
--- 使用方法：psql "postgres://user:password@host:5432/dbname" -f alert_rule_setup_fixed.sql
+-- 使用方法：psql "postgres://user:password@host:5432/dbname" -f alert_rules_setup_fixed.sql
 
 -- 创建告警规则表
-CREATE TABLE IF NOT EXISTS alert_rule (
+CREATE TABLE IF NOT EXISTS alert_rules (
     -- 主键和标识
     id                  VARCHAR(100)    PRIMARY KEY,                    -- 系统生成的唯一标识符
     alert_name          VARCHAR(200)    NOT NULL UNIQUE,                -- 告警规则标识，用户自定义
@@ -23,24 +23,24 @@ CREATE TABLE IF NOT EXISTS alert_rule (
 );
 
 -- 创建基础索引
-CREATE INDEX IF NOT EXISTS idx_alert_rule_alert_name ON alert_rule(alert_name);
-CREATE INDEX IF NOT EXISTS idx_alert_rule_alert_type ON alert_rule(alert_type);
-CREATE INDEX IF NOT EXISTS idx_alert_rule_severity ON alert_rule(severity);
-CREATE INDEX IF NOT EXISTS idx_alert_rule_enabled ON alert_rule(enabled);
-CREATE INDEX IF NOT EXISTS idx_alert_rule_created_at ON alert_rule(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_alert_rule_updated_at ON alert_rule(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_alert_name ON alert_rules(alert_name);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_alert_type ON alert_rules(alert_type);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_severity ON alert_rules(severity);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled ON alert_rules(enabled);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_created_at ON alert_rules(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_updated_at ON alert_rules(updated_at DESC);
 
 -- 创建JSONB字段的索引（使用B-tree索引）
-CREATE INDEX IF NOT EXISTS idx_alert_rule_expression_stable ON alert_rule ((expression->>'stable'));
-CREATE INDEX IF NOT EXISTS idx_alert_rule_expression_metric ON alert_rule ((expression->>'metric'));
+CREATE INDEX IF NOT EXISTS idx_alert_rules_expression_stable ON alert_rules ((expression->>'stable'));
+CREATE INDEX IF NOT EXISTS idx_alert_rules_expression_metric ON alert_rules ((expression->>'metric'));
 
 -- 创建复合索引
-CREATE INDEX IF NOT EXISTS idx_alert_rule_type_severity ON alert_rule(alert_type, severity);
-CREATE INDEX IF NOT EXISTS idx_alert_rule_type_created ON alert_rule(alert_type, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_alert_rule_enabled_type ON alert_rule(enabled, alert_type);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_type_severity ON alert_rules(alert_type, severity);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_type_created ON alert_rules(alert_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled_type ON alert_rules(enabled, alert_type);
 
 -- 创建触发器函数，自动更新updated_at字段
-CREATE OR REPLACE FUNCTION update_alert_rule_updated_at()
+CREATE OR REPLACE FUNCTION update_alert_rules_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = NOW();
@@ -49,13 +49,13 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 创建触发器
-CREATE TRIGGER trigger_update_alert_rule_updated_at
-    BEFORE UPDATE ON alert_rule
+CREATE TRIGGER trigger_update_alert_rules_updated_at
+    BEFORE UPDATE ON alert_rules
     FOR EACH ROW
-    EXECUTE FUNCTION update_alert_rule_updated_at();
+    EXECUTE FUNCTION update_alert_rules_updated_at();
 
 -- 插入示例数据
-INSERT INTO alert_rule (
+INSERT INTO alert_rules (
     id, alert_name, expression, for_duration, severity, 
     summary, description, alert_type, enabled, created_at, updated_at
 ) VALUES (
@@ -86,7 +86,7 @@ INSERT INTO alert_rule (
     NOW()
 ) ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO alert_rule (
+INSERT INTO alert_rules (
     id, alert_name, expression, for_duration, severity, 
     summary, description, alert_type, enabled, created_at, updated_at
 ) VALUES (
@@ -113,7 +113,7 @@ INSERT INTO alert_rule (
     NOW()
 ) ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO alert_rule (
+INSERT INTO alert_rules (
     id, alert_name, expression, for_duration, severity, 
     summary, description, alert_type, enabled, created_at, updated_at
 ) VALUES (

@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <algorithm>
+#include <iostream>
 
 namespace yw {
 namespace alertv2 {
@@ -204,7 +205,7 @@ bool DatabaseAlertRuleRepository::deleteRule(const std::string& id) {
 
 bool DatabaseAlertRuleRepository::ruleExists(const std::string& id) {
     try {
-        std::string sql = "SELECT COUNT(*) as count FROM alert_rule WHERE id = $1";
+        std::string sql = "SELECT COUNT(*) as count FROM alert_rules WHERE id = $1";
         std::vector<std::string> params = {id};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
@@ -222,7 +223,7 @@ bool DatabaseAlertRuleRepository::ruleExists(const std::string& id) {
 
 size_t DatabaseAlertRuleRepository::getRuleCount() {
     try {
-        std::string sql = "SELECT COUNT(*) as count FROM alert_rule";
+        std::string sql = "SELECT COUNT(*) as count FROM alert_rules";
         
         QueryResult result = dbInterface_->executeQuery(sql);
         
@@ -280,7 +281,19 @@ AlertRule DatabaseAlertRuleRepository::parseRuleFromQueryResult(const QueryRow& 
         
         // 解析enabled字段
         std::string enabledStr = row.getValue("enabled");
-        rule.setEnabled(enabledStr == "true" || enabledStr == "1");
+        std::cout << "从数据库解析enabled字段: '" << enabledStr << "'" << std::endl;
+        
+        // 更宽松的布尔值解析
+        bool enabled = false;
+        if (enabledStr == "true" || enabledStr == "1" || enabledStr == "t" || 
+            enabledStr == "TRUE" || enabledStr == "True" || enabledStr == "yes" ||
+            enabledStr == "YES" || enabledStr == "Yes" || enabledStr == "on" ||
+            enabledStr == "ON" || enabledStr == "On") {
+            enabled = true;
+        }
+        
+        std::cout << "解析后的enabled值: " << (enabled ? "true" : "false") << std::endl;
+        rule.setEnabled(enabled);
         
         // 解析expression
         AlertExpression expr;
@@ -318,7 +331,7 @@ AlertRule DatabaseAlertRuleRepository::parseRuleFromQueryResult(const QueryRow& 
 
 std::string DatabaseAlertRuleRepository::buildInsertSql() {
     return R"(
-        INSERT INTO alert_rule (
+        INSERT INTO alert_rules (
             id, alert_name, expression, for_duration, severity, 
             summary, description, alert_type, enabled, created_at, updated_at
         ) VALUES (
@@ -329,7 +342,7 @@ std::string DatabaseAlertRuleRepository::buildInsertSql() {
 
 std::string DatabaseAlertRuleRepository::buildUpdateSql() {
     return R"(
-        UPDATE alert_rule SET
+        UPDATE alert_rules SET
             alert_name = $1,
             expression = $2::jsonb,
             for_duration = $3,
@@ -348,12 +361,12 @@ std::string DatabaseAlertRuleRepository::buildSelectSql() {
         SELECT 
             id, alert_name, expression, for_duration, severity,
             summary, description, alert_type, enabled, created_at, updated_at
-        FROM alert_rule
+        FROM alert_rules
     )";
 }
 
 std::string DatabaseAlertRuleRepository::buildDeleteSql() {
-    return "DELETE FROM alert_rule WHERE id = $1";
+    return "DELETE FROM alert_rules WHERE id = $1";
 }
 
 std::string DatabaseAlertRuleRepository::escapeString(const std::string& str) {

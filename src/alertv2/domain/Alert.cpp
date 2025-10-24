@@ -341,7 +341,24 @@ bool Alert::updateExistingAlert(const Alert& existingAlert, std::shared_ptr<Aler
     AlertStatus currentStatus = existingAlert.getStatus();
     
     if (newStatus != currentStatus) {
-        // 状态发生变化，需要更新告警
+        // 状态发生变化，需要验证状态转换是否合法
+        
+        // 不允许的状态转换：
+        // 1. Firing -> Pending (不能从触发状态退回到等待状态)
+        if (currentStatus == AlertStatus::Firing && newStatus == AlertStatus::Pending) {
+            // 保持原有状态，只更新时间戳
+            Alert updatedAlert = existingAlert;
+            updatedAlert.updateTimestamp();
+            return repository->saveAlert(updatedAlert);
+        }
+        
+        // 2. Resolved -> Pending (已解决的告警不应该退回到等待状态)
+        // 这种情况应该创建新告警，已在 updateInDatabase 中处理
+        
+        // 允许的状态转换：
+        // - Pending -> Firing
+        // - Firing -> Resolved
+        
         Alert updatedAlert = *this;
         
         // 保持原有的ID和时间戳信息

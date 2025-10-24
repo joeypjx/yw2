@@ -276,6 +276,7 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<Alert>& alerts) {
             Alert alertCopy = alert;
             
             // 检查是否需要处理Pending状态的持续时间
+            bool statusChangedToFiring = false;
             if (alertCopy.getStatus() == AlertStatus::Pending) {
                 // 检查数据库中是否存在相同指纹的Pending告警
                 auto existingAlert = alertRepo_->getAlertByFingerprint(alertCopy.getFingerprint());
@@ -283,6 +284,7 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<Alert>& alerts) {
                     // 检查是否满足持续时间条件
                     if (shouldTransitionToFiring(*existingAlert)) {
                         alertCopy.transitionToFiring();
+                        statusChangedToFiring = true; // 标记状态变更
                         std::cout << "Pending告警转为Firing: " << alertCopy.getFingerprint() << std::endl;
                     }
                 }
@@ -291,6 +293,11 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<Alert>& alerts) {
             bool success = alertCopy.updateInDatabase(alertRepo_);
             if (success) {
                 successCount++;
+                
+                // 只在 Pending → Firing 状态转换时调用推送回调
+                if (statusChangedToFiring && pushCallback_) {
+                    pushCallback_(alertCopy);
+                }
             }
         } catch (const std::exception& e) {
             std::cerr << "更新告警到数据库失败: " << e.what() << std::endl;
@@ -298,6 +305,10 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<Alert>& alerts) {
     }
     
     return successCount;
+}
+
+void AlertEngine::setPushCallback(std::function<void(const Alert&)> callback) {
+    pushCallback_ = std::move(callback);
 }
 
 std::unordered_set<std::string> AlertEngine::getCurrentPendingFingerprints() {
@@ -561,6 +572,15 @@ std::vector<Alert> AlertEngine::getAllAlerts() {
     }
 }
 
+std::vector<Alert> AlertEngine::getAlertsExceptPending() {
+    try {
+        return alertRepo_->getAlertsExceptPending();
+    } catch (const std::exception& e) {
+        std::cerr << "获取除Pending外的告警失败: " << e.what() << std::endl;
+        return {};
+    }
+}
+
 std::string AlertEngine::getAlertStatistics() {
     try {
         std::ostringstream oss;
@@ -760,6 +780,12 @@ std::shared_ptr<Alert> AlertEngine::createAlert(const std::string& alertName,
             bool success = existingAlert->updateInDatabase(alertRepo_);
             if (success) {
                 std::cout << "更新现有告警: " << fingerprint << std::endl;
+                
+                // 手动创建的告警直接设为 Firing 状态，需要推送
+                if (pushCallback_) {
+                    pushCallback_(*existingAlert);
+                }
+                
                 return existingAlert;
             } else {
                 std::cerr << "更新现有告警失败: " << fingerprint << std::endl;
@@ -800,6 +826,12 @@ std::shared_ptr<Alert> AlertEngine::createAlert(const std::string& alertName,
         bool success = newAlert.updateInDatabase(alertRepo_);
         if (success) {
             std::cout << "成功创建新告警: " << fingerprint << " (" << alertName << ")" << std::endl;
+            
+            // 手动创建的新告警直接设为 Firing 状态，需要推送
+            if (pushCallback_) {
+                pushCallback_(newAlert);
+            }
+            
             return std::make_shared<Alert>(newAlert);
         } else {
             std::cerr << "创建告警失败: " << fingerprint << std::endl;
@@ -838,6 +870,12 @@ std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& 
             bool success = existingAlert->updateInDatabase(alertRepo_);
             if (success) {
                 std::cout << "更新现有组件告警: " << fingerprint << std::endl;
+                
+                // 组件告警直接设为 Firing 状态，需要推送
+                if (pushCallback_) {
+                    pushCallback_(*existingAlert);
+                }
+                
                 return existingAlert;
             } else {
                 std::cerr << "更新现有组件告警失败: " << fingerprint << std::endl;
@@ -879,6 +917,12 @@ std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& 
         bool success = newAlert.updateInDatabase(alertRepo_);
         if (success) {
             std::cout << "成功创建组件告警: " << fingerprint << " (组件: " << instanceId << ")" << std::endl;
+            
+            // 组件告警直接设为 Firing 状态，需要推送
+            if (pushCallback_) {
+                pushCallback_(newAlert);
+            }
+            
             return std::make_shared<Alert>(newAlert);
         } else {
             std::cerr << "创建组件告警失败: " << fingerprint << std::endl;
@@ -898,10 +942,12 @@ bool AlertEngine::shouldTransitionToFiring(const Alert& pendingAlert) {
         auto labels = pendingAlert.getLabels();
         auto alertNameIt = labels.find("alert_name");
         if (alertNameIt == labels.end()) {
+            std::cerr << "Pending告警缺少alert_name标签: " << pendingAlert.getFingerprint() << std::endl;
             return false;
         }
         
         std::string alertName = alertNameIt->second;
+        std::cout << "检查Pending告警是否应该转为Firing: " << alertName << " (指纹: " << pendingAlert.getFingerprint() << ")" << std::endl;
         
         // 查找对应的告警规则
         AlertRule* rule = nullptr;
@@ -913,31 +959,42 @@ bool AlertEngine::shouldTransitionToFiring(const Alert& pendingAlert) {
         }
         
         if (!rule) {
+            std::cerr << "未找到告警规则: " << alertName << std::endl;
             return false;
         }
         
         // 解析for字段（持续时间）
         std::string forDuration = rule->getFor();
+        std::cout << "告警规则的for字段: '" << forDuration << "'" << std::endl;
+        
         if (forDuration.empty()) {
             // 如果没有设置for字段，默认立即转为firing
+            std::cout << "for字段为空，立即转为Firing" << std::endl;
             return true;
         }
         
         // 解析持续时间（支持s/m/h单位）
         int durationSeconds = parseDuration(forDuration);
+        std::cout << "解析的持续时间: " << durationSeconds << " 秒" << std::endl;
+        
         if (durationSeconds <= 0) {
+            std::cout << "持续时间解析失败或为0，立即转为Firing" << std::endl;
             return true; // 解析失败，默认立即转为firing
         }
         
         // 计算告警创建时间到现在的持续时间
         std::string createdAt = pendingAlert.getCreatedAt();
+        std::cout << "告警创建时间: " << createdAt << std::endl;
+        
         if (createdAt.empty()) {
+            std::cerr << "告警创建时间为空" << std::endl;
             return false;
         }
         
         // 解析创建时间
         auto createdTime = parseISOTime(createdAt);
         if (createdTime == std::chrono::system_clock::time_point{}) {
+            std::cerr << "解析创建时间失败" << std::endl;
             return false;
         }
         
@@ -945,8 +1002,13 @@ bool AlertEngine::shouldTransitionToFiring(const Alert& pendingAlert) {
         auto now = std::chrono::system_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - createdTime);
         
+        std::cout << "告警已持续: " << duration.count() << " 秒，需要: " << durationSeconds << " 秒" << std::endl;
+        
         // 如果持续时间大于等于for字段设置的时间，则转为firing
-        return duration.count() >= durationSeconds;
+        bool shouldFire = duration.count() >= durationSeconds;
+        std::cout << "是否应该转为Firing: " << (shouldFire ? "是" : "否") << std::endl;
+        
+        return shouldFire;
         
     } catch (const std::exception& e) {
         std::cerr << "检查Pending告警是否应该转为Firing时出错: " << e.what() << std::endl;
@@ -998,25 +1060,87 @@ int AlertEngine::parseDuration(const std::string& duration) {
 
 std::chrono::system_clock::time_point AlertEngine::parseISOTime(const std::string& isoTime) {
     try {
+        std::cout << "开始解析ISO时间: " << isoTime << std::endl;
+        
         // 解析ISO格式时间字符串 (例如: 2024-01-01T12:00:00.000Z)
         std::tm tm = {};
         std::istringstream ss(isoTime);
         
-        // 移除末尾的Z
+        // 处理不同的时间格式
         std::string timeStr = isoTime;
-        if (timeStr.back() == 'Z') {
+        bool isUTC = false;
+        
+        // 检查是否是PostgreSQL时间戳格式 (如: 2025-10-24 01:27:39.398+00)
+        if (timeStr.find('+') != std::string::npos) {
+            // 移除时区部分 (如: +00)
+            size_t plusPos = timeStr.find('+');
+            if (plusPos != std::string::npos) {
+                timeStr = timeStr.substr(0, plusPos);
+                isUTC = true;
+                std::cout << "检测到PostgreSQL时间戳格式，移除时区部分" << std::endl;
+            }
+        } else if (timeStr.back() == 'Z') {
+            // 处理标准ISO格式 (如: 2025-10-24T01:27:39.398Z)
             timeStr.pop_back();
+            isUTC = true;
+            std::cout << "检测到标准ISO时间格式" << std::endl;
         }
         
-        // 解析时间
+        std::cout << "处理后的时间字符串: " << timeStr << std::endl;
+        
+        // 解析时间（支持毫秒）
+        // 重新创建istringstream使用处理后的时间字符串
+        ss.clear();
+        ss.str(timeStr);
+        
+        // 尝试解析不同的时间格式
         ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%S");
         if (ss.fail()) {
-            return std::chrono::system_clock::time_point{};
+            // 如果T格式失败，尝试空格格式
+            ss.clear();
+            ss.str(timeStr);
+            ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
+            if (ss.fail()) {
+                std::cerr << "解析ISO时间失败，格式错误: " << isoTime << " (处理后: " << timeStr << ")" << std::endl;
+                return std::chrono::system_clock::time_point{};
+            }
+        }
+        
+        // 处理毫秒部分（如果存在）
+        int milliseconds = 0;
+        if (ss.peek() == '.') {
+            ss.ignore(); // 跳过 '.'
+            ss >> milliseconds;
+            if (ss.fail()) {
+                milliseconds = 0;
+            }
+            std::cout << "解析到毫秒: " << milliseconds << std::endl;
         }
         
         // 转换为time_point
         auto time_t = std::mktime(&tm);
-        return std::chrono::system_clock::from_time_t(time_t);
+        if (time_t == -1) {
+            std::cerr << "解析ISO时间失败，mktime返回-1: " << isoTime << std::endl;
+            return std::chrono::system_clock::time_point{};
+        }
+        
+        std::cout << "mktime成功，time_t: " << time_t << std::endl;
+        
+        auto result = std::chrono::system_clock::from_time_t(time_t);
+        
+        // 添加毫秒
+        result += std::chrono::milliseconds(milliseconds);
+        
+        // 如果是UTC时间，需要调整时区偏移
+        if (isUTC) {
+            // 获取本地时区偏移
+            auto localTime = std::mktime(&tm);
+            auto utcTime = std::mktime(std::gmtime(&time_t));
+            auto offset = localTime - utcTime;
+            result += std::chrono::seconds(offset);
+        }
+        
+        return result;
         
     } catch (const std::exception& e) {
         std::cerr << "解析ISO时间失败: " << isoTime << " - " << e.what() << std::endl;

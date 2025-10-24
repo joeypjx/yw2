@@ -5,6 +5,7 @@
 #include <hv/WebSocketServer.h>
 #include <hv/WebSocketChannel.h>
 #include "mapper/AlertMapper.h"
+#include "../../alertv2/domain/Alert.h"
 
 namespace yw {
 namespace web {
@@ -39,6 +40,62 @@ void AlertPusher::push(const alert::AlertEvent& event) {
     auto view = mapper::toUserAlertEventView(event);
     nlohmann::json j = view;
     std::string payload = j.dump();
+    std::lock_guard<std::mutex> lk(mu_);
+    for (auto it = channels_.begin(); it != channels_.end(); ) {
+        auto ch = *it;
+        if (!ch || !ch->isConnected()) {
+            it = channels_.erase(it);
+            continue;
+        }
+        ch->send(payload);
+        ++it;
+    }
+}
+
+void AlertPusher::pushV2(const alertv2::Alert& alert) {
+    // 将 alertv2::Alert 转换为 UserAlertEventView
+    web::UserAlertEventView view;
+    
+    // 设置基本信息
+    view.fingerprint = alert.getFingerprint();
+    view.id = alert.getId();
+    
+    // 将 AlertStatus 枚举转换为字符串
+    std::string statusStr;
+    switch (alert.getStatus()) {
+        case alertv2::AlertStatus::Pending:
+            statusStr = "pending";
+            break;
+        case alertv2::AlertStatus::Firing:
+            statusStr = "firing";
+            break;
+        case alertv2::AlertStatus::Resolved:
+            statusStr = "resolved";
+            break;
+        default:
+            statusStr = "unknown";
+            break;
+    }
+    view.status = statusStr;
+    
+    view.created_at = alert.getCreatedAt();
+    view.starts_at = alert.getStartsAt();
+    view.ends_at = alert.getEndsAt();
+    view.updated_at = alert.getUpdatedAt();
+    
+    // 设置标签
+    view.labels = alert.getLabels();
+    
+    // 设置注释
+    view.annotations.description = alert.getAnnotations().count("description") ? 
+                                  alert.getAnnotations().at("description") : "";
+    view.annotations.summary = alert.getAnnotations().count("summary") ? 
+                              alert.getAnnotations().at("summary") : "";
+    
+    // 序列化为 JSON 并推送
+    nlohmann::json j = view;
+    std::string payload = j.dump();
+    
     std::lock_guard<std::mutex> lk(mu_);
     for (auto it = channels_.begin(); it != channels_.end(); ) {
         auto ch = *it;

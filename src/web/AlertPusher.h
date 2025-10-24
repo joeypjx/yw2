@@ -21,6 +21,13 @@
 #include <hv/WebSocketServer.h>
 #include <hv/WebSocketChannel.h>
 
+// Forward declaration for AlertV2
+namespace yw {
+namespace alertv2 {
+    class Alert;
+}
+}
+
 namespace yw {
 namespace web {
 
@@ -29,6 +36,8 @@ public:
     AlertPusher(hv::HttpServer* server);
 
     void push(const alert::AlertEvent& event);
+
+    void pushV2(const alertv2::Alert& alert);
 
     void stop();
 

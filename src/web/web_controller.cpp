@@ -12,6 +12,7 @@
 #include "routes/BMCRoutes.h"
 #include "routes/AlertRoutes.h"
 #include "routes/AlertV2Routes.h"
+#include "../../alertv2/application/AlertEngine.h"
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include <iomanip>
@@ -52,6 +53,15 @@ WebController::WebController(std::shared_ptr<hv::HttpServer> server,
             }
         });
     }
+    
+    // 将 Web 层推送能力注入到 alertv2 引擎
+    if (alertv2_engine_) {
+        alertv2_engine_->setPushCallback([this](const alertv2::Alert& alert){
+            if (pusher_) {
+                pusher_->pushV2(alert);
+            }
+        });
+    }
 }
 
 WebController::~WebController() {
@@ -65,7 +75,7 @@ void WebController::setupRoutes() {
     routes::registerNodeRoutes(service_.get(), node_module_.get(), monitor_module_.get());
     routes::registerMetricsRoutes(service_.get(), node_module_.get(), monitor_module_.get(), bmc_module_.get());
     routes::registerBMCRoutes(service_.get(), bmc_module_.get());
-    routes::registerAlertRoutes(service_.get(), alert_module_.get(), pusher_.get());
+    // routes::registerAlertRoutes(service_.get(), alert_module_.get(), pusher_.get());
     
     // 注册AlertV2路由（如果AlertV2引擎可用）
     if (alertv2_engine_) {

@@ -97,9 +97,19 @@ std::vector<Alert> AlertRuleEvaluator::convertQueryResultToAlerts(const QueryRes
         }
         std::string fingerprint = Alert::generateFingerprint(rule.getAlertName(), fingerprintTags);
         
-        // 创建告警对象（默认为Pending状态）
+        // 创建告警对象，根据for字段决定初始状态
         Alert alert(fingerprint, labels, annotations);
-        alert.transitionToPending(); // 设置为Pending状态
+        
+        // 检查告警规则的for字段
+        std::string forDuration = rule.getFor();
+        if (forDuration.empty() || forDuration == "0s" || forDuration == "0m" || forDuration == "0h") {
+            // 如果没有设置for字段或为0，直接设为Firing状态
+            alert.transitionToFiring();
+        } else {
+            // 如果设置了for字段，设为Pending状态，等待持续时间检查
+            alert.transitionToPending();
+        }
+        
         alerts.push_back(alert);
     }
     

@@ -91,7 +91,7 @@ void registerNodeRoutes(hv::HttpService* service,
     service->GET("/node/export", [monitor_module](const HttpContextPtr& ctx) {
         if (!monitor_module) {
             nlohmann::json resp = {
-                {"code", "400"},
+                {"code", 400},
                 {"message", "monitor module unavailable"},
                 {"data", nlohmann::json::array()}
             };
@@ -109,7 +109,7 @@ void registerNodeRoutes(hv::HttpService* service,
         
         if (ip_param.empty() || start_time_param.empty() || end_time_param.empty()) {
             nlohmann::json resp = {
-                {"code", "400"},
+                {"code", 400},
                 {"message", "missing required parameters: ip, start_time, end_time"},
                 {"data", nlohmann::json::array()}
             };
@@ -125,7 +125,7 @@ void registerNodeRoutes(hv::HttpService* service,
             end_time = std::stoll(end_time_param);
         } catch (const std::exception& e) {
             nlohmann::json resp = {
-                {"code", "400"},
+                {"code", 400},
                 {"message", "invalid timestamp format"},
                 {"data", nlohmann::json::array()}
             };
@@ -137,7 +137,7 @@ void registerNodeRoutes(hv::HttpService* service,
         // 验证时间范围
         if (start_time >= end_time) {
             nlohmann::json resp = {
-                {"code", "400"},
+                {"code", 400},
                 {"message", "start_time must be less than end_time"},
                 {"data", nlohmann::json::array()}
             };
@@ -242,7 +242,7 @@ void registerNodeRoutes(hv::HttpService* service,
             data_array.push_back(node_data);
 
             nlohmann::json resp = {
-                {"code", "200"},
+                {"code", 200},
                 {"data", data_array}
             };
 
@@ -251,7 +251,7 @@ void registerNodeRoutes(hv::HttpService* service,
 
         } catch (const std::exception& e) {
             nlohmann::json resp = {
-                {"code", "500"},
+                {"code", 500},
                 {"message", "internal server error: " + std::string(e.what())},
                 {"data", nlohmann::json::array()}
             };

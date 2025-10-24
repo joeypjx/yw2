@@ -128,7 +128,9 @@ inline void from_json(const nlohmann::json& j, AlertExpression& e) {
     j.at("stable").get_to(e.stable);
     j.at("metric").get_to(e.metric);
     j.at("conditions").get_to(e.conditions);
-    j.at("tags").get_to(e.tags);
+    if (j.contains("tags")) {
+        j.at("tags").get_to(e.tags);
+    }
 }
 
 inline void to_json(nlohmann::json& j, const AlertRule& r) {

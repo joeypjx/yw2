@@ -17,8 +17,8 @@ void registerAlertV2Routes(hv::HttpService* service,
                           std::shared_ptr<yw::alertv2::AlertEngine> alertEngine) {
     if (!service || !alertEngine) return;
 
-    // POST /api/v2/alarm/rules - 创建告警规则
-    service->POST("/api/v2/alarm/rules", [alertEngine](const HttpContextPtr& ctx) {
+    // POST /alarm/rules - 创建告警规则
+    service->POST("/alarm/rules", [alertEngine](const HttpContextPtr& ctx) {
         try {
             auto body = ctx->body();
             if (body.empty()) {
@@ -75,8 +75,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/rules - 获取所有告警规则
-    service->GET("/api/v2/alarm/rules", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/rules - 获取所有告警规则
+    service->GET("/alarm/rules", [alertEngine](const HttpContextPtr& ctx) {
         try {
             auto rules = alertEngine->getAllAlertRules();
             json rulesArray = json::array();
@@ -101,8 +101,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/rules/{id} - 获取特定告警规则
-    service->GET("/api/v2/alarm/rules/{id}", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/rules/{id} - 获取特定告警规则
+    service->GET("/alarm/rules/{id}", [alertEngine](const HttpContextPtr& ctx) {
         try {
             const std::string ruleId = ctx->param("id");
             auto rule = alertEngine->getAlertRuleById(ruleId);
@@ -130,8 +130,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // PUT /api/v2/alarm/rules/{id} - 更新告警规则
-    service->PUT("/api/v2/alarm/rules/{id}", [alertEngine](const HttpContextPtr& ctx) {
+    // POST /alarm/rules/{id}/update - 更新告警规则
+    service->POST("/alarm/rules/{id}/update", [alertEngine](const HttpContextPtr& ctx) {
         try {
             const std::string ruleId = ctx->param("id");
             auto body = ctx->body();
@@ -193,8 +193,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // POST /api/v2/alarm/rules/{id}/delete - 删除告警规则
-    service->POST("/api/v2/alarm/rules/{id}/delete", [alertEngine](const HttpContextPtr& ctx) {
+    // POST /alarm/rules/{id}/delete - 删除告警规则
+    service->POST("/alarm/rules/{id}/delete", [alertEngine](const HttpContextPtr& ctx) {
         try {
             const std::string ruleId = ctx->param("id");
             bool success = alertEngine->deleteAlertRule(ruleId);
@@ -222,8 +222,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/rules/enabled - 获取启用的告警规则
-    service->GET("/api/v2/alarm/rules/enabled", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/rules/enabled - 获取启用的告警规则
+    service->GET("/alarm/rules/enabled", [alertEngine](const HttpContextPtr& ctx) {
         try {
             // 这里需要AlertEngine提供getEnabledRules方法
             // 暂时使用getAllAlertRules然后过滤
@@ -251,8 +251,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // POST /api/v2/alarm/rules/{id}/enable - 启用告警规则
-    service->POST("/api/v2/alarm/rules/{id}/enable", [alertEngine](const HttpContextPtr& ctx) {
+    // POST /alarm/rules/{id}/enable - 启用告警规则
+    service->POST("/alarm/rules/{id}/enable", [alertEngine](const HttpContextPtr& ctx) {
         try {
             const std::string ruleId = ctx->param("id");
             auto rule = alertEngine->getAlertRuleById(ruleId);
@@ -294,8 +294,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // POST /api/v2/alarm/rules/{id}/disable - 禁用告警规则
-    service->POST("/api/v2/alarm/rules/{id}/disable", [alertEngine](const HttpContextPtr& ctx) {
+    // POST /alarm/rules/{id}/disable - 禁用告警规则
+    service->POST("/alarm/rules/{id}/disable", [alertEngine](const HttpContextPtr& ctx) {
         try {
             const std::string ruleId = ctx->param("id");
             auto rule = alertEngine->getAlertRuleById(ruleId);
@@ -337,8 +337,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/events - 获取告警事件
-    service->GET("/api/v2/alarm/events", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/events - 获取告警事件
+    service->GET("/alarm/events", [alertEngine](const HttpContextPtr& ctx) {
         try {
             // 获取查询参数
             auto params = ctx->params();
@@ -397,8 +397,13 @@ void registerAlertV2Routes(hv::HttpService* service,
             } else if (!hostIpFilter.empty()) {
                 alerts = alertEngine->getAlertsByHostIp(hostIpFilter);
             } else {
-                // 获取最近告警
-                alerts = alertEngine->getRecentAlerts(limit);
+                // 默认获取除Pending外的所有告警（Firing和Resolved）
+                alerts = alertEngine->getAlertsExceptPending();
+                
+                // 如果结果太多，限制数量
+                if (alerts.size() > static_cast<size_t>(limit)) {
+                    alerts.resize(limit);
+                }
             }
             
             // 构建响应数据
@@ -465,8 +470,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/events/{id} - 获取特定告警事件
-    service->GET("/api/v2/alarm/events/{id}", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/events/{id} - 获取特定告警事件
+    service->GET("/alarm/events/{id}", [alertEngine](const HttpContextPtr& ctx) {
         try {
             const std::string alertId = ctx->param("id");
             auto alert = alertEngine->getAlertById(alertId);
@@ -536,8 +541,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/count - 获取告警总数
-    service->GET("/api/v2/alarm/count", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/count - 获取告警总数
+    service->GET("/alarm/count", [alertEngine](const HttpContextPtr& ctx) {
         try {
             size_t count = alertEngine->getAlertCount();
             
@@ -556,8 +561,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/count/status/{status} - 根据状态获取告警数量
-    service->GET("/api/v2/alarm/count/status/{status}", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/count/status/{status} - 根据状态获取告警数量
+    service->GET("/alarm/count/status/{status}", [alertEngine](const HttpContextPtr& ctx) {
         try {
             const std::string status = ctx->param("status");
             size_t count = alertEngine->getAlertCountByStatus(status);
@@ -577,8 +582,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/count/severity/{severity} - 根据严重程度获取告警数量
-    service->GET("/api/v2/alarm/count/severity/{severity}", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/count/severity/{severity} - 根据严重程度获取告警数量
+    service->GET("/alarm/count/severity/{severity}", [alertEngine](const HttpContextPtr& ctx) {
         try {
             const std::string severity = ctx->param("severity");
             size_t count = alertEngine->getAlertCountBySeverity(severity);
@@ -598,8 +603,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/count/type/{alert_type} - 根据告警类型获取告警数量
-    service->GET("/api/v2/alarm/count/type/{alert_type}", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/count/type/{alert_type} - 根据告警类型获取告警数量
+    service->GET("/alarm/count/type/{alert_type}", [alertEngine](const HttpContextPtr& ctx) {
         try {
             const std::string alertType = ctx->param("alert_type");
             size_t count = alertEngine->getAlertCountByAlertType(alertType);
@@ -619,8 +624,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/count/host/{host_ip} - 根据主机IP获取告警数量
-    service->GET("/api/v2/alarm/count/host/{host_ip}", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/count/host/{host_ip} - 根据主机IP获取告警数量
+    service->GET("/alarm/count/host/{host_ip}", [alertEngine](const HttpContextPtr& ctx) {
         try {
             const std::string hostIp = ctx->param("host_ip");
             size_t count = alertEngine->getAlertCountByHostIp(hostIp);
@@ -640,8 +645,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/count/rule/{rule_id} - 根据规则ID获取告警数量
-    service->GET("/api/v2/alarm/count/rule/{rule_id}", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/count/rule/{rule_id} - 根据规则ID获取告警数量
+    service->GET("/alarm/count/rule/{rule_id}", [alertEngine](const HttpContextPtr& ctx) {
         try {
             const std::string ruleId = ctx->param("rule_id");
             size_t count = alertEngine->getAlertCountByRuleId(ruleId);
@@ -661,8 +666,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/count/name/{alert_name} - 根据告警名称获取告警数量
-    service->GET("/api/v2/alarm/count/name/{alert_name}", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/count/name/{alert_name} - 根据告警名称获取告警数量
+    service->GET("/alarm/count/name/{alert_name}", [alertEngine](const HttpContextPtr& ctx) {
         try {
             const std::string alertName = ctx->param("alert_name");
             size_t count = alertEngine->getAlertCountByAlertName(alertName);
@@ -682,8 +687,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/count/time-range - 根据时间范围获取告警数量
-    service->GET("/api/v2/alarm/count/time-range", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/count/time-range - 根据时间范围获取告警数量
+    service->GET("/alarm/count/time-range", [alertEngine](const HttpContextPtr& ctx) {
         try {
             auto params = ctx->params();
             
@@ -722,8 +727,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/count/active - 获取活跃告警数量
-    service->GET("/api/v2/alarm/count/active", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/count/active - 获取活跃告警数量
+    service->GET("/alarm/count/active", [alertEngine](const HttpContextPtr& ctx) {
         try {
             size_t count = alertEngine->getActiveAlertCount();
             
@@ -742,8 +747,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/count/pending - 获取等待告警数量
-    service->GET("/api/v2/alarm/count/pending", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/count/pending - 获取等待告警数量
+    service->GET("/alarm/count/pending", [alertEngine](const HttpContextPtr& ctx) {
         try {
             size_t count = alertEngine->getPendingAlertCount();
             
@@ -762,8 +767,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/count/resolved - 获取已解决告警数量
-    service->GET("/api/v2/alarm/count/resolved", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/count/resolved - 获取已解决告警数量
+    service->GET("/alarm/count/resolved", [alertEngine](const HttpContextPtr& ctx) {
         try {
             size_t count = alertEngine->getResolvedAlertCount();
             
@@ -782,8 +787,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // GET /api/v2/alarm/statistics - 获取综合告警统计信息
-    service->GET("/api/v2/alarm/statistics", [alertEngine](const HttpContextPtr& ctx) {
+    // GET /alarm/statistics - 获取综合告警统计信息
+    service->GET("/alarm/statistics", [alertEngine](const HttpContextPtr& ctx) {
         try {
             // 获取各种状态的告警数量
             size_t totalCount = alertEngine->getAlertCount();
@@ -838,8 +843,8 @@ void registerAlertV2Routes(hv::HttpService* service,
         }
     });
 
-    // POST /api/v2/alert/component - 组件状态告警上报
-    service->POST("/api/v2/alert/component", [alertEngine](const HttpContextPtr& ctx) {
+    // POST /alert/component - 组件状态告警上报
+    service->POST("/alert/component", [alertEngine](const HttpContextPtr& ctx) {
         try {
             auto body = ctx->body();
             if (body.empty()) {

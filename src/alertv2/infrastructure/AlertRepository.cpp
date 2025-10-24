@@ -249,6 +249,23 @@ std::vector<Alert> DatabaseAlertRepository::getResolvedAlerts() {
     return getAlertsByStatus("resolved");
 }
 
+std::vector<Alert> DatabaseAlertRepository::getAlertsExceptPending() {
+    try {
+        std::string sql = buildSelectSql() + " WHERE status != 'pending' ORDER BY created_at DESC";
+        
+        QueryResult result = dbInterface_->executeQuery(sql);
+        
+        std::vector<Alert> alerts;
+        for (const auto& row : result.rows) {
+            alerts.push_back(parseAlertFromQueryResult(row));
+        }
+        
+        return alerts;
+    } catch (const std::exception& e) {
+        throw std::runtime_error("获取除Pending外的告警失败: " + std::string(e.what()));
+    }
+}
+
 bool DatabaseAlertRepository::deleteAlert(const std::string& id) {
     try {
         std::string sql = buildDeleteSql();
