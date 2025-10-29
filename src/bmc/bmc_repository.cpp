@@ -192,6 +192,46 @@ ORDER BY
     return out;
 }
 
+std::unordered_map<std::string, BMCSensorRow> BMCRepository::getLatestBMCSensor(
+    const std::string& host_ip) {
+    std::unordered_map<std::string, BMCSensorRow> out;
+    pqxx::connection c(conninfo_);
+    pqxx::read_transaction tx{c};
+
+    const char* bmc_query = R"SQL(
+SELECT DISTINCT ON (sensorname)
+    sensorname,
+    EXTRACT(EPOCH FROM "time")::bigint AS timestamp,
+    host_ip::text,
+    sensorseq,
+    sensortype,
+    sensorvalue_L,
+    sensorvalue_H,
+    sensoralmtype
+FROM bmc_sensor
+WHERE host_ip = $1::inet
+ORDER BY sensorname, "time" DESC
+)SQL";
+    pqxx::result r = tx.exec_params(bmc_query, host_ip);
+
+    for (const auto& row : r) {
+        BMCSensorRow e{};
+        const std::string sensorname = row[0].as<std::string>("");
+        e.timestamp      = row[1].as<long long>(0);
+        e.host_ip        = row[2].as<std::string>("");
+        e.sensorseq      = static_cast<std::uint16_t>(row[3].as<int>(0));
+        e.sensortype     = static_cast<std::uint16_t>(row[4].as<int>(0));
+        e.sensorname     = sensorname;
+        e.sensorvalue_L  = static_cast<std::uint16_t>(row[5].as<int>(0));
+        e.sensorvalue_H  = static_cast<std::uint16_t>(row[6].as<int>(0));
+        e.sensor_value   = static_cast<std::double_t>(e.sensorvalue_H) + static_cast<std::double_t>(e.sensorvalue_L) * 0.01;
+        e.sensoralmtype  = static_cast<std::uint16_t>(row[7].as<int>(0));
+        out[sensorname] = std::move(e);
+    }
+
+    return out;
+}
+
 } // namespace bmc
 } // namespace yw
 

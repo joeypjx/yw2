@@ -29,6 +29,9 @@ namespace node {
 
         // 根据IP获取单个节点（含元数据）
         virtual std::optional<NodeExt> getNodeByIP(const std::string& ip) const = 0;
+
+        // 根据机箱号获取该机箱号下的所有节点（含元数据）
+        virtual std::vector<NodeExt> getNodesByBoxId(int box_id) const = 0;
     };
 
     /**

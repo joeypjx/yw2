@@ -6,7 +6,6 @@
 #include <nlohmann/json.hpp>
 
 #include "yw/node_model.h"
-
 #include "yw/monitor_model.h" // 复用 ComponentEntry 的定义与 JSON 宏
 
 namespace yw {
@@ -42,8 +41,14 @@ struct NodeView {
 
     std::int64_t updated_at = 0;
 
-    nlohmann::json component = nlohmann::json::array();
+    std::vector<monitor::ComponentEntry> component;
 };
+
+// /node 列表项视图 JSON 映射
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(GpuDevice, index, name)
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(NodeView,
+    box_id, slot_id, cpu_id, host_ip, hostname, status, box_type, board_type, cpu_type, os_type, resource_type, cpu_arch, gpu, manufacturer, serial_number, production_date, updated_at, component)
 
 // --------------------
 // latest_* 明细结构
@@ -300,12 +305,6 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(NodeMetrics,
     status,
     updated_at
 )
-
-// /node 列表项视图 JSON 映射
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(GpuDevice, index, name)
-
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(NodeView,
-    box_id, slot_id, cpu_id, host_ip, hostname, status, box_type, board_type, cpu_type, os_type, resource_type, cpu_arch, gpu, manufacturer, serial_number, production_date, updated_at, component)
 
 // --------------------
 // /node/historical-metrics 视图 DTO

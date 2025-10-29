@@ -61,6 +61,25 @@ std::optional<NodeExt> NodeManager::getNodeByIP(const std::string& ip) const {
     return ext;
 }
 
+std::vector<NodeExt> NodeManager::getNodesByBoxId(int box_id) const {
+    auto list = node_cache_->getAllNodes();
+    std::vector<NodeExt> filtered;
+    filtered.reserve(list.size());
+
+    const auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now()
+    ).time_since_epoch().count();
+
+    for (auto& ext : list) {
+        if (ext.box_id != box_id) continue;
+        const bool is_online = (now_ms - ext.updated_at) <= 10000;
+        ext.status = is_online ? "online" : "offline";
+        filtered.push_back(std::move(ext));
+    }
+
+    return filtered;
+}
+
 void NodeManager::setupRoutes() {
     if (!service_) {
         spdlog::error("HttpService not available for route setup");

@@ -14,75 +14,135 @@ using json = nlohmann::json;
 void registerNodeRoutes(hv::HttpService* service,
                         node::INodeModule* node_module,
                         monitor::IMonitorModule* monitor_module) {
+                            
     if (!service) return;
+    
     service->GET("/node", [node_module, monitor_module](const HttpContextPtr& ctx) {
-        if (!node_module) return 500;
-        const auto nodes = node_module->getAllNodes();
-        int filter_box_id = -1;
-        bool has_filter = false;
-        std::string filter_host_ip;
-        bool has_host_filter = false;
-        auto params = ctx->params();
-        if (params.find("box_id") != params.end()) {
-            try {
-                filter_box_id = std::stoi(params["box_id"]);
-                has_filter = true;
-            } catch (...) {
-                nlohmann::json resp = {
-                    {"api_version", 1},
-                    {"status", "error"},
-                    {"message", "invalid box_id"},
-                    {"data", nlohmann::json::object()}
-                };
-                ctx->setContentType("application/json");
-                ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
-                return ctx->send(resp.dump(2));
-            }
-        }
-        if (params.find("host_ip") != params.end()) {
-            filter_host_ip = params["host_ip"];
-            has_host_filter = true;
-        }
-        nlohmann::json resp_nodes = nlohmann::json::array();
-        resp_nodes.get_ref<nlohmann::json::array_t&>().reserve(nodes.size());
-        for (const auto& ext : nodes) {
-            if (has_filter && ext.box_id != filter_box_id) continue;
-            if (has_host_filter && ext.host_ip != filter_host_ip) continue;
-            const monitor::Resource* res = nullptr;
-            std::optional<monitor::Resource> resHolder;
-            if (monitor_module) {
-                auto resPtr = monitor_module->getNodeResource(ext.host_ip);
-                if (resPtr) { resHolder = *resPtr; res = &(*resHolder); }
-            }
-            auto v = yw::web::mapper::toNodeView(ext, res);
-            resp_nodes.push_back(std::move(v));
+        if (!node_module) {
+            json resp = {
+                {"api_version", 1},
+                {"status", "error"},
+                {"message", "node module unavailable"},
+                {"data", json::object()}
+            };
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_INTERNAL_SERVER_ERROR);
+            return ctx->send(resp.dump(2));
         }
 
-        nlohmann::json resp;
-        if (has_host_filter) {
-            if (!resp_nodes.empty()) {
+        auto params = ctx->params();
+        bool has_host_ip = params.find("host_ip") != params.end();
+        bool has_box_id = params.find("box_id") != params.end();
+
+        // 情况1: 有 host_ip 参数 - 返回单个节点对象（使用 INodeModule::getNodeByIP）
+        if (has_host_ip) {
+            const std::string filter_host_ip = params["host_ip"];
+            auto nodeOpt = node_module->getNodeByIP(filter_host_ip);
+
+            json resp;
+            if (nodeOpt.has_value()) {
+                // 获取监控资源
+                const monitor::Resource* res = nullptr;
+                std::optional<monitor::Resource> resHolder;
+                if (monitor_module) {
+                    auto resPtr = monitor_module->getNodeResource(nodeOpt->host_ip);
+                    if (resPtr) {
+                        resHolder = *resPtr;
+                        res = &(*resHolder);
+                    }
+                }
+
+                auto nodeView = yw::web::mapper::toNodeView(*nodeOpt, res);
                 resp = {
                     {"api_version", 1},
-                    {"data", resp_nodes[0]},
-                    {"status", "success"},
+                    {"data", nodeView},
+                    {"status", "success"}
                 };
             } else {
                 resp = {
                     {"api_version", 1},
                     {"data", json::object()},
-                    {"status", "success"},
+                    {"status", "success"}
                 };
             }
-        } else {
-            resp = {
-                {"api_version", 1},
-                {"data", {
-                    {"nodes", resp_nodes}
-                }},
-                {"status", "success"},
-            };
+
+            ctx->setContentType("application/json");
+            return ctx->send(resp.dump(2));
         }
 
+        // 情况2: 有 box_id 参数但无 host_ip - 返回指定 box_id 的节点列表
+        if (has_box_id) {
+            int filter_box_id;
+            try {
+                filter_box_id = std::stoi(params["box_id"]);
+            } catch (...) {
+                json resp = {
+                    {"api_version", 1},
+                    {"status", "error"},
+                    {"message", "invalid box_id"},
+                    {"data", json::object()}
+                };
+                ctx->setContentType("application/json");
+                ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
+                return ctx->send(resp.dump(2));
+            }
+
+            const auto nodes = node_module->getNodesByBoxId(filter_box_id);
+            json resp_nodes = json::array();
+            
+            for (const auto& node : nodes) {
+                // 获取监控资源
+                const monitor::Resource* res = nullptr;
+                std::optional<monitor::Resource> resHolder;
+                if (monitor_module) {
+                    auto resPtr = monitor_module->getNodeResource(node.host_ip);
+                    if (resPtr) {
+                        resHolder = *resPtr;
+                        res = &(*resHolder);
+                    }
+                }
+                
+                auto nodeView = yw::web::mapper::toNodeView(node, res);
+                resp_nodes.push_back(std::move(nodeView));
+            }
+
+            json resp = {
+                {"api_version", 1},
+                {"data", {{"nodes", resp_nodes}}},
+                {"status", "success"}
+            };
+            
+            ctx->setContentType("application/json");
+            return ctx->send(resp.dump(2));
+        }
+
+        // 情况3: 无参数 - 返回所有节点列表
+        const auto nodes = node_module->getAllNodes();
+        json resp_nodes = json::array();
+        resp_nodes.get_ref<json::array_t&>().reserve(nodes.size());
+        
+        for (const auto& node : nodes) {
+            // 获取监控资源
+            const monitor::Resource* res = nullptr;
+            std::optional<monitor::Resource> resHolder;
+            if (monitor_module) {
+                auto resPtr = monitor_module->getNodeResource(node.host_ip);
+                if (resPtr) {
+                    resHolder = *resPtr;
+                    res = &(*resHolder);
+                }
+            }
+            
+            auto nodeView = yw::web::mapper::toNodeView(node, res);
+            resp_nodes.push_back(std::move(nodeView));
+        }
+
+        json resp = {
+            {"api_version", 1},
+            {"data", {{"nodes", resp_nodes}}},
+            {"status", "success"}
+        };
+        
         ctx->setContentType("application/json");
         return ctx->send(resp.dump(2));
     });

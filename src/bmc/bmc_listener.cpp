@@ -187,6 +187,12 @@ std::unordered_map<std::string, std::vector<BMCSensorRow>> BMCListener::queryBMC
     return repository_->queryBMCSensor(host_ip, interval);
 }
 
+std::unordered_map<std::string, BMCSensorRow> BMCListener::getLatestBMCSensor(
+    const std::string& host_ip) const {
+    if (!repository_) return {};
+    return repository_->getLatestBMCSensor(host_ip);
+}
+
 } // namespace bmc
 } // namespace yw
 

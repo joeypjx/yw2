@@ -31,15 +31,15 @@ NodeView toNodeView(const node::NodeExt& ext, const monitor::Resource* res) {
     }
     
     if (res) {
-        // 只填充 component，沿用现有 JSON 结构
         v.component = res->component;
     } else {
-        v.component = nlohmann::json::array();
+        v.component.clear();
     }
     return v;
 }
 
-NodeMetrics toNodeMetrics(const node::NodeExt& nx, const monitor::Resource* res, std::int64_t now_seconds) {
+NodeMetrics toNodeMetrics(const node::NodeExt& nx, const monitor::Resource* res, std::int64_t now_seconds,
+                          const std::unordered_map<std::string, bmc::BMCSensorRow>* bmc_sensors) {
     NodeMetrics m;
     // NodeExt 基础
     m.box_id = nx.box_id;
@@ -138,8 +138,30 @@ NodeMetrics toNodeMetrics(const node::NodeExt& nx, const monitor::Resource* res,
             m.latest_gpu_metrics.gpus.push_back(std::move(gs));
         }
         m.latest_gpu_metrics.timestamp = now_seconds;
+    }
 
-        // 传感器（暂无结构，保持空）
+    // BMC传感器数据（如果提供）
+    if (bmc_sensors && !bmc_sensors->empty()) {
+        m.latest_sensor_metrics.sensor_count = static_cast<int>(bmc_sensors->size());
+        m.latest_sensor_metrics.sensors.clear();
+        m.latest_sensor_metrics.sensors.reserve(bmc_sensors->size());
+        
+        for (const auto& [sensorname, sensor_row] : *bmc_sensors) {
+            nlohmann::json sensor_json;
+            sensor_json["timestamp"] = sensor_row.timestamp;
+            sensor_json["host_ip"] = sensor_row.host_ip;
+            sensor_json["sensorseq"] = sensor_row.sensorseq;
+            sensor_json["sensortype"] = sensor_row.sensortype;
+            sensor_json["sensorname"] = sensor_row.sensorname;
+            sensor_json["sensorvalue_L"] = sensor_row.sensorvalue_L;
+            sensor_json["sensorvalue_H"] = sensor_row.sensorvalue_H;
+            sensor_json["sensor_value"] = sensor_row.sensor_value;
+            sensor_json["sensoralmtype"] = sensor_row.sensoralmtype;
+            m.latest_sensor_metrics.sensors.push_back(std::move(sensor_json));
+        }
+        m.latest_sensor_metrics.timestamp = now_seconds;
+    } else {
+        // 传感器（暂无数据，保持空）
         m.latest_sensor_metrics.sensor_count = 0;
         m.latest_sensor_metrics.sensors.clear();
         m.latest_sensor_metrics.timestamp = now_seconds;

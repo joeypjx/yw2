@@ -1,11 +1,12 @@
 #pragma once
 
 #include <vector>
+#include <unordered_map>
 #include <nlohmann/json.hpp>
 
 #include "yw/node_model.h"
 #include "yw/monitor_model.h"
-#include "dto/node_dto.h"
+#include "yw/bmc_model.h"
 #include "dto/node_dto.h"
 
 namespace yw {
@@ -16,7 +17,9 @@ namespace mapper {
 NodeView toNodeView(const node::NodeExt& ext, const monitor::Resource* res);
 
 // NodeExt + 资源 -> NodeMetrics（/node/metrics 用）
-NodeMetrics toNodeMetrics(const node::NodeExt& ext, const monitor::Resource* res, std::int64_t now_seconds);
+// bmc_sensors 可选，如果提供则填充 latest_sensor_metrics
+NodeMetrics toNodeMetrics(const node::NodeExt& ext, const monitor::Resource* res, std::int64_t now_seconds,
+                          const std::unordered_map<std::string, bmc::BMCSensorRow>* bmc_sensors = nullptr);
 
 // ResourceWindow + 可选BMC传感器 -> HistoricalMetricsView
 HistoricalMetricsView toHistoricalMetricsView(const monitor::ResourceWindow& win,

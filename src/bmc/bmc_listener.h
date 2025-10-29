@@ -37,6 +37,9 @@ public:
         const std::string& host_ip,
         const std::string& duration) const override;
 
+    std::unordered_map<std::string, BMCSensorRow> getLatestBMCSensor(
+        const std::string& host_ip) const override;
+
     // BMCCache 访问接口（查询指定 box_id 的 UdpInfo）
     std::optional<UdpInfo> getBoxBMC(int box_id) const override;
 

@@ -23,6 +23,10 @@ public:
         const std::string& host_ip,
         const std::string& duration) const = 0;
 
+    // 获取指定 host_ip 的最新 BMC Sensor 数据（每个传感器只返回最新的一条记录）
+    virtual std::unordered_map<std::string, BMCSensorRow> getLatestBMCSensor(
+        const std::string& host_ip) const = 0;
+
     virtual std::optional<UdpInfo> getBoxBMC(int box_id) const = 0;
 
     // 返回所有 box 的最新 BMC UdpInfo
