@@ -7,7 +7,6 @@ add_library(yw_alertv2 STATIC
     
     # 应用层 (Application Layer) - 应用服务和用例
     application/AlertEngine.cpp
-    application/AlertRuleTester.cpp
     
     # 基础设施层 (Infrastructure Layer) - 数据访问和外部服务
     infrastructure/AlertRepository.cpp
