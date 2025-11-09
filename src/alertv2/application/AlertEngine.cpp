@@ -66,41 +66,6 @@ void AlertEngine::stop() {
     std::cout << "告警引擎已停止" << std::endl;
 }
 
-int AlertEngine::evaluateOnce() {
-    if (!running_) {
-        std::cout << "告警引擎未运行，无法执行评估" << std::endl;
-        return 0;
-    }
-    
-    return performEvaluation();
-}
-
-void AlertEngine::reloadRules() {
-    std::cout << "正在重新加载告警规则..." << std::endl;
-    initialize();
-    std::cout << "告警规则重新加载完成，共加载 " << rules_.size() << " 个规则" << std::endl;
-}
-
-std::string AlertEngine::getStatistics() const {
-    auto now = std::chrono::system_clock::now();
-    auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - startTime_).count();
-    
-    std::ostringstream oss;
-    oss << "告警引擎统计信息:\n";
-    oss << "  运行状态: " << (running_ ? "运行中" : "已停止") << "\n";
-    oss << "  运行时间: " << uptime << " 秒\n";
-    oss << "  告警规则数量: " << rules_.size() << "\n";
-    oss << "  总评估次数: " << totalEvaluations_ << "\n";
-    oss << "  总生成告警数: " << totalAlertsGenerated_ << "\n";
-    oss << "  评估间隔: " << intervalSeconds_ << " 秒\n";
-    
-    if (totalEvaluations_ > 0) {
-        oss << "  平均每次评估告警数: " << (totalAlertsGenerated_ / totalEvaluations_) << "\n";
-    }
-    
-    return oss.str();
-}
-
 void AlertEngine::workerLoop() {
     std::cout << "告警引擎工作线程已启动" << std::endl;
     
@@ -370,21 +335,6 @@ std::unordered_set<std::string> AlertEngine::getCurrentPendingFingerprints() {
     return fingerprints;
 }
 
-std::string AlertEngine::fingerprintsToString(const std::unordered_set<std::string>& fingerprints) {
-    std::ostringstream oss;
-    oss << "[";
-    bool first = true;
-    for (const auto& fingerprint : fingerprints) {
-        if (!first) {
-            oss << ", ";
-        }
-        oss << fingerprint;
-        first = false;
-    }
-    oss << "]";
-    return oss.str();
-}
-
 // 告警规则管理方法实现
 bool AlertEngine::addAlertRule(const AlertRule& rule) {
     try {
@@ -495,45 +445,6 @@ std::vector<AlertRule> AlertEngine::getAllAlertRules() const {
     return rules_;
 }
 
-bool AlertEngine::alertRuleExists(const std::string& ruleId) const {
-    // 检查内存中是否存在
-    for (const auto& rule : rules_) {
-        if (rule.getId() == ruleId) {
-            return true;
-        }
-    }
-    
-    // 检查数据库中是否存在
-    try {
-        return alertRuleRepo_->ruleExists(ruleId);
-    } catch (const std::exception& e) {
-        std::cerr << "检查告警规则是否存在时出错: " << e.what() << std::endl;
-        return false;
-    }
-}
-
-int AlertEngine::syncRulesFromDatabase() {
-    try {
-        std::cout << "正在同步数据库中的启用告警规则到内存..." << std::endl;
-        
-        // 从数据库获取所有启用的规则
-        auto dbRules = alertRuleRepo_->getEnabledRules();
-        
-        // 清空内存中的规则
-        rules_.clear();
-        
-        // 将数据库规则复制到内存
-        rules_ = dbRules;
-        
-        std::cout << "成功同步 " << rules_.size() << " 个启用的告警规则到内存" << std::endl;
-        return static_cast<int>(rules_.size());
-        
-    } catch (const std::exception& e) {
-        std::cerr << "同步告警规则失败: " << e.what() << std::endl;
-        return 0;
-    }
-}
-
 // 告警查询方法实现
 std::vector<Alert> AlertEngine::getAlertsByStatus(const std::string& status) {
     try {
@@ -549,24 +460,6 @@ std::vector<Alert> AlertEngine::getAlertsByHostIp(const std::string& hostIp) {
         return alertRepo_->getAlertsByHostIp(hostIp);
     } catch (const std::exception& e) {
         std::cerr << "根据主机IP获取告警失败: " << e.what() << std::endl;
-        return {};
-    }
-}
-
-std::vector<Alert> AlertEngine::getAlertsByRuleId(const std::string& ruleId) {
-    try {
-        return alertRepo_->getAlertsByRuleId(ruleId);
-    } catch (const std::exception& e) {
-        std::cerr << "根据规则ID获取告警失败: " << e.what() << std::endl;
-        return {};
-    }
-}
-
-std::vector<Alert> AlertEngine::getAlertsByAlertName(const std::string& alertName) {
-    try {
-        return alertRepo_->getAlertsByAlertName(alertName);
-    } catch (const std::exception& e) {
-        std::cerr << "根据告警名称获取告警失败: " << e.what() << std::endl;
         return {};
     }
 }
@@ -589,89 +482,12 @@ std::vector<Alert> AlertEngine::getAlertsBySeverity(const std::string& severity)
     }
 }
 
-std::vector<Alert> AlertEngine::getAlertsByTimeRange(const std::string& startTime, const std::string& endTime) {
-    try {
-        return alertRepo_->getAlertsByTimeRange(startTime, endTime);
-    } catch (const std::exception& e) {
-        std::cerr << "根据时间范围获取告警失败: " << e.what() << std::endl;
-        return {};
-    }
-}
-
-std::vector<Alert> AlertEngine::getRecentAlerts(int limit) {
-    try {
-        return alertRepo_->getRecentAlerts(limit);
-    } catch (const std::exception& e) {
-        std::cerr << "获取最近告警失败: " << e.what() << std::endl;
-        return {};
-    }
-}
-
-std::vector<Alert> AlertEngine::getAllAlerts() {
-    try {
-        return alertRepo_->getAllAlerts();
-    } catch (const std::exception& e) {
-        std::cerr << "获取所有告警失败: " << e.what() << std::endl;
-        return {};
-    }
-}
-
 std::vector<Alert> AlertEngine::getAlertsExceptPending() {
     try {
         return alertRepo_->getAlertsExceptPending();
     } catch (const std::exception& e) {
         std::cerr << "获取除Pending外的告警失败: " << e.what() << std::endl;
         return {};
-    }
-}
-
-std::string AlertEngine::getAlertStatistics() {
-    try {
-        std::ostringstream oss;
-        
-        // 获取各种状态的告警数量
-        auto firingAlerts = getAlertsByStatus("firing");
-        auto resolvedAlerts = getAlertsByStatus("resolved");
-        auto pendingAlerts = getAlertsByStatus("pending");
-        
-        oss << "=== 告警统计信息 ===\n";
-        oss << "Firing告警数量: " << firingAlerts.size() << "\n";
-        oss << "Resolved告警数量: " << resolvedAlerts.size() << "\n";
-        oss << "Pending告警数量: " << pendingAlerts.size() << "\n";
-        oss << "总告警数量: " << firingAlerts.size() + resolvedAlerts.size() + pendingAlerts.size() << "\n";
-        
-        // 按严重程度统计
-        auto criticalAlerts = getAlertsBySeverity("严重");
-        auto warningAlerts = getAlertsBySeverity("警告");
-        auto infoAlerts = getAlertsBySeverity("信息");
-        
-        oss << "\n=== 按严重程度统计 ===\n";
-        oss << "严重告警数量: " << criticalAlerts.size() << "\n";
-        oss << "警告告警数量: " << warningAlerts.size() << "\n";
-        oss << "信息告警数量: " << infoAlerts.size() << "\n";
-        
-        // 按告警类型统计
-        auto hardwareAlerts = getAlertsByAlertType("硬件资源");
-        auto availabilityAlerts = getAlertsByAlertType("availability");
-        
-        oss << "\n=== 按告警类型统计 ===\n";
-        oss << "硬件资源告警数量: " << hardwareAlerts.size() << "\n";
-        oss << "可用性告警数量: " << availabilityAlerts.size() << "\n";
-        
-        return oss.str();
-        
-    } catch (const std::exception& e) {
-        std::cerr << "获取告警统计信息失败: " << e.what() << std::endl;
-        return "获取告警统计信息失败: " + std::string(e.what());
-    }
-}
-
-std::shared_ptr<Alert> AlertEngine::getAlertByFingerprint(const std::string& fingerprint) {
-    try {
-        return alertRepo_->getAlertByFingerprint(fingerprint);
-    } catch (const std::exception& e) {
-        std::cerr << "根据指纹获取告警失败: " << e.what() << std::endl;
-        return nullptr;
     }
 }
 
@@ -694,200 +510,7 @@ size_t AlertEngine::getAlertCount() {
     }
 }
 
-size_t AlertEngine::getAlertCountByStatus(const std::string& status) {
-    try {
-        return alertRepo_->getAlertCountByStatus(status);
-    } catch (const std::exception& e) {
-        std::cerr << "根据状态获取告警数量失败: " << e.what() << std::endl;
-        return 0;
-    }
-}
-
-size_t AlertEngine::getAlertCountByHostIp(const std::string& hostIp) {
-    try {
-        return alertRepo_->getAlertCountByHostIp(hostIp);
-    } catch (const std::exception& e) {
-        std::cerr << "根据主机IP获取告警数量失败: " << e.what() << std::endl;
-        return 0;
-    }
-}
-
-size_t AlertEngine::getAlertCountByRuleId(const std::string& ruleId) {
-    try {
-        return alertRepo_->getAlertCountByRuleId(ruleId);
-    } catch (const std::exception& e) {
-        std::cerr << "根据规则ID获取告警数量失败: " << e.what() << std::endl;
-        return 0;
-    }
-}
-
-size_t AlertEngine::getAlertCountByAlertName(const std::string& alertName) {
-    try {
-        return alertRepo_->getAlertCountByAlertName(alertName);
-    } catch (const std::exception& e) {
-        std::cerr << "根据告警名称获取告警数量失败: " << e.what() << std::endl;
-        return 0;
-    }
-}
-
-size_t AlertEngine::getAlertCountByAlertType(const std::string& alertType) {
-    try {
-        return alertRepo_->getAlertCountByAlertType(alertType);
-    } catch (const std::exception& e) {
-        std::cerr << "根据告警类型获取告警数量失败: " << e.what() << std::endl;
-        return 0;
-    }
-}
-
-size_t AlertEngine::getAlertCountBySeverity(const std::string& severity) {
-    try {
-        return alertRepo_->getAlertCountBySeverity(severity);
-    } catch (const std::exception& e) {
-        std::cerr << "根据严重程度获取告警数量失败: " << e.what() << std::endl;
-        return 0;
-    }
-}
-
-size_t AlertEngine::getAlertCountByTimeRange(const std::string& startTime, const std::string& endTime) {
-    try {
-        return alertRepo_->getAlertCountByTimeRange(startTime, endTime);
-    } catch (const std::exception& e) {
-        std::cerr << "根据时间范围获取告警数量失败: " << e.what() << std::endl;
-        return 0;
-    }
-}
-
-size_t AlertEngine::getActiveAlertCount() {
-    try {
-        return alertRepo_->getActiveAlertCount();
-    } catch (const std::exception& e) {
-        std::cerr << "获取活跃告警数量失败: " << e.what() << std::endl;
-        return 0;
-    }
-}
-
-size_t AlertEngine::getPendingAlertCount() {
-    try {
-        return alertRepo_->getPendingAlertCount();
-    } catch (const std::exception& e) {
-        std::cerr << "获取等待告警数量失败: " << e.what() << std::endl;
-        return 0;
-    }
-}
-
-size_t AlertEngine::getResolvedAlertCount() {
-    try {
-        return alertRepo_->getResolvedAlertCount();
-    } catch (const std::exception& e) {
-        std::cerr << "获取已解决告警数量失败: " << e.what() << std::endl;
-        return 0;
-    }
-}
-
 // 告警创建方法实现
-std::shared_ptr<Alert> AlertEngine::createAlert(const std::string& alertName,
-                                               const std::string& alertType,
-                                               const std::string& severity,
-                                               const std::string& hostIp,
-                                               const std::string& description,
-                                               const std::string& summary,
-                                               const std::map<std::string, std::string>& labels,
-                                               const std::map<std::string, std::string>& annotations) {
-    try {
-        // 生成告警指纹（基于告警名称和主机IP）
-        std::string fingerprint = hostIp + "_" + alertName;
-        
-        // 检查是否已存在相同的告警
-        auto existingAlert = alertRepo_->getAlertByFingerprint(fingerprint);
-        if (existingAlert) {
-            // 如果已存在，更新现有告警
-            existingAlert->setStatus(AlertStatus::Firing);
-            existingAlert->setUpdatedNow();
-            existingAlert->setStartsAt(existingAlert->getUpdatedAt());
-            existingAlert->setEndsAt(""); // 清空结束时间
-            
-            // 更新标签和注释
-            existingAlert->addLabel("description", description);
-            if (!summary.empty()) {
-                existingAlert->addLabel("summary", summary);
-            }
-            
-            // 更新传入的标签和注释
-            for (const auto& label : labels) {
-                existingAlert->addLabel(label.first, label.second);
-            }
-            for (const auto& annotation : annotations) {
-                existingAlert->addAnnotation(annotation.first, annotation.second);
-            }
-            
-            // 保存到数据库
-            bool success = existingAlert->updateInDatabase(alertRepo_);
-            if (success) {
-                std::cout << "更新现有告警: " << fingerprint << std::endl;
-                
-                // 手动创建的告警直接设为 Firing 状态，需要推送
-                if (pushCallback_) {
-                    pushCallback_(*existingAlert);
-                }
-                
-                return existingAlert;
-            } else {
-                std::cerr << "更新现有告警失败: " << fingerprint << std::endl;
-                return nullptr;
-            }
-        }
-        
-        // 创建新告警的标签和注释
-        std::unordered_map<std::string, std::string> alertLabels;
-        std::unordered_map<std::string, std::string> alertAnnotations;
-        
-        // 设置基本标签
-        alertLabels["alert_name"] = alertName;
-        alertLabels["alert_type"] = alertType;
-        alertLabels["severity"] = severity;
-        alertLabels["host_ip"] = hostIp;
-        alertLabels["description"] = description;
-        if (!summary.empty()) {
-            alertLabels["summary"] = summary;
-        }
-        
-        // 添加传入的标签和注释
-        for (const auto& label : labels) {
-            alertLabels[label.first] = label.second;
-        }
-        for (const auto& annotation : annotations) {
-            alertAnnotations[annotation.first] = annotation.second;
-        }
-        
-        // 创建新告警
-        Alert newAlert(fingerprint, alertLabels, alertAnnotations);
-        newAlert.setId(generateAlertId());
-        newAlert.setStatus(AlertStatus::Firing);
-        newAlert.setStartsAt(newAlert.getCreatedAt());
-        newAlert.setEndsAt("");
-        
-        // 保存到数据库
-        bool success = newAlert.updateInDatabase(alertRepo_);
-        if (success) {
-            std::cout << "成功创建新告警: " << fingerprint << " (" << alertName << ")" << std::endl;
-            
-            // 手动创建的新告警直接设为 Firing 状态，需要推送
-            if (pushCallback_) {
-                pushCallback_(newAlert);
-            }
-            
-            return std::make_shared<Alert>(newAlert);
-        } else {
-            std::cerr << "创建告警失败: " << fingerprint << std::endl;
-            return nullptr;
-        }
-        
-    } catch (const std::exception& e) {
-        std::cerr << "创建告警时发生错误: " << e.what() << std::endl;
-        return nullptr;
-    }
-}
-
 std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& hostIp,
                                                            const std::string& instanceId,
                                                            const std::string& uuid,

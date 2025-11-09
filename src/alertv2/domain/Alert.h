@@ -76,13 +76,6 @@ public:
     nlohmann::json toJson() const;
     static Alert fromJson(const nlohmann::json& j);
     
-    // 验证方法
-    bool isValid() const;
-    std::string getValidationError() const;
-    
-    // 字符串表示
-    std::string toString() const;
-    
     // 工具方法
     static std::string generateFingerprint(const std::string& alertName, 
                                           const std::unordered_map<std::string, std::string>& tags);
@@ -104,7 +97,6 @@ private:
     
     // 私有辅助方法
     bool updateExistingAlert(const Alert& existingAlert, std::shared_ptr<AlertRepository> repository);
-    AlertStatus determineNewStatus(AlertStatus currentStatus);
 };
 
 // JSON序列化支持

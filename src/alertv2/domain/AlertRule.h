@@ -81,12 +81,6 @@ public:
     // 验证方法
     bool isValid() const;
     std::string getValidationError() const;
-    
-    // 字符串表示
-    std::string toString() const;
-    
-    // 告警规则评估方法
-    std::vector<Alert> evaluate(std::shared_ptr<DatabaseQueryInterface> dbInterface) const;
 
 private:
     std::string id_;              // 系统生成的唯一ID

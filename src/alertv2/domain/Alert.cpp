@@ -200,89 +200,6 @@ Alert Alert::fromJson(const nlohmann::json& j) {
     return alert;
 }
 
-bool Alert::isValid() const {
-    // 检查id是否为空
-    if (id_.empty()) {
-        return false;
-    }
-    
-    // 检查fingerprint是否为空
-    if (fingerprint_.empty()) {
-        return false;
-    }
-    
-    // 检查labels是否为空
-    if (labels_.empty()) {
-        return false;
-    }
-    
-    // 检查annotations是否为空
-    if (annotations_.empty()) {
-        return false;
-    }
-    
-    // 检查created_at是否为空
-    if (created_at_.empty()) {
-        return false;
-    }
-    
-    // 检查updated_at是否为空
-    if (updated_at_.empty()) {
-        return false;
-    }
-    
-    // 检查必要标签是否存在
-    if (labels_.find("alert_name") == labels_.end()) {
-        return false;
-    }
-    
-    if (labels_.find("host_ip") == labels_.end()) {
-        return false;
-    }
-    
-    return true;
-}
-
-std::string Alert::getValidationError() const {
-    if (id_.empty()) {
-        return "id不能为空";
-    }
-    
-    if (fingerprint_.empty()) {
-        return "fingerprint不能为空";
-    }
-    
-    if (labels_.empty()) {
-        return "labels不能为空";
-    }
-    
-    if (annotations_.empty()) {
-        return "annotations不能为空";
-    }
-    
-    if (created_at_.empty()) {
-        return "created_at不能为空";
-    }
-    
-    if (updated_at_.empty()) {
-        return "updated_at不能为空";
-    }
-    
-    if (labels_.find("alert_name") == labels_.end()) {
-        return "labels中必须包含alert_name";
-    }
-    
-    if (labels_.find("host_ip") == labels_.end()) {
-        return "labels中必须包含host_ip";
-    }
-    
-    return "";
-}
-
-std::string Alert::toString() const {
-    return toJson().dump(2);
-}
-
 std::string Alert::generateFingerprint(const std::string& alertName, 
                                       const std::unordered_map<std::string, std::string>& tags) {
     std::ostringstream oss;
@@ -401,35 +318,6 @@ bool Alert::updateExistingAlert(const Alert& existingAlert, std::shared_ptr<Aler
             return repository->saveAlert(updatedAlert);
         }
     }
-}
-
-AlertStatus Alert::determineNewStatus(AlertStatus currentStatus) {
-    // 根据当前告警的状态和条件判断新状态
-    // 这里可以根据具体的业务逻辑来实现
-    
-    // 简单示例：如果当前告警是pending状态，检查是否应该转为firing
-    if (currentStatus == AlertStatus::Pending) {
-        // 这里可以添加持续时间检查逻辑
-        // 如果满足持续时间条件，返回Firing
-        // 否则返回Pending
-        return AlertStatus::Firing; // 简化实现，实际应该根据持续时间判断
-    }
-    
-    // 如果当前告警是firing状态，检查是否应该转为resolved
-    if (currentStatus == AlertStatus::Firing) {
-        // 这里可以添加告警解决条件检查逻辑
-        // 如果告警条件不再满足，返回Resolved
-        // 否则返回Firing
-        return AlertStatus::Firing; // 简化实现，实际应该根据条件判断
-    }
-    
-    // 如果当前告警是resolved状态，检查是否应该重新激活
-    if (currentStatus == AlertStatus::Resolved) {
-        // 如果告警条件重新满足，返回Pending
-        return AlertStatus::Pending; // 简化实现，实际应该根据条件判断
-    }
-    
-    return currentStatus;
 }
 
 } // namespace alertv2

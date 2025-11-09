@@ -85,41 +85,6 @@ std::shared_ptr<AlertRule> DatabaseAlertRuleRepository::getRuleById(const std::s
     }
 }
 
-std::shared_ptr<AlertRule> DatabaseAlertRuleRepository::getRuleByName(const std::string& alertName) {
-    try {
-        std::string sql = buildSelectSql() + " WHERE alert_name = $1";
-        std::vector<std::string> params = {alertName};
-        
-        QueryResult result = dbInterface_->executeQuery(sql, params);
-        
-        if (result.empty()) {
-            return nullptr;
-        }
-        
-        AlertRule rule = parseRuleFromQueryResult(result[0]);
-        return std::make_shared<AlertRule>(rule);
-    } catch (const std::exception& e) {
-        throw std::runtime_error("根据名称获取告警规则失败: " + std::string(e.what()));
-    }
-}
-
-std::vector<AlertRule> DatabaseAlertRuleRepository::getAllRules() {
-    try {
-        std::string sql = buildSelectSql() + " ORDER BY created_at DESC";
-        
-        QueryResult result = dbInterface_->executeQuery(sql);
-        
-        std::vector<AlertRule> rules;
-        for (const auto& row : result.rows) {
-            rules.push_back(parseRuleFromQueryResult(row));
-        }
-        
-        return rules;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("获取所有告警规则失败: " + std::string(e.what()));
-    }
-}
-
 std::vector<AlertRule> DatabaseAlertRuleRepository::getEnabledRules() {
     try {
         std::string sql = buildSelectSql() + " WHERE enabled = true ORDER BY created_at DESC";
@@ -134,60 +99,6 @@ std::vector<AlertRule> DatabaseAlertRuleRepository::getEnabledRules() {
         return rules;
     } catch (const std::exception& e) {
         throw std::runtime_error("获取启用的告警规则失败: " + std::string(e.what()));
-    }
-}
-
-std::vector<AlertRule> DatabaseAlertRuleRepository::getRulesByType(const std::string& alertType) {
-    try {
-        std::string sql = buildSelectSql() + " WHERE alert_type = $1 ORDER BY created_at DESC";
-        std::vector<std::string> params = {alertType};
-        
-        QueryResult result = dbInterface_->executeQuery(sql, params);
-        
-        std::vector<AlertRule> rules;
-        for (const auto& row : result.rows) {
-            rules.push_back(parseRuleFromQueryResult(row));
-        }
-        
-        return rules;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("根据类型获取告警规则失败: " + std::string(e.what()));
-    }
-}
-
-std::vector<AlertRule> DatabaseAlertRuleRepository::getRulesBySeverity(const std::string& severity) {
-    try {
-        std::string sql = buildSelectSql() + " WHERE severity = $1 ORDER BY created_at DESC";
-        std::vector<std::string> params = {severity};
-        
-        QueryResult result = dbInterface_->executeQuery(sql, params);
-        
-        std::vector<AlertRule> rules;
-        for (const auto& row : result.rows) {
-            rules.push_back(parseRuleFromQueryResult(row));
-        }
-        
-        return rules;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("根据严重等级获取告警规则失败: " + std::string(e.what()));
-    }
-}
-
-std::vector<AlertRule> DatabaseAlertRuleRepository::getRulesByResourceType(const std::string& resourceType) {
-    try {
-        std::string sql = buildSelectSql() + " WHERE expression->>'stable' = $1 ORDER BY created_at DESC";
-        std::vector<std::string> params = {resourceType};
-        
-        QueryResult result = dbInterface_->executeQuery(sql, params);
-        
-        std::vector<AlertRule> rules;
-        for (const auto& row : result.rows) {
-            rules.push_back(parseRuleFromQueryResult(row));
-        }
-        
-        return rules;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("根据资源类型获取告警规则失败: " + std::string(e.what()));
     }
 }
 
@@ -218,48 +129,6 @@ bool DatabaseAlertRuleRepository::ruleExists(const std::string& id) {
         return count > 0;
     } catch (const std::exception& e) {
         throw std::runtime_error("检查规则是否存在失败: " + std::string(e.what()));
-    }
-}
-
-size_t DatabaseAlertRuleRepository::getRuleCount() {
-    try {
-        std::string sql = "SELECT COUNT(*) as count FROM alert_rules";
-        
-        QueryResult result = dbInterface_->executeQuery(sql);
-        
-        if (result.empty()) {
-            return 0;
-        }
-        
-        return static_cast<size_t>(std::stoi(result[0].getValue("count")));
-    } catch (const std::exception& e) {
-        throw std::runtime_error("获取规则总数失败: " + std::string(e.what()));
-    }
-}
-
-bool DatabaseAlertRuleRepository::saveRules(const std::vector<AlertRule>& rules) {
-    try {
-        for (const auto& rule : rules) {
-            if (!saveRule(rule)) {
-                return false;
-            }
-        }
-        return true;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("批量保存告警规则失败: " + std::string(e.what()));
-    }
-}
-
-bool DatabaseAlertRuleRepository::deleteRules(const std::vector<std::string>& ids) {
-    try {
-        for (const auto& id : ids) {
-            if (!deleteRule(id)) {
-                return false;
-            }
-        }
-        return true;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("批量删除告警规则失败: " + std::string(e.what()));
     }
 }
 
@@ -367,19 +236,6 @@ std::string DatabaseAlertRuleRepository::buildSelectSql() {
 
 std::string DatabaseAlertRuleRepository::buildDeleteSql() {
     return "DELETE FROM alert_rules WHERE id = $1";
-}
-
-std::string DatabaseAlertRuleRepository::escapeString(const std::string& str) {
-    std::string escaped = str;
-    
-    // 转义单引号
-    size_t pos = 0;
-    while ((pos = escaped.find("'", pos)) != std::string::npos) {
-        escaped.replace(pos, 1, "''");
-        pos += 2;
-    }
-    
-    return escaped;
 }
 
 } // namespace alertv2

@@ -39,20 +39,15 @@ struct QueryResult {
     const QueryRow& operator[](size_t index) const { return rows[index]; }
 };
 
-// 数据库查询接口抽象类
 class DatabaseQueryInterface {
 public:
     virtual ~DatabaseQueryInterface() = default;
     
-    // 执行SQL查询并返回结果
     virtual QueryResult executeQuery(const std::string& sql) = 0;
-    
-    // 执行带参数的SQL查询
     virtual QueryResult executeQuery(const std::string& sql, 
                                    const std::vector<std::string>& params) = 0;
 };
 
-// PostgreSQL实现
 class PostgreSQLQueryInterface : public DatabaseQueryInterface {
 public:
     explicit PostgreSQLQueryInterface(const std::string& conninfo);

@@ -284,10 +284,6 @@ std::string AlertRule::getValidationError() const {
     return "";
 }
 
-std::string AlertRule::toString() const {
-    return toJson().dump(2);
-}
-
 void AlertRule::generateId() {
     // 使用时间戳和随机数生成唯一ID
     auto now = std::chrono::system_clock::now();
@@ -330,11 +326,6 @@ void AlertRule::setUpdatedNow() {
     oss << "." << std::setfill('0') << std::setw(3) << ms.count();
     
     updated_at_ = oss.str();
-}
-
-std::vector<Alert> AlertRule::evaluate(std::shared_ptr<DatabaseQueryInterface> dbInterface) const {
-    AlertRuleEvaluator evaluator(dbInterface);
-    return evaluator.evaluateRule(*this);
 }
 
 } // namespace alertv2
