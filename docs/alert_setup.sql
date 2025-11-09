@@ -23,7 +23,6 @@ CREATE TABLE IF NOT EXISTS alert (
     
     -- 关联信息
     alert_rule_id       VARCHAR(100),                                  -- 关联的告警规则ID
-    host_ip             VARCHAR(50),                                   -- 节点IP，用于快速查询
     
     -- 约束
     CONSTRAINT chk_status CHECK (status IN ('pending', 'firing', 'resolved'))
@@ -32,7 +31,6 @@ CREATE TABLE IF NOT EXISTS alert (
 -- 创建索引
 CREATE INDEX IF NOT EXISTS idx_alert_fingerprint ON alert(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_alert_status ON alert(status);
-CREATE INDEX IF NOT EXISTS idx_alert_host_ip ON alert(host_ip);
 CREATE INDEX IF NOT EXISTS idx_alert_created_at ON alert(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alert_starts_at ON alert(starts_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alert_updated_at ON alert(updated_at DESC);
@@ -40,7 +38,6 @@ CREATE INDEX IF NOT EXISTS idx_alert_ends_at ON alert(ends_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alert_rule_id ON alert(alert_rule_id);
 
 -- 创建复合索引
-CREATE INDEX IF NOT EXISTS idx_alert_status_host ON alert(status, host_ip);
 CREATE INDEX IF NOT EXISTS idx_alert_status_created ON alert(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alert_rule_status ON alert(alert_rule_id, status);
 
@@ -50,6 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_alert_labels_alert_type ON alert ((labels->>'aler
 CREATE INDEX IF NOT EXISTS idx_alert_labels_severity ON alert ((labels->>'severity'));
 CREATE INDEX IF NOT EXISTS idx_alert_labels_metric ON alert ((labels->>'metric'));
 CREATE INDEX IF NOT EXISTS idx_alert_labels_stable ON alert ((labels->>'stable'));
+CREATE INDEX IF NOT EXISTS idx_alert_labels_host_ip ON alert ((labels->>'host_ip'));
 
 -- 创建触发器函数，自动更新updated_at字段
 CREATE OR REPLACE FUNCTION update_alert_updated_at()
@@ -78,12 +76,11 @@ COMMENT ON COLUMN alert.updated_at IS '触发中持续匹配的更新时间，�
 COMMENT ON COLUMN alert.ends_at IS '告警已解决的时间';
 COMMENT ON COLUMN alert.status IS '告警状态：pending(匹配但未满足持续时间)、firing(触发告警)、resolved(已解决)';
 COMMENT ON COLUMN alert.alert_rule_id IS '关联的告警规则ID';
-COMMENT ON COLUMN alert.host_ip IS '节点IP，用于快速查询';
 
 -- 插入示例数据（可选）
 INSERT INTO alert (
     id, fingerprint, labels, annotations, created_at, starts_at, updated_at, 
-    status, alert_rule_id, host_ip
+    status, alert_rule_id
 ) VALUES (
     'alert_20251023_150000_001_1234',
     'CPU使用率告警|host_ip=192.168.1.100',
@@ -104,13 +101,12 @@ INSERT INTO alert (
     NOW(),
     NOW(),
     'firing',
-    'rule_20250101_120000_123_5678',
-    '192.168.1.100'
+    'rule_20250101_120000_123_5678'
 ) ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO alert (
     id, fingerprint, labels, annotations, created_at, starts_at, updated_at, 
-    status, alert_rule_id, host_ip
+    status, alert_rule_id
 ) VALUES (
     'alert_20251023_150001_002_5678',
     '磁盘使用率告警|host_ip=192.168.1.101|mount_point=/data',
@@ -132,13 +128,12 @@ INSERT INTO alert (
     NOW(),
     NOW(),
     'firing',
-    'rule_20250101_120000_123_5678',
-    '192.168.1.101'
+    'rule_20250101_120000_123_5678'
 ) ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO alert (
     id, fingerprint, labels, annotations, created_at, starts_at, updated_at, 
-    status, alert_rule_id, host_ip
+    status, alert_rule_id
 ) VALUES (
     'alert_20251023_150002_003_9012',
     '节点离线告警|host_ip=192.168.1.102',
@@ -159,6 +154,5 @@ INSERT INTO alert (
     NOW(),
     NOW(),
     'resolved',
-    'rule_20250101_120002_125_5680',
-    '192.168.1.102'
+    'rule_20250101_120002_125_5680'
 ) ON CONFLICT (id) DO NOTHING;
