@@ -25,14 +25,15 @@
         }
     },
 
-    "scanner": {
-        "manager_ip": "0.0.0.0",
-        "manager_port": 18888,
-        "url_heartbeat": "/heartbeat",
-        "url_resource": "/resource",
-        "multicast_ip": "239.192.168.80",
-        "multicast_port": 3980,
-        "interval_ms": 3000
+    "monitor": {
+        "scanner": {
+            "manager_ip": "0.0.0.0",
+            "manager_port": 18888,
+            "url_resource": "/resource",
+            "multicast_ip": "239.192.168.80",
+            "multicast_port": 3980,
+            "interval_ms": 3000
+        }
     },
 
     "logger": {

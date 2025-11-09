@@ -21,16 +21,14 @@ MonitorManager::MonitorManager(std::shared_ptr<hv::HttpService> service,
     : service_(std::move(service)), node_module_(std::move(node_module)) {
     service_->AllowCORS();
     
-    // 启动资源扫描器（与 NodeManager 配置保持一致；从配置读取）
+    // 启动资源扫描器（使用 monitor.scanner 配置）
     scanner_ = std::make_unique<yw::utils::MulticastScanner>(
-        yw::utils::JsonConfig::Get<std::string>("scanner.manager_ip",
-            yw::utils::JsonConfig::Get<std::string>("host", "0.0.0.0")),
-        yw::utils::JsonConfig::Get<int>("scanner.manager_port",
-            yw::utils::JsonConfig::Get<int>("port", 18888)),
-        yw::utils::JsonConfig::Get<std::string>("scanner.url_resource", "/resource"),
-        yw::utils::JsonConfig::Get<std::string>("scanner.multicast_ip", "239.192.168.80"),
-        yw::utils::JsonConfig::Get<int>("scanner.multicast_port", 3980),
-        yw::utils::JsonConfig::Get<int>("scanner.interval_ms", 3000)
+        yw::utils::JsonConfig::Get<std::string>("monitor.scanner.manager_ip", "0.0.0.0"),
+        yw::utils::JsonConfig::Get<int>("monitor.scanner.manager_port", 18888),
+        yw::utils::JsonConfig::Get<std::string>("monitor.scanner.url_resource", "/resource"),
+        yw::utils::JsonConfig::Get<std::string>("monitor.scanner.multicast_ip", "239.192.168.80"),
+        yw::utils::JsonConfig::Get<int>("monitor.scanner.multicast_port", 3980),
+        yw::utils::JsonConfig::Get<int>("monitor.scanner.interval_ms", 5000)
     );
     scanner_->start();
 
