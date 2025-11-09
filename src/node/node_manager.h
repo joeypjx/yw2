@@ -52,6 +52,7 @@ private:
     std::shared_ptr<hv::HttpService> service_;  // 共享路由服务（注入）
     std::unique_ptr<NodeCache> node_cache_;     // 节点缓存
     std::unique_ptr<yw::utils::MulticastScanner> scanner_; // 通用组播扫描器
+    std::int64_t online_threshold_ms_;          // 节点在线状态判断阈值（毫秒）
 };
 
 } // namespace node

@@ -18,16 +18,17 @@ NodeManager::NodeManager(std::shared_ptr<hv::HttpService> service)
     node_cache_ = std::make_unique<NodeCache>();
     service_->AllowCORS();
 
-    // 启动节点扫描器（参数改为从配置读取）
+    // 从配置文件读取节点在线状态判断阈值（默认10秒）
+    online_threshold_ms_ = yw::utils::JsonConfig::Get<int>("node.online_threshold_ms", 10000);
+
+    // 启动节点扫描器（使用 node 模块专用配置）
     scanner_ = std::make_unique<yw::utils::MulticastScanner>(
-        yw::utils::JsonConfig::Get<std::string>("scanner.manager_ip",
-            yw::utils::JsonConfig::Get<std::string>("host", "0.0.0.0")),
-        yw::utils::JsonConfig::Get<int>("scanner.manager_port",
-            yw::utils::JsonConfig::Get<int>("port", 18888)),
-        yw::utils::JsonConfig::Get<std::string>("scanner.url_heartbeat", "/heartbeat"),
-        yw::utils::JsonConfig::Get<std::string>("scanner.multicast_ip", "239.192.168.80"),
-        yw::utils::JsonConfig::Get<int>("scanner.multicast_port", 3980),
-        yw::utils::JsonConfig::Get<int>("scanner.interval_ms", 3000)
+        yw::utils::JsonConfig::Get<std::string>("node.scanner.manager_ip", "0.0.0.0"),
+        yw::utils::JsonConfig::Get<int>("node.scanner.manager_port", 18888),
+        yw::utils::JsonConfig::Get<std::string>("node.scanner.url_heartbeat", "/heartbeat"),
+        yw::utils::JsonConfig::Get<std::string>("node.scanner.multicast_ip", "239.192.168.80"),
+        yw::utils::JsonConfig::Get<int>("node.scanner.multicast_port", 3980),
+        yw::utils::JsonConfig::Get<int>("node.scanner.interval_ms", 3000)
     );
     scanner_->start();
 
@@ -45,7 +46,7 @@ std::vector<NodeExt> NodeManager::getAllNodes() const {
         std::chrono::system_clock::now()
     ).time_since_epoch().count();
     for (auto& ext : list) {
-        const bool is_online = (now_ms - ext.updated_at) <= 10000;
+        const bool is_online = (now_ms - ext.updated_at) <= online_threshold_ms_;
         ext.status = is_online ? "online" : "offline";
     }
     return list;
@@ -57,7 +58,7 @@ std::optional<NodeExt> NodeManager::getNodeByIP(const std::string& ip) const {
     const auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now()
     ).time_since_epoch().count();
-    ext->status = (now_ms - ext->updated_at) <= 10000 ? "online" : "offline";
+    ext->status = (now_ms - ext->updated_at) <= online_threshold_ms_ ? "online" : "offline";
     return ext;
 }
 
@@ -72,7 +73,7 @@ std::vector<NodeExt> NodeManager::getNodesByBoxId(int box_id) const {
 
     for (auto& ext : list) {
         if (ext.box_id != box_id) continue;
-        const bool is_online = (now_ms - ext.updated_at) <= 10000;
+        const bool is_online = (now_ms - ext.updated_at) <= online_threshold_ms_;
         ext.status = is_online ? "online" : "offline";
         filtered.push_back(std::move(ext));
     }
