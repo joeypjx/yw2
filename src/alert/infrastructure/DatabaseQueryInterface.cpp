@@ -3,7 +3,7 @@
 #include <stdexcept>
 
 namespace yw {
-namespace alertv2 {
+namespace alert {
 
 PostgreSQLQueryInterface::PostgreSQLQueryInterface(const std::string& conninfo)
     : conninfo_(conninfo) {}
@@ -68,5 +68,5 @@ QueryResult PostgreSQLQueryInterface::executeQuery(const std::string& sql,
     }
 }
 
-} // namespace alertv2
+} // namespace alert
 } // namespace yw

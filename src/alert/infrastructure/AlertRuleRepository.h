@@ -7,7 +7,7 @@
 #include <string>
 
 namespace yw {
-namespace alertv2 {
+namespace alert {
 
 class AlertRuleRepository {
 public:
@@ -41,5 +41,5 @@ private:
     std::string buildDeleteSql();
 };
 
-} // namespace alertv2
+} // namespace alert
 } // namespace yw

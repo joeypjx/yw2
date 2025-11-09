@@ -6,7 +6,7 @@
 #include <iostream>
 
 namespace yw {
-namespace alertv2 {
+namespace alert {
 
 DatabaseAlertRuleRepository::DatabaseAlertRuleRepository(std::shared_ptr<DatabaseQueryInterface> dbInterface)
     : dbInterface_(dbInterface) {
@@ -238,6 +238,6 @@ std::string DatabaseAlertRuleRepository::buildDeleteSql() {
     return "DELETE FROM alert_rules WHERE id = $1";
 }
 
-} // namespace alertv2
+} // namespace alert
 } // namespace yw
 

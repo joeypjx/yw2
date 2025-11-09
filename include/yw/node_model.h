@@ -33,6 +33,7 @@ struct Node {
     std::string production_date;
 };
 
+// 节点扩展信息（包含状态和时间戳）
 struct NodeExt {
     int box_id = 0;
     int slot_id = 0;
@@ -51,8 +52,8 @@ struct NodeExt {
     std::string manufacturer;
     std::string serial_number;
     std::string production_date;
-    std::int64_t updated_at = 0;
-    std::string   status;
+    std::int64_t updated_at = 0;  // 最后更新时间（毫秒）
+    std::string   status;         // 节点状态
 
     NodeExt() = default;
     explicit NodeExt(const Node& n, std::int64_t ts_ms)

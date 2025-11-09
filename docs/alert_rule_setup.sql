@@ -1,6 +1,6 @@
 -- AlertV2 告警规则表创建脚本（修复版本）
 -- 用于在PostgreSQL数据库中创建告警规则存储表
--- 使用方法：psql "postgres://user:password@host:5432/dbname" -f alert_rules_setup_fixed.sql
+-- 使用方法：psql "postgres://user:password@host:5432/dbname" -f alert_rule_setup.sql
 
 -- 创建告警规则表
 CREATE TABLE IF NOT EXISTS alert_rules (
@@ -139,3 +139,4 @@ INSERT INTO alert_rules (
     NOW(),
     NOW()
 ) ON CONFLICT (id) DO NOTHING;
+

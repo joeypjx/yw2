@@ -7,7 +7,7 @@
 #include <nlohmann/json.hpp>
 
 namespace yw {
-namespace alertv2 {
+namespace alert {
 
 // 前向声明
 class DatabaseQueryInterface;
@@ -147,5 +147,5 @@ inline void from_json(const nlohmann::json& j, AlertRule& r) {
     r = AlertRule::fromJson(j);
 }
 
-} // namespace alertv2
+} // namespace alert
 } // namespace yw

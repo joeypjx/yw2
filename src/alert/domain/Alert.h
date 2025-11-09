@@ -6,7 +6,7 @@
 #include <nlohmann/json.hpp>
 
 namespace yw {
-namespace alertv2 {
+namespace alert {
 
 // 前向声明
 class AlertRepository;
@@ -118,5 +118,5 @@ inline void from_json(const nlohmann::json& j, Alert& a) {
     a = Alert::fromJson(j);
 }
 
-} // namespace alertv2
+} // namespace alert
 } // namespace yw

@@ -8,7 +8,7 @@
 #include <ctime>
 
 namespace yw {
-namespace alertv2 {
+namespace alert {
 
 AlertRule::AlertRule(const std::string& name, const AlertExpression& expr, 
                      const std::string& duration, const std::string& severity,
@@ -328,5 +328,5 @@ void AlertRule::setUpdatedNow() {
     updated_at_ = oss.str();
 }
 
-} // namespace alertv2
+} // namespace alert
 } // namespace yw

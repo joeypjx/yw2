@@ -5,7 +5,7 @@ add_library(yw_web STATIC
     routes/NodeRoutes.cpp
     routes/MetricsRoutes.cpp
     routes/BMCRoutes.cpp
-    routes/AlertV2Routes.cpp
+    routes/AlertRoutes.cpp
     AlertPusher.cpp
 )
 
@@ -20,7 +20,7 @@ target_include_directories(yw_web PRIVATE
 
 target_link_libraries(yw_web PRIVATE
     yw_core
-    yw_alertv2
+    yw_alert
     hv_static
     nlohmann_json::nlohmann_json
 )

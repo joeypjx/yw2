@@ -12,7 +12,7 @@
 
 // Forward declaration for AlertV2
 namespace yw {
-namespace alertv2 {
+namespace alert {
     class AlertEngine;
 }
 }
@@ -27,7 +27,7 @@ public:
                   std::shared_ptr<node::INodeModule> node_module,
                   std::shared_ptr<monitor::IMonitorModule> monitor_module,
                   std::shared_ptr<bmc::IBMCModule> bmc_module,
-                  std::shared_ptr<alertv2::AlertEngine> alertv2_engine = nullptr);
+                  std::shared_ptr<alert::AlertEngine> alert_engine = nullptr);
 
     ~WebController() override;
 
@@ -41,7 +41,7 @@ private:
     std::shared_ptr<node::INodeModule>      node_module_;
     std::shared_ptr<monitor::IMonitorModule> monitor_module_;
     std::shared_ptr<bmc::IBMCModule>        bmc_module_;
-    std::shared_ptr<alertv2::AlertEngine>  alertv2_engine_;
+    std::shared_ptr<alert::AlertEngine>  alert_engine_;
 
     std::unique_ptr<AlertPusher>            pusher_;
 };

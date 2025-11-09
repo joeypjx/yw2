@@ -1,4 +1,4 @@
-目录 src/alertv2
+目录 src/alert
 数据库表参考文件 docs/timescaledb_setup.sql
 cmake .. -DCMAKE_CXX_COMPILER=/opt/homebrew/bin/g++-15
 

@@ -22,7 +22,7 @@
 
 // Forward declaration for AlertV2
 namespace yw {
-namespace alertv2 {
+namespace alert {
     class Alert;
 }
 }
@@ -34,7 +34,7 @@ class AlertPusher {
 public:
     AlertPusher(hv::HttpServer* server);
 
-    void pushV2(const alertv2::Alert& alert);
+    void pushV2(const alert::Alert& alert);
 
     void stop();
 

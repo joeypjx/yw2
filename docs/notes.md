@@ -24,6 +24,7 @@ docker run -d -p 12345:80 swaggerapi/swagger-editor:v5.0.0-alpha.113
 // 
 
 docker run -d --name timescaledb \
+  --restart=always \
   -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD=HZ715Net \
   -e POSTGRES_DB=yw \
@@ -53,6 +54,7 @@ docker run -d -p 6030:6030 -p 6041:6041 -p 6043:6043 -p 6044-6049:6044-6049 -p 6
 test HZ715Net resource
 
 docker run -d --name mysql8 \
+  --restart=always \
   -e MYSQL_ROOT_PASSWORD=YourStrongPwd \
   -e TZ=Asia/Shanghai \
   -p 3306:3306 \
@@ -73,7 +75,7 @@ server {
     root /usr/share/nginx/html;
     index index.html;
     location / {
-        try_files $uri $uri/ =404;
+        try_files $uri $uri/ /index.html;
     }
 }
 EOF
@@ -84,4 +86,4 @@ docker run -d --name nginx \
   -v /data/nginx/conf.d:/etc/nginx/conf.d \
   -v /data/nginx/html:/usr/share/nginx/html \
   -v /data/nginx/logs:/var/log/nginx \
-  nginx:1.27-alpine
+  nginx

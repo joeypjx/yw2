@@ -6,7 +6,7 @@
 #include <memory>
 
 namespace yw {
-namespace alertv2 {
+namespace alert {
 
 // 查询结果行
 struct QueryRow {
@@ -61,5 +61,5 @@ private:
     std::string conninfo_;
 };
 
-} // namespace alertv2
+} // namespace alert
 } // namespace yw

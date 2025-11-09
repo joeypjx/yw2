@@ -9,8 +9,8 @@
 #include "routes/NodeRoutes.h"
 #include "routes/MetricsRoutes.h"
 #include "routes/BMCRoutes.h"
-#include "routes/AlertV2Routes.h"
-#include "../../alertv2/application/AlertEngine.h"
+#include "routes/AlertRoutes.h"
+#include "../../alert/application/AlertEngine.h"
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include <iomanip>
@@ -26,13 +26,13 @@ WebController::WebController(std::shared_ptr<hv::HttpServer> server,
                              std::shared_ptr<node::INodeModule> node_module,
                              std::shared_ptr<monitor::IMonitorModule> monitor_module,
                              std::shared_ptr<bmc::IBMCModule> bmc_module,
-                             std::shared_ptr<alertv2::AlertEngine> alertv2_engine)
+                             std::shared_ptr<alert::AlertEngine> alert_engine)
     : server_(std::move(server)),
       service_(std::move(service)),
       node_module_(std::move(node_module)),
       monitor_module_(std::move(monitor_module)),
       bmc_module_(std::move(bmc_module)),
-      alertv2_engine_(std::move(alertv2_engine)) {
+      alert_engine_(std::move(alert_engine)) {
 
     pusher_ = std::make_unique<AlertPusher>(server_.get());
 
@@ -42,8 +42,8 @@ WebController::WebController(std::shared_ptr<hv::HttpServer> server,
     }
 
     // 将 Web 层推送能力注入到 alertv2 引擎
-    if (alertv2_engine_) {
-        alertv2_engine_->setPushCallback([this](const alertv2::Alert& alert){
+    if (alert_engine_) {
+        alert_engine_->setPushCallback([this](const alert::Alert& alert){
             if (pusher_) {
                 pusher_->pushV2(alert);
             }
@@ -64,8 +64,8 @@ void WebController::setupRoutes() {
     routes::registerBMCRoutes(service_.get(), bmc_module_.get());
     
     // 注册AlertV2路由（如果AlertV2引擎可用）
-    if (alertv2_engine_) {
-        routes::registerAlertV2Routes(service_.get(), alertv2_engine_);
+    if (alert_engine_) {
+        routes::registerAlertRoutes(service_.get(), alert_engine_);
         spdlog::info("AlertV2 routes registered successfully");
     } else {
         spdlog::warn("AlertV2 engine not available, skipping AlertV2 routes");

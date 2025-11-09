@@ -8,7 +8,7 @@
 #include <algorithm>
 
 namespace yw {
-namespace alertv2 {
+namespace alert {
 
 Alert::Alert(const std::string& fingerprint, const std::unordered_map<std::string, std::string>& labels,
              const std::unordered_map<std::string, std::string>& annotations)
@@ -320,5 +320,5 @@ bool Alert::updateExistingAlert(const Alert& existingAlert, std::shared_ptr<Aler
     }
 }
 
-} // namespace alertv2
+} // namespace alert
 } // namespace yw

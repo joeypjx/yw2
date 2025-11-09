@@ -4,7 +4,7 @@
 #include <nlohmann/json.hpp>
 #include <hv/WebSocketServer.h>
 #include <hv/WebSocketChannel.h>
-#include "../../alertv2/domain/Alert.h"
+#include "../../alert/domain/Alert.h"
 #include "dto/alert_dto.h"
 
 namespace yw {
@@ -36,8 +36,8 @@ bool AlertPusher::init() {
     return true;
 }
 
-void AlertPusher::pushV2(const alertv2::Alert& alert) {
-    // 将 alertv2::Alert 转换为 UserAlertEventView
+void AlertPusher::pushV2(const alert::Alert& alert) {
+    // 将 alert::Alert 转换为 UserAlertEventView
     web::UserAlertEventView view;
     
     // 设置基本信息
@@ -47,13 +47,13 @@ void AlertPusher::pushV2(const alertv2::Alert& alert) {
     // 将 AlertStatus 枚举转换为字符串
     std::string statusStr;
     switch (alert.getStatus()) {
-        case alertv2::AlertStatus::Pending:
+        case alert::AlertStatus::Pending:
             statusStr = "pending";
             break;
-        case alertv2::AlertStatus::Firing:
+        case alert::AlertStatus::Firing:
             statusStr = "firing";
             break;
-        case alertv2::AlertStatus::Resolved:
+        case alert::AlertStatus::Resolved:
             statusStr = "resolved";
             break;
         default:
