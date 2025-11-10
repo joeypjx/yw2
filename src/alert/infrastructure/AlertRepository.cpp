@@ -91,7 +91,7 @@ std::shared_ptr<Alert> DatabaseAlertRepository::getAlertById(const std::string& 
 
 std::shared_ptr<Alert> DatabaseAlertRepository::getAlertByFingerprint(const std::string& fingerprint) {
     try {
-        std::string sql = buildSelectSql() + " WHERE fingerprint = $1";
+        std::string sql = buildSelectSql() + " WHERE fingerprint = $1 ORDER BY created_at DESC LIMIT 1";
         std::vector<std::string> params = {fingerprint};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
@@ -233,6 +233,25 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsBySeverity(const std::strin
         return alerts;
     } catch (const std::exception& e) {
         throw std::runtime_error("根据严重程度获取告警失败: " + std::string(e.what()));
+    }
+}
+
+std::vector<Alert> DatabaseAlertRepository::getAlertsByDescription(const std::string& description) {
+    try {
+        // 从 annotations JSON 中查询 description，支持模糊匹配
+        std::string sql = buildSelectSql() + " WHERE annotations->>'description' LIKE $1 ORDER BY created_at DESC";
+        std::vector<std::string> params = {"%" + description + "%"};
+        
+        QueryResult result = dbInterface_->executeQuery(sql, params);
+        
+        std::vector<Alert> alerts;
+        for (const auto& row : result.rows) {
+            alerts.push_back(parseAlertFromQueryResult(row));
+        }
+        
+        return alerts;
+    } catch (const std::exception& e) {
+        throw std::runtime_error("根据描述获取告警失败: " + std::string(e.what()));
     }
 }
 

@@ -26,6 +26,7 @@ public:
     virtual std::vector<Alert> getAlertsByTimeRange(const std::string& startTime, const std::string& endTime) = 0;
     virtual std::vector<Alert> getAlertsByAlertType(const std::string& alertType) = 0;
     virtual std::vector<Alert> getAlertsBySeverity(const std::string& severity) = 0;
+    virtual std::vector<Alert> getAlertsByDescription(const std::string& description) = 0;
     virtual std::vector<Alert> getAlertsExceptPending() = 0;
     
     virtual size_t getAlertCount() = 0;
@@ -46,6 +47,7 @@ public:
     std::vector<Alert> getAlertsByTimeRange(const std::string& startTime, const std::string& endTime) override;
     std::vector<Alert> getAlertsByAlertType(const std::string& alertType) override;
     std::vector<Alert> getAlertsBySeverity(const std::string& severity) override;
+    std::vector<Alert> getAlertsByDescription(const std::string& description) override;
     std::vector<Alert> getAlertsExceptPending() override;
     bool deleteAlert(const std::string& id) override;
     bool alertExists(const std::string& id) override;
