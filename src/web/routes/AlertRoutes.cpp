@@ -6,6 +6,8 @@
 #include "../../alert/application/AlertEngine.h"
 #include "../../alert/domain/AlertRule.h"
 #include <iostream>
+#include <algorithm>
+#include <cctype>
 
 namespace yw {
 namespace web {
@@ -278,6 +280,12 @@ void registerAlertRoutes(hv::HttpService* service,
                 }
             }
             
+            // 获取描述过滤参数
+            std::string descriptionFilter;
+            if (params.find("description") != params.end()) {
+                descriptionFilter = params["description"];
+            }
+            
             // 获取起止时间过滤参数
             std::string startTimeFilter;
             std::string endTimeFilter;
@@ -302,7 +310,7 @@ void registerAlertRoutes(hv::HttpService* service,
             
             std::vector<yw::alert::Alert> alerts;
             
-            // 根据过滤条件获取告警（优先级：时间范围 > 状态 > 严重程度 > 告警类型 > 主机IP > 机箱号 > 板卡号）
+            // 根据过滤条件获取告警（优先级：时间范围 > 状态 > 严重程度 > 告警类型 > 主机IP > 描述 > 机箱号 > 板卡号）
             if (!startTimeFilter.empty() && !endTimeFilter.empty()) {
                 // 时间范围查询（最高优先级）
                 alerts = alertEngine->getAlertsByTimeRange(startTimeFilter, endTimeFilter);
@@ -314,6 +322,8 @@ void registerAlertRoutes(hv::HttpService* service,
                 alerts = alertEngine->getAlertsByAlertType(alertTypeFilter);
             } else if (!hostIpFilter.empty()) {
                 alerts = alertEngine->getAlertsByHostIp(hostIpFilter);
+            } else if (!descriptionFilter.empty()) {
+                alerts = alertEngine->getAlertsByDescription(descriptionFilter);
             } else if (boxIdFilter >= 0) {
                 alerts = alertEngine->getAlertsByBoxId(boxIdFilter);
             } else if (slotIdFilter >= 0) {
@@ -414,6 +424,24 @@ void registerAlertRoutes(hv::HttpService* service,
                                     match = false;
                                 }
                             } catch (...) {
+                                match = false;
+                            }
+                        }
+                    }
+                    
+                    // 描述过滤（模糊匹配）
+                    if (match && !descriptionFilter.empty()) {
+                        auto annotations = alert.getAnnotations();
+                        auto it = annotations.find("description");
+                        if (it == annotations.end()) {
+                            match = false;
+                        } else {
+                            // 检查 description 是否包含过滤文本（不区分大小写）
+                            std::string description = it->second;
+                            std::string filterLower = descriptionFilter;
+                            std::transform(description.begin(), description.end(), description.begin(), ::tolower);
+                            std::transform(filterLower.begin(), filterLower.end(), filterLower.begin(), ::tolower);
+                            if (description.find(filterLower) == std::string::npos) {
                                 match = false;
                             }
                         }
@@ -604,7 +632,7 @@ void registerAlertRoutes(hv::HttpService* service,
             std::string hostIp = j.value("host_ip", "");
             std::string instanceId = j.value("instance_id", "");
             std::string uuid = j.value("uuid", "");
-            std::string index = j.value("index", "");
+            int index = j.value("index", 0);
             std::string status = j.value("status", "unknown");
             
             // 验证必需字段

@@ -75,6 +75,8 @@ void AlertEngine::workerLoop() {
         try {
             // 执行评估
             performEvaluation();
+
+            performEvaluationForAlive();
             
             // 等待下次评估
             std::this_thread::sleep_for(std::chrono::seconds(intervalSeconds_));
@@ -136,6 +138,175 @@ int AlertEngine::performEvaluation() {
         
     } catch (const std::exception& e) {
         std::cerr << "告警评估失败: " << e.what() << std::endl;
+        throw;
+    }
+}
+
+int AlertEngine::performEvaluationForAlive() {
+    auto startTime = std::chrono::system_clock::now();
+    
+    try {
+        std::cout << "\n=== 开始检查节点存活状态 ===" << std::endl;
+        
+        // 查询每个节点 IP 的最新时间
+        std::string sql = R"(
+            SELECT host_ip::text as host_ip, MAX(time) as latest_time 
+            FROM resource_alive 
+            GROUP BY host_ip 
+            ORDER BY host_ip
+        )";
+        
+        QueryResult result = dbInterface_->executeQuery(sql);
+        
+        std::cout << "找到 " << result.size() << " 个节点" << std::endl;
+        
+        // 获取当前时间
+        auto now = std::chrono::system_clock::now();
+        
+        int alertCount = 0;
+        
+        // 遍历每个节点，检查最新时间
+        for (const auto& row : result.rows) {
+            std::string hostIp = row.getValue("host_ip");
+            std::string latestTimeStr = row.getValue("latest_time");
+            
+            if (latestTimeStr.empty()) {
+                std::cout << "节点 " << hostIp << ": 无记录" << std::endl;
+                continue;
+            }
+            
+            // 解析时间字符串
+            auto latestTime = parseISOTime(latestTimeStr);
+            if (latestTime == std::chrono::system_clock::time_point{}) {
+                std::cerr << "节点 " << hostIp << ": 解析时间失败: " << latestTimeStr << std::endl;
+                continue;
+            }
+            
+            // 计算时间差（秒）
+            auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - latestTime);
+            int secondsSinceLastAlive = duration.count();
+            
+            // 输出节点信息
+            std::cout << "节点 " << hostIp 
+                      << ": 最新心跳时间 " << latestTimeStr 
+                      << ", 距离现在 " << secondsSinceLastAlive << " 秒" << std::endl;
+            
+            // 如果超过 5 秒未心跳，创建 firing 告警
+            if (secondsSinceLastAlive > 5) {
+                try {
+                    // 生成 fingerprint
+                    std::unordered_map<std::string, std::string> fingerprintTags;
+                    fingerprintTags["host_ip"] = hostIp;
+                    std::string fingerprint = Alert::generateFingerprint("节点心跳超时", fingerprintTags);
+                    
+                    // 检查是否已存在相同 fingerprint 的告警
+                    auto existingAlert = alertRepo_->getAlertByFingerprint(fingerprint);
+                    
+                    if (existingAlert) {
+                        // 如果已存在告警，更新现有告警
+                        bool wasFiring = (existingAlert->getStatus() == AlertStatus::Firing);
+                        if (!wasFiring) {
+                            existingAlert->transitionToFiring();
+                        }
+                        existingAlert->setUpdatedNow();
+                        existingAlert->setStartsAt(existingAlert->getUpdatedAt());
+                        existingAlert->setEndsAt(""); // 清空结束时间
+                        
+                        // 更新描述
+                        std::string description = "节点 " + hostIp + " 心跳超时，距离最新心跳已 " + 
+                                                std::to_string(secondsSinceLastAlive) + " 秒";
+                        existingAlert->addLabel("description", description);
+                        existingAlert->addAnnotation("description", description);
+                        
+                        // 保存到数据库
+                        bool success = existingAlert->updateInDatabase(alertRepo_);
+                        if (success) {
+                            std::cout << "更新节点心跳超时告警: " << hostIp << " (指纹: " << fingerprint << ")" << std::endl;
+                            
+                            // 如果状态从非 Firing 变为 Firing，调用推送回调
+                            if (!wasFiring && existingAlert->getStatus() == AlertStatus::Firing && pushCallback_) {
+                                pushCallback_(*existingAlert);
+                            }
+                            alertCount++;
+                        }
+                    } else {
+                        // 创建新告警的标签和注释
+                        std::unordered_map<std::string, std::string> alertLabels;
+                        std::unordered_map<std::string, std::string> alertAnnotations;
+                        
+                        // 设置基本标签
+                        alertLabels["alert_name"] = "节点心跳超时";
+                        alertLabels["alert_type"] = "availability";
+                        alertLabels["severity"] = "严重";
+                        alertLabels["host_ip"] = hostIp;
+                        
+                        // 设置描述
+                        std::string description = "节点 " + hostIp + " 心跳超时，距离最新心跳已 " + 
+                                                std::to_string(secondsSinceLastAlive) + " 秒";
+                        alertLabels["description"] = description;
+                        alertLabels["summary"] = "节点心跳超时";
+                        
+                        // 设置注释
+                        alertAnnotations["description"] = description;
+                        alertAnnotations["summary"] = "节点 " + hostIp + " 心跳超时";
+                        alertAnnotations["monitoring_source"] = "alive_check";
+                        alertAnnotations["last_alive_time"] = latestTimeStr;
+                        alertAnnotations["seconds_since_last_alive"] = std::to_string(secondsSinceLastAlive);
+                        
+                        // 创建新告警
+                        Alert newAlert(fingerprint, alertLabels, alertAnnotations);
+                        newAlert.setId(generateAlertId());
+                        newAlert.setStatus(AlertStatus::Firing);
+                        newAlert.setStartsAt(newAlert.getCreatedAt());
+                        newAlert.setEndsAt("");
+                        
+                        // 保存到数据库
+                        bool success = newAlert.updateInDatabase(alertRepo_);
+                        if (success) {
+                            std::cout << "成功创建节点心跳超时告警: " << hostIp << " (指纹: " << fingerprint << ")" << std::endl;
+                            alertCount++;
+                            
+                            // 节点心跳超时告警直接设为 Firing 状态，需要推送
+                            if (pushCallback_) {
+                                pushCallback_(newAlert);
+                            }
+                        } else {
+                            std::cerr << "创建节点心跳超时告警失败: " << hostIp << std::endl;
+                        }
+                    }
+                } catch (const std::exception& e) {
+                    std::cerr << "处理节点心跳超时告警时发生错误: " << hostIp << " - " << e.what() << std::endl;
+                }
+            } else {
+                // 如果节点正常（<= 5秒），检查是否有已存在的告警需要解决
+                try {
+                    std::unordered_map<std::string, std::string> fingerprintTags;
+                    fingerprintTags["host_ip"] = hostIp;
+                    std::string fingerprint = Alert::generateFingerprint("节点心跳超时", fingerprintTags);
+                    
+                    auto existingAlert = alertRepo_->getAlertByFingerprint(fingerprint);
+                    if (existingAlert && existingAlert->getStatus() == AlertStatus::Firing) {
+                        // 节点已恢复，将告警转为 resolved
+                        existingAlert->transitionToResolved();
+                        existingAlert->setEndsNow();
+                        existingAlert->updateInDatabase(alertRepo_);
+                        std::cout << "节点 " << hostIp << " 心跳已恢复，告警已解决" << std::endl;
+                    }
+                } catch (const std::exception& e) {
+                    std::cerr << "处理节点恢复时发生错误: " << hostIp << " - " << e.what() << std::endl;
+                }
+            }
+        }
+        
+        auto endTime = std::chrono::system_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+        
+        std::cout << "节点存活状态检查完成，耗时: " << duration << " 毫秒，创建/更新了 " << alertCount << " 个告警" << std::endl;
+        
+        return result.size();
+        
+    } catch (const std::exception& e) {
+        std::cerr << "检查节点存活状态失败: " << e.what() << std::endl;
         throw;
     }
 }
@@ -511,6 +682,15 @@ std::vector<Alert> AlertEngine::getAlertsBySeverity(const std::string& severity)
     }
 }
 
+std::vector<Alert> AlertEngine::getAlertsByDescription(const std::string& description) {
+    try {
+        return alertRepo_->getAlertsByDescription(description);
+    } catch (const std::exception& e) {
+        std::cerr << "根据描述获取告警失败: " << e.what() << std::endl;
+        return {};
+    }
+}
+
 std::vector<Alert> AlertEngine::getAlertsExceptPending() {
     try {
         return alertRepo_->getAlertsExceptPending();
@@ -543,11 +723,11 @@ size_t AlertEngine::getAlertCount() {
 std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& hostIp,
                                                            const std::string& instanceId,
                                                            const std::string& uuid,
-                                                           const std::string& index,
+                                                           int index,
                                                            const std::string& status) {
     try {
         // 生成指纹（与AlertRoutes中的逻辑保持一致）
-        std::string fingerprint = hostIp + "_" + instanceId + "_" + uuid + "_" + index;
+        std::string fingerprint = hostIp + "_" + instanceId + "_" + uuid + "_" + std::to_string(index);
         
         // 检查是否已存在相同的告警
         auto existingAlert = alertRepo_->getAlertByFingerprint(fingerprint);
@@ -590,7 +770,7 @@ std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& 
         alertLabels["host_ip"] = hostIp;
         alertLabels["instance_id"] = instanceId;
         alertLabels["uuid"] = uuid;
-        alertLabels["index"] = index;
+        alertLabels["index"] = std::to_string(index);
         alertLabels["component_status"] = status;
         
         // 设置描述

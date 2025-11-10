@@ -48,13 +48,14 @@ public:
     std::vector<Alert> getAlertsByTimeRange(const std::string& startTime, const std::string& endTime);
     std::vector<Alert> getAlertsByAlertType(const std::string& alertType);
     std::vector<Alert> getAlertsBySeverity(const std::string& severity);
+    std::vector<Alert> getAlertsByDescription(const std::string& description);
     std::vector<Alert> getAlertsExceptPending();
     std::shared_ptr<Alert> getAlertById(const std::string& alertId);
     
     std::shared_ptr<Alert> createAlertFromComponent(const std::string& hostIp,
                                                    const std::string& instanceId,
                                                    const std::string& uuid,
-                                                   const std::string& index,
+                                                   int index,
                                                    const std::string& status);
     
     size_t getAlertCount();
@@ -88,6 +89,7 @@ private:
     void workerLoop();
     void initialize();
     int performEvaluation();
+    int performEvaluationForAlive();
     std::vector<Alert> evaluateAllRules();
     int processAlertStatusUpdates(const std::vector<Alert>& currentAlerts);
     int updateAlertsToDatabase(const std::vector<Alert>& alerts);
