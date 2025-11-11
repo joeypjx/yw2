@@ -148,9 +148,13 @@ int AlertEngine::performEvaluationForAlive() {
     try {
         std::cout << "\n=== 开始检查节点存活状态 ===" << std::endl;
         
-        // 查询每个节点 IP 的最新时间
+        // 查询每个节点 IP 的最新时间，并在数据库层面直接计算时间差（秒）
+        // 这样避免了时区转换的复杂性
         std::string sql = R"(
-            SELECT host_ip::text as host_ip, MAX(time) as latest_time 
+            SELECT 
+                host_ip::text as host_ip, 
+                MAX(time) as latest_time,
+                EXTRACT(EPOCH FROM (NOW() - MAX(time)))::int as seconds_since_last_alive
             FROM resource_alive 
             GROUP BY host_ip 
             ORDER BY host_ip
@@ -160,75 +164,46 @@ int AlertEngine::performEvaluationForAlive() {
         
         std::cout << "找到 " << result.size() << " 个节点" << std::endl;
         
-        // 获取当前时间
-        auto now = std::chrono::system_clock::now();
-        
         int alertCount = 0;
         
         // 遍历每个节点，检查最新时间
         for (const auto& row : result.rows) {
             std::string hostIp = row.getValue("host_ip");
             std::string latestTimeStr = row.getValue("latest_time");
+            std::string secondsSinceLastAliveStr = row.getValue("seconds_since_last_alive");
             
-            if (latestTimeStr.empty()) {
+            if (latestTimeStr.empty() || secondsSinceLastAliveStr.empty()) {
                 std::cout << "节点 " << hostIp << ": 无记录" << std::endl;
                 continue;
             }
             
-            // 解析时间字符串
-            auto latestTime = parseISOTime(latestTimeStr);
-            if (latestTime == std::chrono::system_clock::time_point{}) {
-                std::cerr << "节点 " << hostIp << ": 解析时间失败: " << latestTimeStr << std::endl;
+            // 从数据库查询结果中获取时间差（秒）
+            int secondsSinceLastAlive = 0;
+            try {
+                secondsSinceLastAlive = std::stoi(secondsSinceLastAliveStr);
+            } catch (const std::exception& e) {
+                std::cerr << "节点 " << hostIp << ": 解析时间差失败: " << secondsSinceLastAliveStr << std::endl;
                 continue;
             }
-            
-            // 计算时间差（秒）
-            auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - latestTime);
-            int secondsSinceLastAlive = duration.count();
             
             // 输出节点信息
             std::cout << "节点 " << hostIp 
                       << ": 最新心跳时间 " << latestTimeStr 
                       << ", 距离现在 " << secondsSinceLastAlive << " 秒" << std::endl;
             
+            std::unordered_map<std::string, std::string> fingerprintTags;
+            fingerprintTags["host_ip"] = hostIp;
+            std::string fingerprint = Alert::generateFingerprint("节点心跳超时", fingerprintTags);
+
             // 如果超过 5 秒未心跳，创建 firing 告警
             if (secondsSinceLastAlive > 5) {
                 try {
-                    // 生成 fingerprint
-                    std::unordered_map<std::string, std::string> fingerprintTags;
-                    fingerprintTags["host_ip"] = hostIp;
-                    std::string fingerprint = Alert::generateFingerprint("节点心跳超时", fingerprintTags);
+                    // 检查是否已存在相同 fingerprint 的 firing 告警
+                    auto existingAlerts = alertRepo_->getAlertsByFingerprintAndStatus(fingerprint, "firing");
                     
-                    // 检查是否已存在相同 fingerprint 的告警
-                    auto existingAlert = alertRepo_->getAlertByFingerprint(fingerprint);
-                    
-                    if (existingAlert) {
-                        // 如果已存在告警，更新现有告警
-                        bool wasFiring = (existingAlert->getStatus() == AlertStatus::Firing);
-                        if (!wasFiring) {
-                            existingAlert->transitionToFiring();
-                        }
-                        existingAlert->setUpdatedNow();
-                        existingAlert->setStartsAt(existingAlert->getUpdatedAt());
-                        existingAlert->setEndsAt(""); // 清空结束时间
+                    if (existingAlerts.size() > 0) {
                         
-                        // 更新描述
-                        std::string description = "节点 " + hostIp + " 心跳超时，距离最新心跳已 " + 
-                                                std::to_string(secondsSinceLastAlive) + " 秒";
-                        existingAlert->addLabel("description", description);
-                        existingAlert->addAnnotation("description", description);
-                        
-                        // 保存到数据库
-                        bool success = existingAlert->updateInDatabase(alertRepo_);
-                        if (success) {
-                            std::cout << "更新节点心跳超时告警: " << hostIp << " (指纹: " << fingerprint << ")" << std::endl;
-                            
-                            // 如果状态从非 Firing 变为 Firing，调用推送回调
-                            if (!wasFiring && existingAlert->getStatus() == AlertStatus::Firing && pushCallback_) {
-                                pushCallback_(*existingAlert);
-                            }
-                            alertCount++;
-                        }
+                        // do not do anything
                     } else {
                         // 创建新告警的标签和注释
                         std::unordered_map<std::string, std::string> alertLabels;
@@ -255,7 +230,6 @@ int AlertEngine::performEvaluationForAlive() {
                         
                         // 创建新告警
                         Alert newAlert(fingerprint, alertLabels, alertAnnotations);
-                        newAlert.setId(generateAlertId());
                         newAlert.setStatus(AlertStatus::Firing);
                         newAlert.setStartsAt(newAlert.getCreatedAt());
                         newAlert.setEndsAt("");
@@ -280,17 +254,9 @@ int AlertEngine::performEvaluationForAlive() {
             } else {
                 // 如果节点正常（<= 5秒），检查是否有已存在的告警需要解决
                 try {
-                    std::unordered_map<std::string, std::string> fingerprintTags;
-                    fingerprintTags["host_ip"] = hostIp;
-                    std::string fingerprint = Alert::generateFingerprint("节点心跳超时", fingerprintTags);
-                    
-                    auto existingAlert = alertRepo_->getAlertByFingerprint(fingerprint);
-                    if (existingAlert && existingAlert->getStatus() == AlertStatus::Firing) {
-                        // 节点已恢复，将告警转为 resolved
-                        existingAlert->transitionToResolved();
-                        existingAlert->setEndsNow();
-                        existingAlert->updateInDatabase(alertRepo_);
-                        std::cout << "节点 " << hostIp << " 心跳已恢复，告警已解决" << std::endl;
+                    int resolvedCount = alertRepo_->resolveFiringAlertsByFingerprint(fingerprint);
+                    if (resolvedCount > 0) {
+                        std::cout << "已解决 " << resolvedCount << " 个节点心跳超时告警: " << hostIp << std::endl;
                     }
                 } catch (const std::exception& e) {
                     std::cerr << "处理节点恢复时发生错误: " << hostIp << " - " << e.what() << std::endl;
@@ -337,11 +303,11 @@ std::vector<Alert> AlertEngine::evaluateAllRules() {
 
 int AlertEngine::processAlertStatusUpdates(const std::vector<Alert>& currentAlerts) {
     try {
-        // 获取当前数据库中firing和pending状态的告警指纹
+        // 获取当前数据库中firing和pending状态的告警指纹（只获取硬件资源类型）
         auto currentFiringFingerprints = getCurrentFiringFingerprints();
         auto currentPendingFingerprints = getCurrentPendingFingerprints();
-        std::cout << "数据库中当前firing告警数量: " << currentFiringFingerprints.size() << std::endl;
-        std::cout << "数据库中当前pending告警数量: " << currentPendingFingerprints.size() << std::endl;
+        std::cout << "数据库中当前firing告警数量（硬件资源）: " << currentFiringFingerprints.size() << std::endl;
+        std::cout << "数据库中当前pending告警数量（硬件资源）: " << currentPendingFingerprints.size() << std::endl;
         
         // 获取当前生成的告警指纹
         std::unordered_set<std::string> currentAlertFingerprints;
@@ -361,12 +327,23 @@ int AlertEngine::processAlertStatusUpdates(const std::vector<Alert>& currentAler
         
         for (const auto& fingerprint : firingAlertsToResolve) {
             try {
+                // 获取一个告警来检查节点是否有新数据
                 auto alert = alertRepo_->getAlertByFingerprint(fingerprint);
-                if (alert) {
-                    alert->transitionToResolved();
-                    alert->updateInDatabase(alertRepo_);
-                    processedCount++;
-                    std::cout << "Firing告警已解决: " << fingerprint << std::endl;
+                if (!alert) {
+                    continue;
+                }
+                
+                // 检查节点是否有新数据，如果没有新数据，保持告警状态不变
+                if (!hasNodeRecentData(*alert)) {
+                    std::cout << "Firing告警节点无新数据，保持状态: " << fingerprint << std::endl;
+                    continue;
+                }
+                
+                // 节点有新数据但不满足条件，将所有相同fingerprint的firing告警都标记为resolved
+                int resolvedCount = alertRepo_->resolveFiringAlertsByFingerprint(fingerprint);
+                if (resolvedCount > 0) {
+                    processedCount += resolvedCount;
+                    std::cout << "已解决 " << resolvedCount << " 个Firing告警: " << fingerprint << std::endl;
                 }
             } catch (const std::exception& e) {
                 std::cerr << "解决firing告警 " << fingerprint << " 时出错: " << e.what() << std::endl;
@@ -385,11 +362,16 @@ int AlertEngine::processAlertStatusUpdates(const std::vector<Alert>& currentAler
             try {
                 auto alert = alertRepo_->getAlertByFingerprint(fingerprint);
                 if (alert) {
-                    // 直接删除pending状态的告警
-                    bool deleted = alertRepo_->deleteAlert(alert->getId());
-                    if (deleted) {
-                        processedCount++;
-                        std::cout << "Pending告警已删除: " << fingerprint << std::endl;
+                    // 检查节点是否有新数据，如果没有新数据，保持告警状态不变
+                    if (!hasNodeRecentData(*alert)) {
+                        std::cout << "Pending告警节点无新数据，保持状态: " << fingerprint << std::endl;
+                        continue;
+                    }
+                    // 节点有新数据但不满足条件，删除所有相同fingerprint的pending状态告警
+                    int deletedCount = alertRepo_->deleteAlertsByFingerprintAndStatus(fingerprint, "pending");
+                    if (deletedCount > 0) {
+                        processedCount += deletedCount;
+                        std::cout << "已删除 " << deletedCount << " 个Pending告警: " << fingerprint << std::endl;
                     }
                 }
             } catch (const std::exception& e) {
@@ -455,16 +437,14 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<Alert>& alerts) {
                         continue; // 跳过创建新告警
                     }
                 } else if (existingAlert->getStatus() == AlertStatus::Firing) {
-                    if (alertCopy.getStatus() == AlertStatus::Firing) {
-                        // 如果数据库中已有firing告警，且新告警也是firing，则更新现有告警
-                        existingAlert->setUpdatedNow();
-                        bool success = existingAlert->updateInDatabase(alertRepo_);
-                        if (success) {
-                            successCount++;
-                            std::cout << "更新现有Firing告警: " << alertCopy.getFingerprint() << std::endl;
-                        }
-                        continue; // 跳过创建新告警
+                    // 如果数据库中已有firing告警，且新告警也是firing，则更新现有告警
+                    existingAlert->setUpdatedNow();
+                    bool success = existingAlert->updateInDatabase(alertRepo_);
+                    if (success) {
+                        successCount++;
+                        std::cout << "更新现有Firing告警: " << alertCopy.getFingerprint() << std::endl;
                     }
+                    continue; // 跳过创建新告警
                 }
             }
             
@@ -499,7 +479,11 @@ std::unordered_set<std::string> AlertEngine::getCurrentPendingFingerprints() {
     try {
         auto pendingAlerts = alertRepo_->getAlertsByStatus("pending");
         for (const auto& alert : pendingAlerts) {
-            fingerprints.insert(alert.getFingerprint());
+            // 只获取 alert_type 为 "硬件资源" 的告警
+            std::string alertType = alert.getLabel("alert_type");
+            if (alertType == "硬件资源") {
+                fingerprints.insert(alert.getFingerprint());
+            }
         }
     } catch (const std::exception& e) {
         std::cerr << "获取pending告警指纹时出错: " << e.what() << std::endl;
@@ -727,7 +711,7 @@ std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& 
                                                            const std::string& status) {
     try {
         // 生成指纹（与AlertRoutes中的逻辑保持一致）
-        std::string fingerprint = hostIp + "_" + instanceId + "_" + uuid + "_" + std::to_string(index);
+        std::string fingerprint = "业务组件状态异常|host_ip=" + hostIp + "|instance_id=" + instanceId + "|uuid=" + uuid + "|index=" + std::to_string(index);
         
         // 检查是否已存在相同的告警
         auto existingAlert = alertRepo_->getAlertByFingerprint(fingerprint);
@@ -762,29 +746,24 @@ std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& 
         // 创建新组件告警的标签和注释
         std::unordered_map<std::string, std::string> alertLabels;
         std::unordered_map<std::string, std::string> alertAnnotations;
-        
+
         // 设置基本标签
         alertLabels["alert_name"] = "业务组件状态异常";
-        alertLabels["alert_type"] = "availability";
-        alertLabels["severity"] = "警告";
+        alertLabels["alert_type"] = "业务链路";
+        alertLabels["severity"] = "严重";
         alertLabels["host_ip"] = hostIp;
         alertLabels["instance_id"] = instanceId;
         alertLabels["uuid"] = uuid;
         alertLabels["index"] = std::to_string(index);
-        alertLabels["component_status"] = status;
+        alertLabels["value"] = status;
         
         // 设置描述
         std::string description = hostIp + " 节点上 " + instanceId + " 组件状态为 " + status;
-        alertLabels["description"] = description;
-        alertLabels["summary"] = "业务组件状态异常";
-        
-        // 设置注释
-        alertAnnotations["component_type"] = "业务组件";
-        alertAnnotations["monitoring_source"] = "external";
+        alertAnnotations["summary"] = "业务组件状态异常";
+        alertAnnotations["description"] = description;
         
         // 创建新组件告警
         Alert newAlert(fingerprint, alertLabels, alertAnnotations);
-        newAlert.setId(generateAlertId());
         newAlert.setStatus(AlertStatus::Firing);
         newAlert.setStartsAt(newAlert.getCreatedAt());
         newAlert.setEndsAt("");
@@ -1017,13 +996,101 @@ std::unordered_set<std::string> AlertEngine::getCurrentFiringFingerprints() {
     try {
         auto firingAlerts = alertRepo_->getAlertsByStatus("firing");
         for (const auto& alert : firingAlerts) {
-            fingerprints.insert(alert.getFingerprint());
+            // 只获取 alert_type 为 "硬件资源" 的告警
+            std::string alertType = alert.getLabel("alert_type");
+            if (alertType == "硬件资源") {
+                fingerprints.insert(alert.getFingerprint());
+            }
         }
     } catch (const std::exception& e) {
         std::cerr << "获取firing告警指纹时出错: " << e.what() << std::endl;
     }
     
     return fingerprints;
+}
+
+bool AlertEngine::hasNodeRecentData(const Alert& alert, int seconds) {
+    try {
+        // 从告警的labels中获取必要信息
+        std::string hostIp = alert.getLabel("host_ip");
+        std::string stable = alert.getLabel("stable");
+        
+        if (hostIp.empty() || stable.empty()) {
+            // 如果无法获取必要信息，假设有新数据（保守策略）
+            return true;
+        }
+        
+        // 获取表名
+        std::string tableName;
+        if (stable == "cpu") tableName = "resource_cpu";
+        else if (stable == "memory") tableName = "resource_memory";
+        else if (stable == "disk") tableName = "resource_disk";
+        else if (stable == "network") tableName = "resource_network";
+        else if (stable == "gpu") tableName = "resource_gpu";
+        else if (stable == "alive") tableName = "resource_alive";
+        else {
+            // 未知的stable，假设有新数据
+            return true;
+        }
+        
+        // 构建查询，检查该节点在指定时间范围内是否有新数据
+        // 使用参数化查询避免SQL注入
+        std::ostringstream sql;
+        std::vector<std::string> params;
+        int paramIndex = 1;
+        
+        sql << "SELECT COUNT(*) as count FROM " << tableName;
+        sql << " WHERE host_ip = $1::inet";
+        sql << " AND time >= NOW() - INTERVAL '" << seconds << " seconds'";
+        params.push_back(hostIp);
+        paramIndex++;
+        
+        // 如果有标签列，添加标签条件（从告警的labels中获取）
+        if (stable == "disk") {
+            std::string device = alert.getLabel("device");
+            std::string mountPoint = alert.getLabel("mount_point");
+            if (!device.empty()) {
+                sql << " AND device = $" << paramIndex;
+                params.push_back(device);
+                paramIndex++;
+            }
+            if (!mountPoint.empty()) {
+                sql << " AND mount_point = $" << paramIndex;
+                params.push_back(mountPoint);
+                paramIndex++;
+            }
+        } else if (stable == "network") {
+            std::string interface = alert.getLabel("interface");
+            if (!interface.empty()) {
+                sql << " AND interface = $" << paramIndex;
+                params.push_back(interface);
+                paramIndex++;
+            }
+        } else if (stable == "gpu") {
+            std::string gpuIndex = alert.getLabel("gpu_index");
+            if (!gpuIndex.empty()) {
+                sql << " AND gpu_index = $" << paramIndex;
+                params.push_back(gpuIndex);
+                paramIndex++;
+            }
+        }
+        
+        QueryResult result = dbInterface_->executeQuery(sql.str(), params);
+        
+        // 检查是否有数据
+        if (!result.rows.empty()) {
+            std::string countStr = result.rows[0].getValue("count");
+            int count = std::stoi(countStr);
+            return count > 0;
+        }
+        
+        return false;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "检查节点是否有新数据时出错: " << e.what() << std::endl;
+        // 出错时假设有新数据（保守策略）
+        return true;
+    }
 }
 
 } // namespace alert

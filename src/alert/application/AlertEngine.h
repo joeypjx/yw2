@@ -99,6 +99,7 @@ private:
     bool shouldTransitionToFiring(const Alert& pendingAlert);
     int parseDuration(const std::string& duration);
     std::chrono::system_clock::time_point parseISOTime(const std::string& isoTime);
+    bool hasNodeRecentData(const Alert& alert, int seconds = 10);
 };
 
 } // namespace alert

@@ -106,6 +106,24 @@ std::shared_ptr<Alert> DatabaseAlertRepository::getAlertByFingerprint(const std:
     }
 }
 
+std::vector<Alert> DatabaseAlertRepository::getAlertsByFingerprintAndStatus(const std::string& fingerprint, const std::string& status) {
+    try {
+        std::string sql = buildSelectSql() + " WHERE fingerprint = $1 AND status = $2 ORDER BY created_at DESC";
+        std::vector<std::string> params = {fingerprint, status};
+        
+        QueryResult result = dbInterface_->executeQuery(sql, params);
+        
+        std::vector<Alert> alerts;
+        for (const auto& row : result.rows) {
+            alerts.push_back(parseAlertFromQueryResult(row));
+        }
+        
+        return alerts;
+    } catch (const std::exception& e) {
+        throw std::runtime_error("根据指纹和状态获取告警失败: " + std::string(e.what()));
+    }
+}
+
 std::vector<Alert> DatabaseAlertRepository::getAlertsByStatus(const std::string& status) {
     try {
         std::string sql = buildSelectSql() + " WHERE status = $1 ORDER BY created_at DESC";
@@ -281,6 +299,62 @@ bool DatabaseAlertRepository::deleteAlert(const std::string& id) {
         return true;
     } catch (const std::exception& e) {
         throw std::runtime_error("删除告警失败: " + std::string(e.what()));
+    }
+}
+
+int DatabaseAlertRepository::deleteAlertsByFingerprintAndStatus(const std::string& fingerprint, const std::string& status) {
+    try {
+        // 先查询要删除的数量
+        std::string countSql = "SELECT COUNT(*) as count FROM alert WHERE fingerprint = $1 AND status = $2";
+        std::vector<std::string> params = {fingerprint, status};
+        QueryResult countResult = dbInterface_->executeQuery(countSql, params);
+        
+        int count = 0;
+        if (!countResult.rows.empty()) {
+            std::string countStr = countResult.rows[0].getValue("count");
+            count = std::stoi(countStr);
+        }
+        
+        // 如果有要删除的告警，执行删除
+        if (count > 0) {
+            std::string sql = "DELETE FROM alert WHERE fingerprint = $1 AND status = $2";
+            dbInterface_->executeQuery(sql, params);
+        }
+        
+        return count;
+    } catch (const std::exception& e) {
+        throw std::runtime_error("根据指纹和状态删除告警失败: " + std::string(e.what()));
+    }
+}
+
+int DatabaseAlertRepository::resolveFiringAlertsByFingerprint(const std::string& fingerprint) {
+    try {
+        // 先查询要更新的数量
+        std::string countSql = "SELECT COUNT(*) as count FROM alert WHERE fingerprint = $1 AND status = $2";
+        std::vector<std::string> params = {fingerprint, "firing"};
+        QueryResult countResult = dbInterface_->executeQuery(countSql, params);
+        
+        int count = 0;
+        if (!countResult.rows.empty()) {
+            std::string countStr = countResult.rows[0].getValue("count");
+            count = std::stoi(countStr);
+        }
+        
+        // 如果有要更新的告警，执行更新：将status改为resolved，设置ends_at为当前时间，更新updated_at
+        if (count > 0) {
+            std::string sql = R"(
+                UPDATE alert SET 
+                    status = 'resolved',
+                    ends_at = NOW(),
+                    updated_at = NOW()
+                WHERE fingerprint = $1 AND status = $2
+            )";
+            dbInterface_->executeQuery(sql, params);
+        }
+        
+        return count;
+    } catch (const std::exception& e) {
+        throw std::runtime_error("根据指纹将firing告警标记为resolved失败: " + std::string(e.what()));
     }
 }
 

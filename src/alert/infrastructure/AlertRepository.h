@@ -16,7 +16,10 @@ public:
     virtual bool saveAlert(const Alert& alert) = 0;
     virtual std::shared_ptr<Alert> getAlertById(const std::string& id) = 0;
     virtual std::shared_ptr<Alert> getAlertByFingerprint(const std::string& fingerprint) = 0;
+    virtual std::vector<Alert> getAlertsByFingerprintAndStatus(const std::string& fingerprint, const std::string& status) = 0;
     virtual bool deleteAlert(const std::string& id) = 0;
+    virtual int deleteAlertsByFingerprintAndStatus(const std::string& fingerprint, const std::string& status) = 0;
+    virtual int resolveFiringAlertsByFingerprint(const std::string& fingerprint) = 0;
     virtual bool alertExists(const std::string& id) = 0;
     
     virtual std::vector<Alert> getAlertsByStatus(const std::string& status) = 0;
@@ -40,6 +43,7 @@ public:
     bool saveAlert(const Alert& alert) override;
     std::shared_ptr<Alert> getAlertById(const std::string& id) override;
     std::shared_ptr<Alert> getAlertByFingerprint(const std::string& fingerprint) override;
+    std::vector<Alert> getAlertsByFingerprintAndStatus(const std::string& fingerprint, const std::string& status) override;
     std::vector<Alert> getAlertsByStatus(const std::string& status) override;
     std::vector<Alert> getAlertsByHostIp(const std::string& hostIp) override;
     std::vector<Alert> getAlertsByBoxId(int boxId) override;
@@ -50,6 +54,8 @@ public:
     std::vector<Alert> getAlertsByDescription(const std::string& description) override;
     std::vector<Alert> getAlertsExceptPending() override;
     bool deleteAlert(const std::string& id) override;
+    int deleteAlertsByFingerprintAndStatus(const std::string& fingerprint, const std::string& status) override;
+    int resolveFiringAlertsByFingerprint(const std::string& fingerprint) override;
     bool alertExists(const std::string& id) override;
     size_t getAlertCount() override;
 
