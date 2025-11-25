@@ -98,6 +98,8 @@ NodeMetrics toNodeMetrics(const node::NodeExt& nx, const monitor::Resource* res,
             s.rx_packets = ni.rx_packets; s.tx_packets = ni.tx_packets;
             s.rx_errors = ni.rx_errors; s.tx_errors = ni.tx_errors;
             s.rx_rate = ni.rx_rate; s.tx_rate = ni.tx_rate;
+            s.rx_drop_rate = ni.rx_drop_rate; s.tx_drop_rate = ni.tx_drop_rate;
+            s.state = ni.state;
             s.timestamp = now_seconds;
             m.latest_network_metrics.networks.push_back(std::move(s));
         }

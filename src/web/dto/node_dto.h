@@ -125,12 +125,15 @@ struct NetworkSample {
     std::uint64_t rx_bytes = 0;
     std::uint64_t rx_errors = 0;
     std::uint64_t rx_packets = 0;
-    std::uint64_t rx_rate = 0;
+    double        rx_rate = 0.0;
+    double        rx_drop_rate = 0.0;
     std::int64_t  timestamp = 0;
     std::uint64_t tx_bytes = 0;
     std::uint64_t tx_errors = 0;
     std::uint64_t tx_packets = 0;
-    std::uint64_t tx_rate = 0;
+    double        tx_rate = 0.0;
+    double        tx_drop_rate = 0.0;
+    int           state = 0;
 };
 
 struct LatestNetworkMetrics {
@@ -256,11 +259,14 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(NetworkSample,
     rx_errors,
     rx_packets,
     rx_rate,
+    rx_drop_rate,
     timestamp,
     tx_bytes,
     tx_errors,
     tx_packets,
-    tx_rate
+    tx_rate,
+    tx_drop_rate,
+    state
 )
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LatestNetworkMetrics,

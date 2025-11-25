@@ -67,8 +67,11 @@ CREATE TABLE IF NOT EXISTS resource_network (
   tx_packets  BIGINT,
   rx_errors   BIGINT,
   tx_errors   BIGINT,
-  rx_rate     BIGINT,
-  tx_rate     BIGINT
+  rx_rate     DOUBLE PRECISION,
+  tx_rate     DOUBLE PRECISION,
+  rx_drop_rate DOUBLE PRECISION,
+  tx_drop_rate DOUBLE PRECISION,
+  state       INTEGER
 );
 SELECT create_hypertable('resource_network','time','host_ip',4, if_not_exists => TRUE);
 
@@ -116,7 +119,9 @@ CREATE TABLE IF NOT EXISTS component_resource (
   mem_used    BIGINT,
   mem_limit   BIGINT,
   net_tx      BIGINT,
-  net_rx      BIGINT
+  net_rx      BIGINT,
+  net_rx_rate DOUBLE PRECISION,
+  net_tx_rate DOUBLE PRECISION
 );
 SELECT create_hypertable('component_resource','time','host_ip',4, if_not_exists => TRUE);
 
