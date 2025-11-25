@@ -1,5 +1,6 @@
 #include "AlertEngine.h"
 #include "../domain/AlertRuleEvaluator.h"
+#include "yw/JsonConfig.h"
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -14,6 +15,7 @@ AlertEngine::AlertEngine(std::shared_ptr<DatabaseQueryInterface> dbInterface,
     : dbInterface_(dbInterface), alertRuleRepo_(alertRuleRepo), alertRepo_(alertRepo),
       nodeModule_(nodeModule),
       running_(false), shouldStop_(false), intervalSeconds_(5),
+      heartbeatTimeoutSeconds_(yw::utils::JsonConfig::Get<int>("alert.heartbeat_timeout_seconds", 5)),
       totalEvaluations_(0), totalAlertsGenerated_(0),
       lastEvaluationTime_(std::chrono::system_clock::now()),
       startTime_(std::chrono::system_clock::now()) {
@@ -195,8 +197,8 @@ int AlertEngine::performEvaluationForAlive() {
             fingerprintTags["host_ip"] = hostIp;
             std::string fingerprint = Alert::generateFingerprint("节点心跳超时", fingerprintTags);
 
-            // 如果超过 5 秒未心跳，创建 firing 告警
-            if (secondsSinceLastAlive > 5) {
+            // 如果超过配置的阈值未心跳，创建 firing 告警
+            if (secondsSinceLastAlive > heartbeatTimeoutSeconds_) {
                 try {
                     // 检查是否已存在相同 fingerprint 的 firing 告警
                     auto existingAlerts = alertRepo_->getAlertsByFingerprintAndStatus(fingerprint, "firing");
@@ -479,9 +481,9 @@ std::unordered_set<std::string> AlertEngine::getCurrentPendingFingerprints() {
     try {
         auto pendingAlerts = alertRepo_->getAlertsByStatus("pending");
         for (const auto& alert : pendingAlerts) {
-            // 只获取 alert_type 为 "硬件资源" 的告警
+            // 只获取 alert_type 为 "硬件状态" 的告警
             std::string alertType = alert.getLabel("alert_type");
-            if (alertType == "硬件资源") {
+            if (alertType == "硬件状态") {
                 fingerprints.insert(alert.getFingerprint());
             }
         }
@@ -996,9 +998,9 @@ std::unordered_set<std::string> AlertEngine::getCurrentFiringFingerprints() {
     try {
         auto firingAlerts = alertRepo_->getAlertsByStatus("firing");
         for (const auto& alert : firingAlerts) {
-            // 只获取 alert_type 为 "硬件资源" 的告警
+            // 只获取 alert_type 为 "硬件状态" 的告警
             std::string alertType = alert.getLabel("alert_type");
-            if (alertType == "硬件资源") {
+            if (alertType == "硬件状态") {
                 fingerprints.insert(alert.getFingerprint());
             }
         }
