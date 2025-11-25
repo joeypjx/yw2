@@ -78,6 +78,9 @@ private:
     // 评估间隔
     int intervalSeconds_;
     
+    // 节点心跳超时阈值（秒）
+    int heartbeatTimeoutSeconds_;
+    
     // 统计信息
     std::atomic<int> totalEvaluations_;
     std::atomic<int> totalAlertsGenerated_;
