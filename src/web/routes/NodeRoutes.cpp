@@ -2,6 +2,8 @@
 
 #include <nlohmann/json.hpp>
 #include <sstream>
+#include <chrono>
+#include <spdlog/spdlog.h>
 #include "dto/node_dto.h"
 #include "mapper/NodeMapper.h"
 
@@ -149,6 +151,9 @@ void registerNodeRoutes(hv::HttpService* service,
 
     // GET /node/export - 导出节点历史数据
     service->GET("/node/export", [monitor_module](const HttpContextPtr& ctx) {
+        auto t_start = std::chrono::high_resolution_clock::now();
+        spdlog::info("[export] 接口开始处理请求");
+        
         if (!monitor_module) {
             nlohmann::json resp = {
                 {"code", 400},
@@ -160,6 +165,7 @@ void registerNodeRoutes(hv::HttpService* service,
             return ctx->send(resp.dump(2));
         }
 
+        auto t_params_start = std::chrono::high_resolution_clock::now();
         auto params = ctx->params();
         
         // 解析必需参数
@@ -247,10 +253,19 @@ void registerNodeRoutes(hv::HttpService* service,
             }
         }
 
+        auto t_params_end = std::chrono::high_resolution_clock::now();
+        auto params_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_params_end - t_params_start).count();
+        spdlog::info("[export] 参数解析完成，耗时: {} ms", params_duration);
+
         try {
+            auto t_export_start = std::chrono::high_resolution_clock::now();
             // 调用监控模块导出数据
             monitor::ExportData exportData = monitor_module->exportNodeData(ip_param, start_time, end_time, actual_types);
+            auto t_export_end = std::chrono::high_resolution_clock::now();
+            auto export_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_export_end - t_export_start).count();
+            spdlog::info("[export] exportNodeData 调用完成，耗时: {} ms，数据点数量: {}", export_duration, exportData.data.size());
 
+            auto t_json_start = std::chrono::high_resolution_clock::now();
             // 转换为 export.md 格式
             nlohmann::json data_array = nlohmann::json::array();
             
@@ -301,13 +316,27 @@ void registerNodeRoutes(hv::HttpService* service,
 
             data_array.push_back(node_data);
 
+            auto t_json_end = std::chrono::high_resolution_clock::now();
+            auto json_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_json_end - t_json_start).count();
+            spdlog::info("[export] JSON 转换完成，耗时: {} ms", json_duration);
+
+            auto t_serialize_start = std::chrono::high_resolution_clock::now();
             nlohmann::json resp = {
                 {"code", 200},
                 {"data", data_array}
             };
 
             ctx->setContentType("application/json");
-            return ctx->send(resp.dump(2));
+            std::string response_str = resp.dump(2);
+            auto t_serialize_end = std::chrono::high_resolution_clock::now();
+            auto serialize_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_serialize_end - t_serialize_start).count();
+            spdlog::info("[export] JSON 序列化完成，耗时: {} ms，响应大小: {} bytes", serialize_duration, response_str.size());
+
+            auto t_end = std::chrono::high_resolution_clock::now();
+            auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
+            spdlog::info("[export] 接口处理完成，总耗时: {} ms", total_duration);
+            
+            return ctx->send(response_str);
 
         } catch (const std::exception& e) {
             nlohmann::json resp = {

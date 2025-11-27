@@ -68,9 +68,13 @@ ExportData MonitorManager::exportNodeData(const std::string& host_ip,
                                            std::int64_t start_time,
                                            std::int64_t end_time,
                                            const std::vector<std::string>& types) const {
+    auto t_func_start = std::chrono::high_resolution_clock::now();
+    spdlog::info("[exportNodeData] 函数开始，host_ip: {}, start_time: {}, end_time: {}", host_ip, start_time, end_time);
+    
     ExportData result;
     result.ip = host_ip;
     
+    auto t_format_start = std::chrono::high_resolution_clock::now();
     // 转换时间戳为字符串格式
     auto formatTimestamp = [](std::int64_t timestamp) -> std::string {
         auto time_point = std::chrono::system_clock::from_time_t(timestamp);
@@ -83,14 +87,23 @@ ExportData MonitorManager::exportNodeData(const std::string& host_ip,
     
     result.start_time = formatTimestamp(start_time);
     result.end_time = formatTimestamp(end_time);
+    auto t_format_end = std::chrono::high_resolution_clock::now();
+    auto format_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_format_end - t_format_start).count();
+    spdlog::info("[exportNodeData] 时间戳格式化完成，耗时: {} ms", format_duration);
     
     if (!repository_) {
         return result;
     }
     
+    auto t_query_start = std::chrono::high_resolution_clock::now();
     // 查询原始数据
     MetricsSeries metrics = repository_->queryMetricsSeries(host_ip, start_time, end_time, types);
+    auto t_query_end = std::chrono::high_resolution_clock::now();
+    auto query_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_query_end - t_query_start).count();
+    spdlog::info("[exportNodeData] 数据库查询完成，耗时: {} ms，CPU点数: {}, Memory点数: {}, Disk设备数: {}, Network接口数: {}, GPU数: {}", 
+                 query_duration, metrics.cpu.size(), metrics.memory.size(), metrics.disk.size(), metrics.network.size(), metrics.gpu.size());
     
+    auto t_process_start = std::chrono::high_resolution_clock::now();
     // 构建类型列表
     std::set<std::string> typeSet;
     if (types.empty()) {
@@ -124,6 +137,7 @@ ExportData MonitorManager::exportNodeData(const std::string& host_ip,
     
     result.type.assign(typeSet.begin(), typeSet.end());
     
+    auto t_timestamp_start = std::chrono::high_resolution_clock::now();
     // 收集所有时间戳
     std::set<std::int64_t> allTimestamps;
     
@@ -158,6 +172,11 @@ ExportData MonitorManager::exportNodeData(const std::string& host_ip,
         }
     }
     
+    auto t_timestamp_end = std::chrono::high_resolution_clock::now();
+    auto timestamp_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_timestamp_end - t_timestamp_start).count();
+    spdlog::info("[exportNodeData] 时间戳收集完成，耗时: {} ms，唯一时间戳数量: {}", timestamp_duration, allTimestamps.size());
+    
+    auto t_datapoint_start = std::chrono::high_resolution_clock::now();
     // 为每个时间戳创建数据点
     for (std::int64_t timestamp : allTimestamps) {
         ExportDataPoint dataPoint;
@@ -214,6 +233,14 @@ ExportData MonitorManager::exportNodeData(const std::string& host_ip,
         
         result.data.push_back(dataPoint);
     }
+    
+    auto t_datapoint_end = std::chrono::high_resolution_clock::now();
+    auto datapoint_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_datapoint_end - t_datapoint_start).count();
+    spdlog::info("[exportNodeData] 数据点构建完成，耗时: {} ms，数据点数量: {}", datapoint_duration, result.data.size());
+    
+    auto t_func_end = std::chrono::high_resolution_clock::now();
+    auto func_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_func_end - t_func_start).count();
+    spdlog::info("[exportNodeData] 函数完成，总耗时: {} ms", func_duration);
     
     return result;
 }
