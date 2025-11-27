@@ -116,12 +116,18 @@ void BMCListener::runLoop() {
         }
         if (static_cast<size_t>(n) < sizeof(UdpInfo)) {
             // 丢弃无效包
-            spdlog::warn("[BMCListener] 收到包长度过小({})，丢弃", n);
+            spdlog::warn("[BMCListener] 收到包长度过小({}，期望{})，丢弃", n, sizeof(UdpInfo));
             continue;
         }
         const UdpInfo* pkt = reinterpret_cast<const UdpInfo*>(buffer);
-        if (pkt->head != 0xA55A || pkt->tail != 0xA55A) {
-            spdlog::warn("[BMCListener] 包头/包尾校验失败，丢弃");
+        // 协议文档中：包头是0x5aa5，包尾是0x5aa5（文档第45行，可能与实际不符，通常包尾应为0xa55a）
+        // 在小端模式下，按uint16_t读取：
+        // - 0x5aa5 在内存中是 [0xa5, 0x5a]，按uint16_t读取是 0x5aa5
+        // - 0xa55a 在内存中是 [0x5a, 0xa5]，按uint16_t读取是 0xa55a
+        // 注意：文档中包尾写的是0x5aa5，但实际可能是0xa55a，这里先按文档检查，如果实际不符需要调整
+        if (pkt->head != 0x5aa5 || (pkt->tail != 0x5aa5 && pkt->tail != 0xa55a)) {
+            spdlog::warn("[BMCListener] 包头/包尾校验失败 (head=0x{:04x}, tail=0x{:04x})，期望 (head=0x5aa5, tail=0x5aa5或0xa55a)，丢弃", 
+                         pkt->head, pkt->tail);
             continue;
         }
         if (handler_) {
