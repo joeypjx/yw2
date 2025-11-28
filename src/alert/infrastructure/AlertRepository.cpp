@@ -290,6 +290,38 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsExceptPending() {
     }
 }
 
+std::vector<Alert> DatabaseAlertRepository::getAlertsByFilters(const AlertFilters& filters) {
+    try {
+        // 构建 WHERE 子句和参数
+        auto [whereClause, params] = buildWhereClause(filters);
+        
+        // 构建完整 SQL
+        std::string sql = buildSelectSql();
+        if (!whereClause.empty()) {
+            sql += " WHERE " + whereClause;
+        }
+        sql += " ORDER BY created_at DESC";
+        
+        // 添加 LIMIT
+        int limit = filters.limit;
+        if (limit <= 0) limit = 100;
+        if (limit > 1000) limit = 1000;
+        sql += " LIMIT " + std::to_string(limit);
+        
+        // 执行查询
+        QueryResult result = dbInterface_->executeQuery(sql, params);
+        
+        std::vector<Alert> alerts;
+        for (const auto& row : result.rows) {
+            alerts.push_back(parseAlertFromQueryResult(row));
+        }
+        
+        return alerts;
+    } catch (const std::exception& e) {
+        throw std::runtime_error("根据过滤条件获取告警失败: " + std::string(e.what()));
+    }
+}
+
 bool DatabaseAlertRepository::deleteAlert(const std::string& id) {
     try {
         std::string sql = buildDeleteSql();
@@ -472,6 +504,89 @@ std::string DatabaseAlertRepository::buildSelectSql() {
 
 std::string DatabaseAlertRepository::buildDeleteSql() {
     return "DELETE FROM alert WHERE id = $1";
+}
+
+std::pair<std::string, std::vector<std::string>> DatabaseAlertRepository::buildWhereClause(const AlertFilters& filters) {
+    std::vector<std::string> conditions;
+    std::vector<std::string> params;
+    int paramIndex = 1;
+    
+    // 状态过滤
+    if (!filters.status.empty()) {
+        conditions.push_back("status = $" + std::to_string(paramIndex++));
+        params.push_back(filters.status);
+    }
+    
+    // 严重程度过滤
+    if (!filters.severity.empty()) {
+        conditions.push_back("labels->>'severity' = $" + std::to_string(paramIndex++));
+        params.push_back(filters.severity);
+    }
+    
+    // 告警类型过滤
+    if (!filters.alert_type.empty()) {
+        conditions.push_back("labels->>'alert_type' = $" + std::to_string(paramIndex++));
+        params.push_back(filters.alert_type);
+    }
+    
+    // 主机IP过滤
+    if (!filters.host_ip.empty()) {
+        conditions.push_back("labels->>'host_ip' = $" + std::to_string(paramIndex++));
+        params.push_back(filters.host_ip);
+    }
+    
+    // 机箱号过滤
+    if (filters.box_id >= 0) {
+        conditions.push_back("labels->>'box_id' = $" + std::to_string(paramIndex++));
+        params.push_back(std::to_string(filters.box_id));
+    }
+    
+    // 板卡号过滤
+    if (filters.slot_id >= 0) {
+        conditions.push_back("labels->>'slot_id' = $" + std::to_string(paramIndex++));
+        params.push_back(std::to_string(filters.slot_id));
+    }
+    
+    // 时间范围过滤
+    if (!filters.start_time.empty()) {
+        conditions.push_back("created_at >= $" + std::to_string(paramIndex++) + "::timestamp");
+        params.push_back(filters.start_time);
+    }
+    if (!filters.end_time.empty()) {
+        conditions.push_back("created_at <= $" + std::to_string(paramIndex++) + "::timestamp");
+        params.push_back(filters.end_time);
+    }
+    
+    // 描述过滤（模糊匹配）
+    if (!filters.description.empty()) {
+        conditions.push_back("annotations->>'description' LIKE $" + std::to_string(paramIndex++));
+        params.push_back("%" + filters.description + "%");
+    }
+    
+    // 栈名过滤
+    if (!filters.stack_name.empty()) {
+        conditions.push_back("labels->>'stack_name' = $" + std::to_string(paramIndex++));
+        params.push_back(filters.stack_name);
+    }
+    
+    // 组件名过滤
+    if (!filters.component_name.empty()) {
+        conditions.push_back("labels->>'component_name' = $" + std::to_string(paramIndex++));
+        params.push_back(filters.component_name);
+    }
+    
+    // 如果没有过滤条件，返回空字符串
+    if (conditions.empty()) {
+        return {"", params};
+    }
+    
+    // 组合所有条件
+    std::string whereClause = conditions[0];
+    for (size_t i = 1; i < conditions.size(); ++i) {
+        whereClause += " AND " + conditions[i];
+    }
+    
+    return {whereClause, params};
 }
 
 } // namespace alert

@@ -9,6 +9,32 @@
 namespace yw {
 namespace alert {
 
+/**
+ * @brief 告警查询过滤条件结构体
+ */
+struct AlertFilters {
+    std::string status;              // 状态过滤 (pending/firing/resolved)
+    std::string severity;            // 严重程度过滤
+    std::string alert_type;          // 告警类型过滤
+    std::string host_ip;             // 主机IP过滤
+    int box_id = -1;                 // 机箱号过滤 (-1 表示不过滤)
+    int slot_id = -1;                // 板卡号过滤 (-1 表示不过滤)
+    std::string start_time;          // 起始时间过滤
+    std::string end_time;            // 结束时间过滤
+    std::string description;         // 描述过滤（模糊匹配）
+    int limit = 100;                 // 限制返回数量 (默认100, 最大1000)
+    std::string stack_name;          // 栈名过滤
+    std::string component_name;      // 组件名过滤
+    
+    // 检查是否有任何过滤条件
+    bool hasAnyFilter() const {
+        return !status.empty() || !severity.empty() || !alert_type.empty() ||
+               !host_ip.empty() || box_id >= 0 || slot_id >= 0 ||
+               !start_time.empty() || !end_time.empty() || !description.empty() ||
+               !stack_name.empty() || !component_name.empty();
+    }
+};
+
 class AlertRepository {
 public:
     virtual ~AlertRepository() = default;
@@ -32,6 +58,9 @@ public:
     virtual std::vector<Alert> getAlertsByDescription(const std::string& description) = 0;
     virtual std::vector<Alert> getAlertsExceptPending() = 0;
     
+    // 统一的过滤查询接口，支持多个过滤条件组合
+    virtual std::vector<Alert> getAlertsByFilters(const AlertFilters& filters) = 0;
+    
     virtual size_t getAlertCount() = 0;
 };
 
@@ -53,6 +82,7 @@ public:
     std::vector<Alert> getAlertsBySeverity(const std::string& severity) override;
     std::vector<Alert> getAlertsByDescription(const std::string& description) override;
     std::vector<Alert> getAlertsExceptPending() override;
+    std::vector<Alert> getAlertsByFilters(const AlertFilters& filters) override;
     bool deleteAlert(const std::string& id) override;
     int deleteAlertsByFingerprintAndStatus(const std::string& fingerprint, const std::string& status) override;
     int resolveFiringAlertsByFingerprint(const std::string& fingerprint) override;
@@ -67,6 +97,9 @@ private:
     std::string buildUpdateSql();
     std::string buildSelectSql();
     std::string buildDeleteSql();
+    
+    // 构建动态 WHERE 子句和参数
+    std::pair<std::string, std::vector<std::string>> buildWhereClause(const AlertFilters& filters);
 };
 
 } // namespace alert

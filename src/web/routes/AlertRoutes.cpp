@@ -230,233 +230,92 @@ void registerAlertRoutes(hv::HttpService* service,
             // 获取查询参数
             auto params = ctx->params();
             
-            // 默认获取最近24小时的告警
-            std::string duration = "24h";
-            if (params.find("duration") != params.end()) {
-                duration = params["duration"];
-            }
+            // 构建过滤条件
+            yw::alert::AlertFilters filters;
             
             // 获取状态过滤参数
-            std::string statusFilter;
             if (params.find("status") != params.end()) {
-                statusFilter = params["status"];
+                filters.status = params["status"];
             }
             
             // 获取严重程度过滤参数
-            std::string severityFilter;
             if (params.find("severity") != params.end()) {
-                severityFilter = params["severity"];
+                filters.severity = params["severity"];
             }
             
             // 获取告警类型过滤参数
-            std::string alertTypeFilter;
             if (params.find("alert_type") != params.end()) {
-                alertTypeFilter = params["alert_type"];
+                filters.alert_type = params["alert_type"];
             }
             
             // 获取主机IP过滤参数
-            std::string hostIpFilter;
             if (params.find("host_ip") != params.end()) {
-                hostIpFilter = params["host_ip"];
+                filters.host_ip = params["host_ip"];
             }
             
             // 获取机箱号过滤参数
-            int boxIdFilter = -1;
             if (params.find("box_id") != params.end()) {
                 try {
-                    boxIdFilter = std::stoi(params["box_id"]);
+                    filters.box_id = std::stoi(params["box_id"]);
                 } catch (...) {
-                    boxIdFilter = -1;
+                    filters.box_id = -1;
                 }
             }
             
             // 获取板卡号过滤参数
-            int slotIdFilter = -1;
             if (params.find("slot_id") != params.end()) {
                 try {
-                    slotIdFilter = std::stoi(params["slot_id"]);
+                    filters.slot_id = std::stoi(params["slot_id"]);
                 } catch (...) {
-                    slotIdFilter = -1;
+                    filters.slot_id = -1;
                 }
             }
             
             // 获取描述过滤参数
-            std::string descriptionFilter;
             if (params.find("description") != params.end()) {
-                descriptionFilter = params["description"];
+                filters.description = params["description"];
             }
             
             // 获取起止时间过滤参数
-            std::string startTimeFilter;
-            std::string endTimeFilter;
             if (params.find("start_time") != params.end()) {
-                startTimeFilter = params["start_time"];
+                filters.start_time = params["start_time"];
             }
             if (params.find("end_time") != params.end()) {
-                endTimeFilter = params["end_time"];
+                filters.end_time = params["end_time"];
+            }
+            
+            // 获取栈名过滤参数
+            if (params.find("stack_name") != params.end()) {
+                filters.stack_name = params["stack_name"];
+            }
+            
+            // 获取组件名过滤参数
+            if (params.find("component_name") != params.end()) {
+                filters.component_name = params["component_name"];
             }
             
             // 获取限制数量参数
-            int limit = 100; // 默认限制100条
             if (params.find("limit") != params.end()) {
                 try {
-                    limit = std::stoi(params["limit"]);
-                    if (limit <= 0) limit = 100;
-                    if (limit > 1000) limit = 1000; // 最大限制1000条
+                    filters.limit = std::stoi(params["limit"]);
+                    if (filters.limit <= 0) filters.limit = 100;
+                    if (filters.limit > 1000) filters.limit = 1000; // 最大限制1000条
                 } catch (...) {
-                    limit = 100;
+                    filters.limit = 100;
                 }
             }
             
+            // 使用统一的过滤接口查询告警
+            // 如果没有提供任何过滤条件，使用 getAlertsExceptPending 获取默认结果
             std::vector<yw::alert::Alert> alerts;
-            
-            // 根据过滤条件获取告警（优先级：时间范围 > 状态 > 严重程度 > 告警类型 > 主机IP > 描述 > 机箱号 > 板卡号）
-            if (!startTimeFilter.empty() && !endTimeFilter.empty()) {
-                // 时间范围查询（最高优先级）
-                alerts = alertEngine->getAlertsByTimeRange(startTimeFilter, endTimeFilter);
-            } else if (!statusFilter.empty()) {
-                alerts = alertEngine->getAlertsByStatus(statusFilter);
-            } else if (!severityFilter.empty()) {
-                alerts = alertEngine->getAlertsBySeverity(severityFilter);
-            } else if (!alertTypeFilter.empty()) {
-                alerts = alertEngine->getAlertsByAlertType(alertTypeFilter);
-            } else if (!hostIpFilter.empty()) {
-                alerts = alertEngine->getAlertsByHostIp(hostIpFilter);
-            } else if (!descriptionFilter.empty()) {
-                alerts = alertEngine->getAlertsByDescription(descriptionFilter);
-            } else if (boxIdFilter >= 0) {
-                alerts = alertEngine->getAlertsByBoxId(boxIdFilter);
-            } else if (slotIdFilter >= 0) {
-                alerts = alertEngine->getAlertsBySlotId(slotIdFilter);
-            } else {
-                // 默认获取除Pending外的所有告警（Firing和Resolved）
+            if (!filters.hasAnyFilter()) {
                 alerts = alertEngine->getAlertsExceptPending();
-                
-                // 如果结果太多，限制数量
-                if (alerts.size() > static_cast<size_t>(limit)) {
-                    alerts.resize(limit);
+                // 限制数量
+                if (alerts.size() > static_cast<size_t>(filters.limit)) {
+                    alerts.resize(filters.limit);
                 }
-            }
-            
-            // 如果使用了时间范围查询，还需要应用其他过滤条件
-            if (!startTimeFilter.empty() && !endTimeFilter.empty()) {
-                std::vector<yw::alert::Alert> filteredAlerts;
-                for (const auto& alert : alerts) {
-                    bool match = true;
-                    
-                    // 状态过滤
-                    if (!statusFilter.empty()) {
-                        std::string alertStatus;
-                        switch (alert.getStatus()) {
-                            case yw::alert::AlertStatus::Pending:
-                                alertStatus = "pending";
-                                break;
-                            case yw::alert::AlertStatus::Firing:
-                                alertStatus = "firing";
-                                break;
-                            case yw::alert::AlertStatus::Resolved:
-                                alertStatus = "resolved";
-                                break;
-                            default:
-                                alertStatus = "unknown";
-                                break;
-                        }
-                        if (alertStatus != statusFilter) {
-                            match = false;
-                        }
-                    }
-                    
-                    // 严重程度过滤
-                    if (match && !severityFilter.empty()) {
-                        auto labels = alert.getLabels();
-                        auto it = labels.find("severity");
-                        if (it == labels.end() || it->second != severityFilter) {
-                            match = false;
-                        }
-                    }
-                    
-                    // 告警类型过滤
-                    if (match && !alertTypeFilter.empty()) {
-                        auto labels = alert.getLabels();
-                        auto it = labels.find("alert_type");
-                        if (it == labels.end() || it->second != alertTypeFilter) {
-                            match = false;
-                        }
-                    }
-                    
-                    // 主机IP过滤
-                    if (match && !hostIpFilter.empty()) {
-                        auto labels = alert.getLabels();
-                        auto it = labels.find("host_ip");
-                        if (it == labels.end() || it->second != hostIpFilter) {
-                            match = false;
-                        }
-                    }
-                    
-                    // 机箱号过滤
-                    if (match && boxIdFilter >= 0) {
-                        auto labels = alert.getLabels();
-                        auto it = labels.find("box_id");
-                        if (it == labels.end()) {
-                            match = false;
-                        } else {
-                            try {
-                                int boxId = std::stoi(it->second);
-                                if (boxId != boxIdFilter) {
-                                    match = false;
-                                }
-                            } catch (...) {
-                                match = false;
-                            }
-                        }
-                    }
-                    
-                    // 板卡号过滤
-                    if (match && slotIdFilter >= 0) {
-                        auto labels = alert.getLabels();
-                        auto it = labels.find("slot_id");
-                        if (it == labels.end()) {
-                            match = false;
-                        } else {
-                            try {
-                                int slotId = std::stoi(it->second);
-                                if (slotId != slotIdFilter) {
-                                    match = false;
-                                }
-                            } catch (...) {
-                                match = false;
-                            }
-                        }
-                    }
-                    
-                    // 描述过滤（模糊匹配）
-                    if (match && !descriptionFilter.empty()) {
-                        auto annotations = alert.getAnnotations();
-                        auto it = annotations.find("description");
-                        if (it == annotations.end()) {
-                            match = false;
-                        } else {
-                            // 检查 description 是否包含过滤文本（不区分大小写）
-                            std::string description = it->second;
-                            std::string filterLower = descriptionFilter;
-                            std::transform(description.begin(), description.end(), description.begin(), ::tolower);
-                            std::transform(filterLower.begin(), filterLower.end(), filterLower.begin(), ::tolower);
-                            if (description.find(filterLower) == std::string::npos) {
-                                match = false;
-                            }
-                        }
-                    }
-                    
-                    if (match) {
-                        filteredAlerts.push_back(alert);
-                    }
-                }
-                alerts = std::move(filteredAlerts);
-            }
-            
-            // 如果结果太多，限制数量
-            if (alerts.size() > static_cast<size_t>(limit)) {
-                alerts.resize(limit);
+            } else {
+                alerts = alertEngine->getAlertsByFilters(filters);
             }
             
             // 构建响应数据
@@ -634,6 +493,8 @@ void registerAlertRoutes(hv::HttpService* service,
             std::string uuid = j.value("uuid", "");
             int index = j.value("index", 0);
             std::string status = j.value("status", "unknown");
+            std::string stack_name = j.value("stack_name", "");
+            std::string component_name = j.value("component_name", "");
             
             // 验证必需字段
             if (hostIp.empty() || instanceId.empty()) {
@@ -646,7 +507,7 @@ void registerAlertRoutes(hv::HttpService* service,
             }
             
             // 使用AlertEngine创建组件告警
-            auto alert = alertEngine->createAlertFromComponent(hostIp, instanceId, uuid, index, status);
+            auto alert = alertEngine->createAlertFromComponent(hostIp, instanceId, uuid, index, status, stack_name, component_name);
             
             if (alert) {
                 json resp = {{"api_version", 2}, {"status", "success"}, 

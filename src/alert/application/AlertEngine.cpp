@@ -686,6 +686,15 @@ std::vector<Alert> AlertEngine::getAlertsExceptPending() {
     }
 }
 
+std::vector<Alert> AlertEngine::getAlertsByFilters(const AlertFilters& filters) {
+    try {
+        return alertRepo_->getAlertsByFilters(filters);
+    } catch (const std::exception& e) {
+        std::cerr << "根据过滤条件获取告警失败: " << e.what() << std::endl;
+        return {};
+    }
+}
+
 std::shared_ptr<Alert> AlertEngine::getAlertById(const std::string& alertId) {
     try {
         return alertRepo_->getAlertById(alertId);
@@ -710,7 +719,9 @@ std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& 
                                                            const std::string& instanceId,
                                                            const std::string& uuid,
                                                            int index,
-                                                           const std::string& status) {
+                                                           const std::string& status,
+                                                           const std::string& stack_name,
+                                                           const std::string& component_name) {
     try {
         // 生成指纹（与AlertRoutes中的逻辑保持一致）
         std::string fingerprint = "业务组件状态异常|host_ip=" + hostIp + "|instance_id=" + instanceId + "|uuid=" + uuid + "|index=" + std::to_string(index);
@@ -758,6 +769,8 @@ std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& 
         alertLabels["uuid"] = uuid;
         alertLabels["index"] = std::to_string(index);
         alertLabels["value"] = status;
+        alertLabels["stack_name"] = stack_name;
+        alertLabels["component_name"] = component_name;
         
         // 设置描述
         std::string description = hostIp + " 节点上 " + instanceId + " 组件状态为 " + status;

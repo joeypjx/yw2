@@ -50,13 +50,16 @@ public:
     std::vector<Alert> getAlertsBySeverity(const std::string& severity);
     std::vector<Alert> getAlertsByDescription(const std::string& description);
     std::vector<Alert> getAlertsExceptPending();
+    std::vector<Alert> getAlertsByFilters(const AlertFilters& filters);
     std::shared_ptr<Alert> getAlertById(const std::string& alertId);
     
     std::shared_ptr<Alert> createAlertFromComponent(const std::string& hostIp,
                                                    const std::string& instanceId,
                                                    const std::string& uuid,
                                                    int index,
-                                                   const std::string& status);
+                                                   const std::string& status,
+                                                   const std::string& stack_name,
+                                                   const std::string& component_name);
     
     size_t getAlertCount();
     void setPushCallback(std::function<void(const Alert&)> callback);
