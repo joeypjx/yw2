@@ -51,14 +51,16 @@ void ResourceRepository::save(const Resource& data) {
     // Network
     for (const auto& nic : data.resource.network) {
         tx.exec_params(
-            "INSERT INTO resource_network(time, host_ip, interface, rx_bytes, tx_bytes, rx_packets, tx_packets, rx_errors, tx_errors, rx_rate, tx_rate)"
-            " VALUES (now(), $1::inet, $2,$3,$4,$5,$6,$7,$8,$9,$10)",
+            "INSERT INTO resource_network(time, host_ip, interface, rx_bytes, tx_bytes, rx_packets, tx_packets, rx_errors, tx_errors, rx_rate, tx_rate, rx_drop_rate, tx_drop_rate, state)"
+            " VALUES (now(), $1::inet, $2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
             data.host_ip,
             nic.interface,
             nic.rx_bytes, nic.tx_bytes,
             nic.rx_packets, nic.tx_packets,
             nic.rx_errors, nic.tx_errors,
-            nic.rx_rate, nic.tx_rate
+            nic.rx_rate, nic.tx_rate,
+            nic.rx_drop_rate, nic.tx_drop_rate,
+            nic.state
         );
     }
 
@@ -90,14 +92,15 @@ void ResourceRepository::save(const Resource& data) {
     // Component
     for (const auto& comp : data.component) {
         tx.exec_params(
-            "INSERT INTO component_resource(time, host_ip, instance_id, uuid, idx, name, container_id, state, cpu_load, mem_used, mem_limit, net_tx, net_rx)"
-            " VALUES (now(), $1::inet, $2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
+            "INSERT INTO component_resource(time, host_ip, instance_id, uuid, idx, name, container_id, state, cpu_load, mem_used, mem_limit, net_tx, net_rx, net_rx_rate, net_tx_rate)"
+            " VALUES (now(), $1::inet, $2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
             data.host_ip,
             comp.instance_id, comp.uuid, comp.index,
             comp.config.name, comp.config.id, comp.state,
             comp.resource.cpu.load,
             comp.resource.memory.mem_used, comp.resource.memory.mem_limit,
-            comp.resource.network.tx, comp.resource.network.rx
+            comp.resource.network.tx, comp.resource.network.rx,
+            comp.resource.network.rx_rate, comp.resource.network.tx_rate
         );
     }
 

@@ -161,7 +161,10 @@
                     "tx_bytes": 1975762894,
                     "tx_errors": 0,
                     "tx_packets": 3245933,
-                    "tx_rate": 12002.166666666666
+                    "tx_rate": 12002.166666666666,
+                    "rx_drop_rate": 0.1,
+                    "tx_drop_rate": 0.2,
+                    "state": 0
                 },
                 {
                     "interface": "docker0",
@@ -172,7 +175,10 @@
                     "tx_bytes": 109122371,
                     "tx_errors": 0,
                     "tx_packets": 573438,
-                    "tx_rate": 5623.333333333333
+                    "tx_rate": 5623.333333333333,
+                    "rx_drop_rate": 0.1,
+                    "tx_drop_rate": 0.2,
+                    "state": -1
                 }
             ]
         }

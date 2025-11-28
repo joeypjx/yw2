@@ -41,8 +41,11 @@ struct NetworkInterface {
     std::uint64_t tx_packets = 0;
     std::uint64_t rx_errors = 0;
     std::uint64_t tx_errors = 0;
-    std::uint64_t rx_rate = 0;
-    std::uint64_t tx_rate = 0;
+    double        rx_rate = 0.0;
+    double        tx_rate = 0.0;
+    double        rx_drop_rate = 0.0;
+    double        tx_drop_rate = 0.0;
+    int           state = 0;
 };
 
 struct DiskPartition {
@@ -81,7 +84,12 @@ struct NodeResource {
 
 struct ComponentCpuResource { double load = 0.0; };
 struct ComponentMemoryResource { std::uint64_t mem_used = 0; std::uint64_t mem_limit = 0; };
-struct ComponentNetworkResource { std::uint64_t tx = 0; std::uint64_t rx = 0; };
+struct ComponentNetworkResource {
+    std::uint64_t tx = 0;
+    std::uint64_t rx = 0;
+    double        rx_rate = 0.0;
+    double        tx_rate = 0.0;
+};
 
 struct ComponentResource {
     ComponentCpuResource     cpu;
@@ -119,7 +127,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MemoryResource,
     total, used, free, usage_percent)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(NetworkInterface,
-    interface, rx_bytes, tx_bytes, rx_packets, tx_packets, rx_errors, tx_errors, rx_rate, tx_rate)
+    interface, rx_bytes, tx_bytes, rx_packets, tx_packets, rx_errors, tx_errors, rx_rate, tx_rate, rx_drop_rate, tx_drop_rate, state)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(DiskPartition,
     device, mount_point, total, used, free, usage_percent)
@@ -137,7 +145,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ComponentMemoryResource,
     mem_used, mem_limit)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ComponentNetworkResource,
-    tx, rx)
+    tx, rx, rx_rate, tx_rate)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ComponentResource,
     cpu, memory, network)
@@ -159,7 +167,7 @@ struct CpuPoint {
     std::int64_t timestamp = 0; double usage_percent = 0.0; double load_avg_1m = 0.0; double load_avg_5m = 0.0; double load_avg_15m = 0.0; int core_count = 0; int core_allocated = 0; double temperature = 0.0; double voltage = 0.0; double current = 0.0; double power = 0.0;
 };
 struct MemoryPoint { std::int64_t timestamp = 0; std::uint64_t total = 0; std::uint64_t used = 0; std::uint64_t free = 0; double usage_percent = 0.0; };
-struct NetworkPoint { std::int64_t timestamp = 0; std::string interface; std::uint64_t rx_bytes = 0; std::uint64_t tx_bytes = 0; std::uint64_t rx_packets = 0; std::uint64_t tx_packets = 0; std::uint64_t rx_errors = 0; std::uint64_t tx_errors = 0; std::uint64_t rx_rate = 0; std::uint64_t tx_rate = 0; };
+struct NetworkPoint { std::int64_t timestamp = 0; std::string interface; std::uint64_t rx_bytes = 0; std::uint64_t tx_bytes = 0; std::uint64_t rx_packets = 0; std::uint64_t tx_packets = 0; std::uint64_t rx_errors = 0; std::uint64_t tx_errors = 0; double rx_rate = 0.0; double tx_rate = 0.0; double rx_drop_rate = 0.0; double tx_drop_rate = 0.0; int state = 0; };
 struct DiskPoint { std::int64_t timestamp = 0; std::string device; std::string mount_point; std::uint64_t total = 0; std::uint64_t used = 0; std::uint64_t free = 0; double usage_percent = 0.0; };
 struct GpuPoint { std::int64_t timestamp = 0; int index = 0; std::string name; double compute_usage = 0.0; double mem_usage = 0.0; std::uint64_t mem_used = 0; std::uint64_t mem_total = 0; double temperature = 0.0; double power = 0.0; };
 
@@ -180,7 +188,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(CpuPoint,
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MemoryPoint,
     timestamp, total, used, free, usage_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(NetworkPoint,
-    interface, rx_bytes, tx_bytes, rx_packets, tx_packets, rx_errors, tx_errors, rx_rate, tx_rate, timestamp)
+    interface, rx_bytes, tx_bytes, rx_packets, tx_packets, rx_errors, tx_errors, rx_rate, tx_rate, rx_drop_rate, tx_drop_rate, state, timestamp)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(DiskPoint,
     device, mount_point, total, used, free, usage_percent, timestamp)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(GpuPoint,

@@ -65,7 +65,22 @@ docker run -d --name mysql8 \
   --character-set-server=utf8mb4 \
   --collation-server=utf8mb4_0900_ai_ci
 
+// registry
 
+# 创建数据目录
+sudo mkdir -p /opt/yw/registry/data
+sudo mkdir -p /opt/yw/registry/conf
+
+# 运行 Registry 容器
+docker run -d \
+  --name yw-registry \
+  --network host \
+  -e REGISTRY_HTTP_ADDR=:5000 \
+  -v /opt/yw/registry/data:/var/lib/registry \
+  -v /opt/yw/registry/conf:/etc/docker/registry \
+  registry:2
+
+// nginx
 
 mkdir -p /data/nginx/{conf.d,html,logs}
 cat >/data/nginx/conf.d/default.conf <<'EOF'
