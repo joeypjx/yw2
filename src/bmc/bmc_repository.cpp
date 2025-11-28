@@ -41,9 +41,11 @@ void BMCRepository::save(const UdpInfo& pkt) {
     pqxx::connection c(conninfo_);
     pqxx::work tx{c};
 
-    // bmc_fan: 遍历 2 个风扇
-    for (int i = 0; i < 2; ++i) {
+    // bmc_fan: 遍历 6 个风扇（根据协议更新）
+    for (int i = 0; i < 6; ++i) {
         const auto& f = pkt.fan[i];
+        // 跳过无效风扇（序号为0xFF表示无此风扇）
+        if (f.fanseq == 0xFF) continue;
         tx.exec_params(
             "INSERT INTO bmc_fan(\"time\", boxid, fanseq, fanmode, fanspeed)"
             " VALUES (now(), $1, $2, $3, $4)",
@@ -54,54 +56,80 @@ void BMCRepository::save(const UdpInfo& pkt) {
         );
     }
 
-    // bmc_sensor: 遍历 14 个板卡，每块最多 5 个传感器
-    for (int bi = 0; bi < 14; ++bi) {
-        const auto& b = pkt.board[bi];
-        for (int si = 0; si < 5; ++si) {
-            const auto& s = b.sensor[si];
-            // 以 0 作为空项的简单判别：可按实际协议调整
+    // 名称与版本：将定长字节数组转为字符串（去除尾部\0）
+    auto to_str = [](const std::uint8_t* p, size_t n) -> std::string {
+        std::string out; out.reserve(n);
+        for (size_t i = 0; i < n; ++i) {
+            if (p[i] == 0) break; out.push_back(static_cast<char>(p[i]));
+        }
+        return out;
+    };
+
+    auto calculateHostIP = [](int box_id, int slot_id) -> std::string {
+        if (slot_id == 0) return std::string(); // 电源模块不计算host_ip
+        int network_id; int host_id;
+        if (slot_id >= 1 && slot_id <= 7) {
+            network_id = box_id * 2;
+            switch (slot_id) {
+                case 1: host_id = 5; break; 
+                case 2: host_id = 37; break; 
+                case 3: host_id = 69; break;
+                case 4: host_id = 101; break;
+                case 5: host_id = 133; break;
+                case 6: host_id = 170; break;
+                case 7: host_id = 180; break;
+                default: return std::string();
+            }
+        } else if (slot_id >= 8 && slot_id <= 12) {
+            network_id = box_id * 2 + 1;
+            switch (slot_id) {
+                case 8: host_id = 5; break;
+                case 9: host_id = 37; break;
+                case 10: host_id = 69; break;
+                case 11: host_id = 101; break;
+                case 12: host_id = 133; break;
+                default: return std::string();
+            }
+        } else { 
+            return std::string(); 
+        }
+        return std::string("192.168.") + std::to_string(network_id) + "." + std::to_string(host_id);
+    };
+
+    // 负载槽映射：协议中负载槽顺序是：槽1、槽2、槽3、槽4、槽6、槽7、槽9、槽10、槽11、槽12
+    static const int slot_mapping[] = {1, 2, 3, 4, 6, 7, 9, 10, 11, 12};
+
+    // bmc_sensor: 处理 2 个电源模块
+    for (int pi = 0; pi < 2; ++pi) {
+        const auto& dyboard = pkt.dyboard[pi];
+        // 电源模块不映射到slot_id，不计算host_ip，跳过传感器保存
+        // 如果需要保存电源模块的传感器数据，可以在这里添加逻辑
+    }
+
+    // bmc_sensor: 处理 10 个负载槽，每块最多 8 个传感器
+    for (int si = 0; si < 10; ++si) {
+        const auto& board = pkt.board[si];
+        // 检查负载槽在位信息
+        if (board.prst == 0) {
+            // 负载槽不在位，跳过
+            continue;
+        }
+        
+        // 获取对应的槽位ID
+        int slot_id = slot_mapping[si];
+        const std::string host_ip = calculateHostIP(pkt.boxid, slot_id);
+        if (host_ip.empty()) continue;
+        
+        // 根据传感器数量处理（最多8个）
+        int sensor_count = (board.sensornum > 8) ? 8 : board.sensornum;
+        for (int sensor_idx = 0; sensor_idx < sensor_count; ++sensor_idx) {
+            const auto& s = board.sensor[sensor_idx];
+            // 跳过无效传感器（序号为0xFF表示无此传感器）
+            if (s.sensorseq == 0xFF) continue;
+            // 以 0 作为空项的简单判别
             if (s.sensorseq == 0 && s.sensortype == 0 && s.sensorvalue_L == 0 && s.sensorvalue_H == 0) {
                 continue;
             }
-            // 名称与版本：将定长字节数组转为字符串（去除尾部\0）
-            auto to_str = [](const std::uint8_t* p, size_t n) -> std::string {
-                std::string out; out.reserve(n);
-                for (size_t i = 0; i < n; ++i) {
-                    if (p[i] == 0) break; out.push_back(static_cast<char>(p[i]));
-                }
-                return out;
-            };
-
-            auto ipmbaddrToSlotId = [](std::uint8_t ipmbaddr) -> std::uint8_t {
-                switch (ipmbaddr) {
-                    case 0x7c: return 1;   case 0x7a: return 2;   case 0x38: return 3;   case 0x76: return 4;
-                    case 0x34: return 5;   case 0x32: return 6;   case 0x70: return 7;   case 0x6e: return 8;
-                    case 0x2c: return 9;   case 0x2a: return 10;  case 0x68: return 11;  case 0x26: return 12;
-                    case 0x02: return 13;  case 0x04: return 14;  default: return 0;
-                }
-            };
-            auto calculateHostIP = [](int box_id, int slot_id) -> std::string {
-                int network_id; int host_id;
-                if (slot_id >= 1 && slot_id <= 7) {
-                    network_id = box_id * 2;
-                    switch (slot_id) {
-                        case 1: host_id = 5; break; case 2: host_id = 37; break; case 3: host_id = 69; break;
-                        case 4: host_id = 101; break; case 5: host_id = 133; break; case 6: host_id = 170; break; case 7: host_id = 180; break;
-                        default: host_id = 5; break;
-                    }
-                } else if (slot_id >= 8 && slot_id <= 12) {
-                    network_id = box_id * 2 + 1;
-                    switch (slot_id) {
-                        case 8: host_id = 5; break; case 9: host_id = 37; break; case 10: host_id = 69; break; case 11: host_id = 101; break; case 12: host_id = 133; break; case 13: host_id = 181; break; case 14: host_id = 182; break;
-                        default: host_id = 5; break;
-                    }
-                } else { return std::string(); }
-                return std::string("192.168.") + std::to_string(network_id) + "." + std::to_string(host_id);
-            };
-
-            const int slot_id = ipmbaddrToSlotId(b.ipmbaddr);
-            const std::string host_ip = calculateHostIP(pkt.boxid, slot_id);
-            if (host_ip.empty()) continue;
 
             tx.exec_params(
                 "INSERT INTO bmc_sensor(\"time\", host_ip, sensorseq, sensortype, sensorname, sensorvalue_L, sensorvalue_H, sensoralmtype)"
