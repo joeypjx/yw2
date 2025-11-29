@@ -733,10 +733,10 @@ std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& 
             existingAlert->setStatus(AlertStatus::Firing);
             existingAlert->setUpdatedNow();
             existingAlert->setStartsAt(existingAlert->getUpdatedAt());
-            existingAlert->setEndsAt(""); // 清空结束时间
+            existingAlert->setEndsAt(""); // 清空结束时间 
             
             // 更新描述
-            std::string description = hostIp + " 节点上 " + stack_name + " " + component_name + " " + instanceId + " 组件状态为 " + status;
+            std::string description = hostIp + " 节点上业务(" + stack_name + ") 组件(" + component_name + ") 状态为 " + status;
             existingAlert->addLabel("description", description);
             
             // 保存到数据库
@@ -773,7 +773,7 @@ std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& 
         alertLabels["component_name"] = component_name;
         
         // 设置描述
-        std::string description = hostIp + " 节点上 " + instanceId + " 组件状态为 " + status;
+        std::string description = hostIp + " 节点上业务(" + stack_name + ") 组件(" + component_name + ") 状态为 " + status;
         alertAnnotations["summary"] = "业务组件状态异常";
         alertAnnotations["description"] = description;
         

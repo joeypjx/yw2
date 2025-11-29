@@ -493,8 +493,11 @@ void registerAlertRoutes(hv::HttpService* service,
             std::string uuid = j.value("uuid", "");
             int index = j.value("index", 0);
             std::string status = j.value("status", "unknown");
-            std::string stack_name = j.value("stack_name", "");
-            std::string component_name = j.value("component_name", "");
+            std::string stack_name = j.value("link_name", "");
+            if (stack_name.empty()) {
+                stack_name = j.value("instance_name", "");
+            }
+            std::string component_name = j.value("name", "");
             
             // 验证必需字段
             if (hostIp.empty() || instanceId.empty()) {
