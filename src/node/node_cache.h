@@ -28,6 +28,8 @@ public:
     NodeCache(const NodeCache&) = delete;
     NodeCache& operator=(const NodeCache&) = delete;
 
+    bool initialize();
+
     // 基本操作
     /**
      * @brief 添加或更新节点

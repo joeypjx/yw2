@@ -15,11 +15,12 @@ using json = nlohmann::json;
 
 void registerNodeRoutes(hv::HttpService* service,
                         node::INodeModule* node_module,
-                        monitor::IMonitorModule* monitor_module) {
+                        monitor::IMonitorModule* monitor_module,
+                        bmc::IBMCModule* bmc_module) {
                             
     if (!service) return;
     
-    service->GET("/node", [node_module, monitor_module](const HttpContextPtr& ctx) {
+    service->GET("/node", [node_module, monitor_module, bmc_module](const HttpContextPtr& ctx) {
         if (!node_module) {
             json resp = {
                 {"api_version", 1},
@@ -54,7 +55,8 @@ void registerNodeRoutes(hv::HttpService* service,
                     }
                 }
 
-                auto nodeView = yw::web::mapper::toNodeView(*nodeOpt, res);
+                auto prst = bmc_module->getBoardPrst(nodeOpt->box_id, nodeOpt->slot_id);
+                auto nodeView = yw::web::mapper::toNodeView(*nodeOpt, res, prst);
                 resp = {
                     {"api_version", 1},
                     {"data", nodeView},
@@ -103,8 +105,9 @@ void registerNodeRoutes(hv::HttpService* service,
                         res = &(*resHolder);
                     }
                 }
-                
-                auto nodeView = yw::web::mapper::toNodeView(node, res);
+
+                auto prst = bmc_module->getBoardPrst(node.box_id, node.slot_id);
+                auto nodeView = yw::web::mapper::toNodeView(node, res, prst);
                 resp_nodes.push_back(std::move(nodeView));
             }
 
@@ -135,7 +138,8 @@ void registerNodeRoutes(hv::HttpService* service,
                 }
             }
             
-            auto nodeView = yw::web::mapper::toNodeView(node, res);
+            auto prst = bmc_module->getBoardPrst(node.box_id, node.slot_id);
+            auto nodeView = yw::web::mapper::toNodeView(node, res, prst);
             resp_nodes.push_back(std::move(nodeView));
         }
 

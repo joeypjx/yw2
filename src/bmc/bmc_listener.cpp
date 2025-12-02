@@ -199,6 +199,11 @@ std::unordered_map<std::string, BMCSensorRow> BMCListener::getLatestBMCSensor(
     return repository_->getLatestBMCSensor(host_ip);
 }
 
+std::optional<std::uint8_t> BMCListener::getBoardPrst(int box_id, int board_id) const {
+    if (!bmc_cache_) return std::nullopt;
+    return bmc_cache_->getBoardPrst(box_id, board_id);
+}
+
 } // namespace bmc
 } // namespace yw
 

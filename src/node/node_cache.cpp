@@ -2,13 +2,56 @@
 #include <spdlog/spdlog.h>
 #include <algorithm>
 #include <chrono>
+#include <vector>
+#include <mutex>
 
 namespace yw {
 namespace node {
 
-NodeCache::NodeCache() = default;
+NodeCache::NodeCache() {
+    initialize();
+}
 
 NodeCache::~NodeCache() = default;
+
+bool NodeCache::initialize() {
+    // init 9 box , 12 boards per box
+    std::vector<NodeRecord> nodes;
+    for (int box_id = 1; box_id <= 9; box_id++) {
+        for (int board_id = 1; board_id <= 12; board_id++) {
+            Node node;
+            node.box_id = box_id;
+            node.slot_id = board_id;
+
+            int thirdOctet;
+            int fourthOctet;
+            
+            if (board_id <= 7) {
+                thirdOctet = box_id * 2;
+                if (board_id == 6) {
+                    fourthOctet = 170;
+                } else if (board_id == 7) {
+                    fourthOctet = 180;
+                } else {
+                    fourthOctet = (board_id - 1) * 32 + 5;
+                }
+            } else {
+                thirdOctet = box_id * 2 + 1;
+                fourthOctet = (board_id - 8) * 32 + 5;
+            }
+            
+            node.host_ip = "192.168." + std::to_string(thirdOctet) + "." + std::to_string(fourthOctet);
+
+            NodeRecord record;
+            record.node = node;
+            record.last_update_ms = 0;
+            
+            nodes_.insert(std::make_pair(node.host_ip, record));
+        }
+    }
+
+    return true;
+}
 
 bool NodeCache::addOrUpdateNode(const Node& node) {
     if (node.host_ip.empty()) {

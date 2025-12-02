@@ -37,6 +37,11 @@ public:
      */
     std::vector<UdpInfo> getAll() const;
 
+    /**
+     * @brief 根据 box_id 和 board_id 获取板卡在位信息
+     */
+    std::optional<std::uint8_t> getBoardPrst(int box_id, int board_id) const;
+
 private:
     struct Record {
         UdpInfo info{};

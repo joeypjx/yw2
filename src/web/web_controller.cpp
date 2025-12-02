@@ -59,7 +59,7 @@ WebController::~WebController() {
 
 void WebController::setupRoutes() {
     // 仅负责装配分域路由
-    routes::registerNodeRoutes(service_.get(), node_module_.get(), monitor_module_.get());
+    routes::registerNodeRoutes(service_.get(), node_module_.get(), monitor_module_.get(), bmc_module_.get());
     routes::registerMetricsRoutes(service_.get(), node_module_.get(), monitor_module_.get(), bmc_module_.get());
     routes::registerBMCRoutes(service_.get(), bmc_module_.get());
     

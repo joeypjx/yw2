@@ -32,6 +32,8 @@ public:
     void setHandler(PacketHandler handler);
     void setRepository(std::unique_ptr<BMCRepository> repo);
 
+    std::optional<std::uint8_t> getBoardPrst(int box_id, int board_id) const override;
+
     // IBMCModule 接口实现
     std::unordered_map<std::string, std::vector<BMCSensorRow>> queryBMCSensor(
         const std::string& host_ip,

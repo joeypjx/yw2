@@ -68,7 +68,8 @@ void registerMetricsRoutes(hv::HttpService* service,
                         }
                     }
                     
-                    result.push_back(yw::web::mapper::toNodeMetrics(nx, res, now_seconds, &bmc_sensors));
+                    auto prst = bmc_module->getBoardPrst(nx.box_id, nx.slot_id);
+                    result.push_back(yw::web::mapper::toNodeMetrics(nx, res, now_seconds, &bmc_sensors, prst));
                     
                 } catch (const std::exception& e) {
                     // 单个节点处理失败，记录日志但继续处理其他节点

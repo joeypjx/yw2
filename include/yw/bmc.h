@@ -19,6 +19,9 @@ struct UdpInfo;
 class IBMCModule {
 public:
     virtual ~IBMCModule() = default;
+
+    virtual std::optional<std::uint8_t> getBoardPrst(int box_id, int board_id) const = 0;
+
     virtual std::unordered_map<std::string, std::vector<BMCSensorRow>> queryBMCSensor(
         const std::string& host_ip,
         const std::string& duration) const = 0;

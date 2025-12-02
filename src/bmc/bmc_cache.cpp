@@ -37,6 +37,20 @@ std::vector<UdpInfo> BMCCache::getAll() const {
     return out;
 }
 
+std::optional<std::uint8_t> BMCCache::getBoardPrst(int box_id, int board_id) const {
+    if (box_id < 0 || board_id < 0) return std::nullopt;
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = cache_.find(box_id);
+    if (it == cache_.end()) return std::nullopt;
+
+    for (int i = 0; i < 10; i++) {
+        if (it->second.info.board[i].ipmbaddr == board_id) {
+            return it->second.info.board[i].prst;
+        }
+    }
+    return 0;
+}
+
 } // namespace bmc
 } // namespace yw
 
