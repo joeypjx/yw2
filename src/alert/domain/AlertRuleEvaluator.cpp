@@ -13,6 +13,11 @@ AlertRuleEvaluator::AlertRuleEvaluator(std::shared_ptr<DatabaseQueryInterface> d
     : dbInterface_(dbInterface), nodeModule_(nodeModule) {}
 
 std::vector<Alert> AlertRuleEvaluator::evaluateRule(const AlertRule& rule) {
+
+    if (rule.isEnabled() == false) {
+        return std::vector<Alert>();
+    }
+
     // 1. 将告警规则转换为SQL查询
     std::string sql = convertRuleToSQL(rule);
     
