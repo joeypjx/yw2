@@ -133,6 +133,14 @@ int main() {
     } catch (const std::exception& e) {
         spdlog::error("Failed to initialize AlertV2 engine: {}", e.what());
         spdlog::warn("Continuing without AlertV2 engine");
+        // 如果 alert_engine 已经启动，需要先停止它以避免资源泄漏
+        if (alert_engine) {
+            try {
+                alert_engine->stop();
+            } catch (const std::exception& stop_error) {
+                spdlog::error("Error stopping AlertV2 engine: {}", stop_error.what());
+            }
+        }
         alert_engine = nullptr;
     }
     
