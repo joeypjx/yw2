@@ -41,13 +41,20 @@ std::optional<std::uint8_t> BMCCache::getBoardPrst(int box_id, int board_id) con
     if (box_id < 0 || board_id < 0) return std::nullopt;
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = cache_.find(box_id);
+    // TODO:机箱数据不存在，则认为所有板卡不在位
     if (it == cache_.end()) return std::nullopt;
 
-    for (int i = 0; i < 10; i++) {
-        if (it->second.info.board[i].ipmbaddr == board_id) {
-            return it->second.info.board[i].prst;
+    // 机箱数据超过20秒未更新，则认为所有板卡不在位
+    if (it->second.last_update_ms < std::chrono::system_clock::now().time_since_epoch().count() - 20000) {
+        return 0;
+    } else {
+        for (int i = 0; i < 10; i++) {
+            if (it->second.info.board[i].ipmbaddr == board_id) {
+                return it->second.info.board[i].prst;
+            }
         }
     }
+
     return 0;
 }
 
