@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <mutex>
+#include <functional>
 // 前向声明，避免直接依赖 server 头
 namespace hv { class HttpService; }
 
@@ -38,6 +39,12 @@ public:
     std::optional<NodeExt> getNodeByIP(const std::string& ip) const override;
     std::vector<NodeExt> getNodesByBoxId(int box_id) const override;
 
+    /**
+     * @brief 设置告警回调函数
+     * @param callback 回调函数，参数为：box_id、slot_id、缓存的板卡类型、新的板卡类型
+     */
+    void setAlertCallback(std::function<void(int, int, const std::string&, const std::string&)> callback) override;
+
     // 禁止拷贝和赋值
     NodeManager(const NodeManager&) = delete;
     NodeManager& operator=(const NodeManager&) = delete;
@@ -53,6 +60,7 @@ private:
     std::unique_ptr<NodeCache> node_cache_;     // 节点缓存
     std::unique_ptr<yw::utils::MulticastScanner> scanner_; // 通用组播扫描器
     std::int64_t online_threshold_ms_;          // 节点在线状态判断阈值（毫秒）
+    std::function<void(int, int, const std::string&, const std::string&)> alert_callback_; // 告警回调函数
 };
 
 } // namespace node

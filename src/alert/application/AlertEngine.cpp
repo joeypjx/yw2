@@ -805,6 +805,60 @@ std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& 
     }
 }
 
+std::shared_ptr<Alert> AlertEngine::createBoardTypeChangeAlert(int box_id, int slot_id,
+                                                               const std::string& cached_board_type,
+                                                               const std::string& new_board_type) {
+    try {
+        // 生成指纹（使用 box_id 和 slot_id）
+        std::string fingerprint = "节点板卡类型变化|box_id=" + std::to_string(box_id) + "|slot_id=" + std::to_string(slot_id);
+        
+        // 创建新板卡类型变化告警的标签和注释
+        std::unordered_map<std::string, std::string> alertLabels;
+        std::unordered_map<std::string, std::string> alertAnnotations;
+        
+        // 设置基本标签
+        alertLabels["alert_name"] = "节点板卡类型变化";
+        alertLabels["alert_type"] = "硬件状态";
+        alertLabels["severity"] = "警告";
+        alertLabels["box_id"] = std::to_string(box_id);
+        alertLabels["slot_id"] = std::to_string(slot_id);
+        alertLabels["cached_board_type"] = cached_board_type;
+        alertLabels["new_board_type"] = new_board_type;
+        
+        // 设置描述
+        std::string description = "机箱 " + std::to_string(box_id) + " 槽位 " + std::to_string(slot_id) + 
+                                " 的板卡类型从 " + cached_board_type + " 变为 " + new_board_type;
+        alertAnnotations["summary"] = "节点板卡类型变化";
+        alertAnnotations["description"] = description;
+        
+        // 创建新板卡类型变化告警
+        Alert newAlert(fingerprint, alertLabels, alertAnnotations);
+        newAlert.setStatus(AlertStatus::Resolved);
+        newAlert.setStartsAt(newAlert.getCreatedAt());
+        newAlert.setEndsAt(newAlert.getCreatedAt()); // 已解决状态，结束时间等于创建时间
+        
+        // 保存到数据库
+        bool success = newAlert.updateInDatabase(alertRepo_);
+        if (success) {
+            std::cout << "成功创建板卡类型变化告警: " << fingerprint << " (机箱: " << box_id << ", 槽位: " << slot_id << ")" << std::endl;
+            
+            // 推送告警
+            if (pushCallback_) {
+                pushCallback_(newAlert);
+            }
+            
+            return std::make_shared<Alert>(newAlert);
+        } else {
+            std::cerr << "创建板卡类型变化告警失败: " << fingerprint << std::endl;
+            return nullptr;
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "创建板卡类型变化告警时发生错误: " << e.what() << std::endl;
+        return nullptr;
+    }
+}
+
 // 私有辅助方法
 bool AlertEngine::shouldTransitionToFiring(const Alert& pendingAlert) {
     try {

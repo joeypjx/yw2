@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <functional>
 #include "yw/node_model.h"
 
 // 前向声明
@@ -32,6 +33,12 @@ namespace node {
 
         // 根据机箱号获取该机箱号下的所有节点（含元数据）
         virtual std::vector<NodeExt> getNodesByBoxId(int box_id) const = 0;
+
+        /**
+         * @brief 设置告警回调函数
+         * @param callback 回调函数，参数为：box_id、slot_id、缓存的板卡类型、新的板卡类型
+         */
+        virtual void setAlertCallback(std::function<void(int, int, const std::string&, const std::string&)> callback) = 0;
     };
 
     /**

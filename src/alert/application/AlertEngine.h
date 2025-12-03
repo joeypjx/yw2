@@ -61,6 +61,18 @@ public:
                                                    const std::string& stack_name,
                                                    const std::string& component_name);
     
+    /**
+     * @brief 创建节点板卡类型变化告警
+     * @param box_id 机箱ID
+     * @param slot_id 槽位ID
+     * @param cached_board_type 缓存的板卡类型
+     * @param new_board_type 新的板卡类型
+     * @return 创建的告警对象，失败返回nullptr
+     */
+    std::shared_ptr<Alert> createBoardTypeChangeAlert(int box_id, int slot_id, 
+                                                      const std::string& cached_board_type, 
+                                                      const std::string& new_board_type);
+    
     size_t getAlertCount();
     void setPushCallback(std::function<void(const Alert&)> callback);
 

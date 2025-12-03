@@ -45,7 +45,10 @@ std::optional<std::uint8_t> BMCCache::getBoardPrst(int box_id, int board_id) con
     if (it == cache_.end()) return std::nullopt;
 
     // 机箱数据超过20秒未更新，则认为所有板卡不在位
-    if (it->second.last_update_ms < std::chrono::system_clock::now().time_since_epoch().count() - 20000) {
+    const auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now()
+    ).time_since_epoch().count();
+    if (it->second.last_update_ms < static_cast<std::int64_t>(now_ms) - 20000) {
         return 0;
     } else {
         for (int i = 0; i < 10; i++) {

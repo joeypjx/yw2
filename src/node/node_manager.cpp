@@ -83,6 +83,10 @@ std::vector<NodeExt> NodeManager::getNodesByBoxId(int box_id) const {
     return filtered;
 }
 
+void NodeManager::setAlertCallback(std::function<void(int, int, const std::string&, const std::string&)> callback) {
+    alert_callback_ = std::move(callback);
+}
+
 namespace {
     // 辅助函数：验证 IP 地址格式
     bool isValidIpAddress(const std::string& ip) {
@@ -247,6 +251,18 @@ void NodeManager::setupRoutes() {
                 return ctx->send(resp.dump(2));
             }
             
+            auto cached_node = node_cache_->getNode(node.host_ip);
+            if (cached_node) {
+                // 比较板卡类型
+                if (cached_node->board_type != node.board_type) {
+                    // 告警
+                    spdlog::warn("Board type mismatch for node {}: cached: {}, new: {}", node.host_ip, cached_node->board_type, node.board_type);
+                    // 调用告警回调函数
+                    if (alert_callback_) {
+                        alert_callback_(node.box_id, node.slot_id, cached_node->board_type, node.board_type);
+                    }
+                }
+            }
             // 保存到缓存
             node_cache_->addOrUpdateNode(node);
             

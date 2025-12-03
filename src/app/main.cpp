@@ -120,6 +120,15 @@ int main() {
         // 启动告警引擎
         alert_engine->start(5); // 5秒评估间隔
         
+        // 设置节点模块的告警回调
+        node_module->setAlertCallback([alert_engine](int box_id, int slot_id, 
+                                                      const std::string& cached_board_type, 
+                                                      const std::string& new_board_type) {
+            if (alert_engine) {
+                alert_engine->createBoardTypeChangeAlert(box_id, slot_id, cached_board_type, new_board_type);
+            }
+        });
+        
         spdlog::info("AlertV2 engine initialized and started successfully");
     } catch (const std::exception& e) {
         spdlog::error("Failed to initialize AlertV2 engine: {}", e.what());
