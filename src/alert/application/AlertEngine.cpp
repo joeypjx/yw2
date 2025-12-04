@@ -833,7 +833,7 @@ std::shared_ptr<Alert> AlertEngine::createBoardTypeChangeAlert(int box_id, int s
         
         // 创建新板卡类型变化告警
         Alert newAlert(fingerprint, alertLabels, alertAnnotations);
-        newAlert.setStatus(AlertStatus::Resolved);
+        newAlert.setStatus(AlertStatus::Firing);
         newAlert.setStartsAt(newAlert.getCreatedAt());
         newAlert.setEndsAt(newAlert.getCreatedAt()); // 已解决状态，结束时间等于创建时间
         
