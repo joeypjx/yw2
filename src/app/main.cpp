@@ -10,6 +10,7 @@
 #include "yw/monitor.h"
 #include "yw/web.h"
 #include "yw/bmc.h"
+#include "yw/controller.h"
 #include "yw/app_context.h"
 #include "yw/JsonConfig.h"
 
@@ -99,6 +100,7 @@ int main() {
     std::shared_ptr<yw::node::INodeModule> node_module = yw::node::NodeFactory::getNodeModule(app_context->getHttpService());
     std::shared_ptr<yw::monitor::IMonitorModule> monitor_module = yw::monitor::MonitorFactory::getMonitorModule(app_context->getHttpService(), node_module);
     std::shared_ptr<yw::bmc::IBMCModule> bmc_module = yw::bmc::BMCFactory::getBMCModule();
+    std::shared_ptr<yw::controller::IControllerModule> controller_module = yw::controller::ControllerFactory::getControllerModule();
     
     // 创建AlertV2引擎（可选）
     std::shared_ptr<yw::alert::AlertEngine> alert_engine = nullptr;
@@ -148,8 +150,9 @@ int main() {
     app_context->setNodeModule(node_module);
     app_context->setMonitorModule(monitor_module);
     app_context->setBMCModule(bmc_module);
+    app_context->setControllerModule(controller_module);
 
-    std::shared_ptr<yw::web::IWebModule> web_module = yw::web::WebFactory::getWebModule(app_context->getHttpServer(), app_context->getHttpService(), node_module, monitor_module, bmc_module, alert_engine);
+    std::shared_ptr<yw::web::IWebModule> web_module = yw::web::WebFactory::getWebModule(app_context->getHttpServer(), app_context->getHttpService(), node_module, monitor_module, bmc_module, controller_module, alert_engine);
 
     while (g_running) {
         std::this_thread::sleep_for(std::chrono::seconds(1));

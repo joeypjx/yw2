@@ -4,6 +4,7 @@
 #include "yw/monitor.h"
 #include "yw/bmc.h"
 #include "yw/bmc_model.h"
+#include "yw/controller.h"
 #include "dto/node_dto.h"
 #include "mapper/NodeMapper.h"
 #include "routes/NodeRoutes.h"
@@ -26,12 +27,14 @@ WebController::WebController(std::shared_ptr<hv::HttpServer> server,
                              std::shared_ptr<node::INodeModule> node_module,
                              std::shared_ptr<monitor::IMonitorModule> monitor_module,
                              std::shared_ptr<bmc::IBMCModule> bmc_module,
+                             std::shared_ptr<controller::IControllerModule> controller_module,
                              std::shared_ptr<alert::AlertEngine> alert_engine)
     : server_(std::move(server)),
       service_(std::move(service)),
       node_module_(std::move(node_module)),
       monitor_module_(std::move(monitor_module)),
       bmc_module_(std::move(bmc_module)),
+      controller_module_(std::move(controller_module)),
       alert_engine_(std::move(alert_engine)) {
 
     pusher_ = std::make_unique<AlertPusher>(server_.get());
@@ -61,7 +64,7 @@ void WebController::setupRoutes() {
     // 仅负责装配分域路由
     routes::registerNodeRoutes(service_.get(), node_module_.get(), monitor_module_.get(), bmc_module_.get());
     routes::registerMetricsRoutes(service_.get(), node_module_.get(), monitor_module_.get(), bmc_module_.get());
-    routes::registerBMCRoutes(service_.get(), bmc_module_.get());
+    routes::registerBMCRoutes(service_.get(), bmc_module_.get(), controller_module_.get());
     
     // 注册AlertV2路由（如果AlertV2引擎可用）
     if (alert_engine_) {

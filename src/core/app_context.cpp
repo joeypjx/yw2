@@ -4,6 +4,7 @@
 #include "yw/node.h"
 #include "yw/monitor.h"
 #include "yw/bmc.h"
+#include "yw/controller.h"
 
 namespace yw {
 namespace core {
@@ -58,7 +59,8 @@ void AppContext::cleanup() {
     node_module_.reset();
     monitor_module_.reset();
     bmc_module_.reset();
-
+    controller_module_.reset();
+    
     if (http_server_) {
         // 停止libhv服务器
         http_server_->stop();
@@ -112,6 +114,10 @@ void AppContext::setBMCModule(std::shared_ptr<yw::bmc::IBMCModule> m) {
     std::lock_guard<std::mutex> lock(mutex_);
     bmc_module_ = std::move(m);
 }
+void AppContext::setControllerModule(std::shared_ptr<yw::controller::IControllerModule> m) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    controller_module_ = std::move(m);
+}
 
 std::shared_ptr<yw::node::INodeModule> AppContext::getNodeModule() const {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -124,6 +130,10 @@ std::shared_ptr<yw::monitor::IMonitorModule> AppContext::getMonitorModule() cons
 std::shared_ptr<yw::bmc::IBMCModule> AppContext::getBMCModule() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return bmc_module_;
+}
+std::shared_ptr<yw::controller::IControllerModule> AppContext::getControllerModule() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return controller_module_;
 }
 
 } // namespace core

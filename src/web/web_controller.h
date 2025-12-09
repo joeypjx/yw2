@@ -7,6 +7,7 @@
 #include "yw/node.h"
 #include "yw/monitor.h"
 #include "yw/bmc.h"
+#include "yw/controller.h"
 #include "dto/node_dto.h"
 #include "AlertPusher.h"
 
@@ -27,6 +28,7 @@ public:
                   std::shared_ptr<node::INodeModule> node_module,
                   std::shared_ptr<monitor::IMonitorModule> monitor_module,
                   std::shared_ptr<bmc::IBMCModule> bmc_module,
+                  std::shared_ptr<controller::IControllerModule> controller_module,
                   std::shared_ptr<alert::AlertEngine> alert_engine = nullptr);
 
     ~WebController() override;
@@ -41,6 +43,7 @@ private:
     std::shared_ptr<node::INodeModule>      node_module_;
     std::shared_ptr<monitor::IMonitorModule> monitor_module_;
     std::shared_ptr<bmc::IBMCModule>        bmc_module_;
+    std::shared_ptr<controller::IControllerModule> controller_module_;
     std::shared_ptr<alert::AlertEngine>  alert_engine_;
 
     std::unique_ptr<AlertPusher>            pusher_;

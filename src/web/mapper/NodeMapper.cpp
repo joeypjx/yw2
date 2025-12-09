@@ -37,9 +37,11 @@ NodeView toNodeView(const node::NodeExt &ext, const monitor::Resource *res,
     v.component.clear();
   }
 
-  if (prst) {
-    v.status = prst.value() == 0 ? "offline_in_position" : v.status;
+
+  if (v.status == "offline" && prst.has_value() && prst.value() != 0) {
+    v.status = "offline_in_position";
   }
+
   return v;
 }
 
@@ -57,8 +59,9 @@ NodeMetrics toNodeMetrics(
   m.status = nx.status;
   m.updated_at = nx.updated_at;
 
-  if (prst) {
-    m.status = prst.value() == 0 ? "offline_in_position" : m.status;
+
+  if (m.status == "offline" && prst.has_value() && prst.value() != 0) {
+    m.status = "offline_in_position";
   }
 
   if (res) {

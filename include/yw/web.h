@@ -9,6 +9,7 @@ namespace node { class INodeModule; }
 namespace monitor { class IMonitorModule; }
 namespace bmc { class IBMCModule; }
 namespace alert { class AlertEngine; }
+namespace controller { class IControllerModule; }
 namespace web {
 
 class IWebModule {
@@ -24,6 +25,7 @@ public:
                                                     std::shared_ptr<node::INodeModule> node_module,
                                                     std::shared_ptr<monitor::IMonitorModule> monitor_module,
                                                     std::shared_ptr<bmc::IBMCModule> bmc_module,
+                                                    std::shared_ptr<controller::IControllerModule> controller_module,
                                                     std::shared_ptr<alert::AlertEngine> alert_engine = nullptr);
 };
 

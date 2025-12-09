@@ -8,7 +8,8 @@ namespace web {
 namespace routes {
 
 void registerBMCRoutes(hv::HttpService* service,
-                       bmc::IBMCModule* bmc_module) {
+                       bmc::IBMCModule* bmc_module,
+                       controller::IControllerModule* controller_module) {
     if (!service) return;
     service->GET("/box/bmc", [bmc_module](const HttpContextPtr& ctx) {
         if (!bmc_module) {
@@ -55,6 +56,141 @@ void registerBMCRoutes(hv::HttpService* service,
             nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "Invalid box_id parameter"},{"data", nlohmann::json::object()}};
             ctx->setContentType("application/json");
             ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
+            return ctx->send(resp.dump(2));
+        }
+    });
+
+    // reset box board
+    service->POST("/box/reset_board", [controller_module](const HttpContextPtr& ctx) {
+        // 解析 JSON 请求体: {"box_id": <int>, "slot_id": array of int}
+        nlohmann::json req;
+        try {
+            req = nlohmann::json::parse(ctx->body());
+        } catch (...) {
+            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "invalid json body"},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
+            return ctx->send(resp.dump(2));
+        }
+        if (!req.contains("box_id") || !req["box_id"].is_number_integer() || !req.contains("slot_id") || !req["slot_id"].is_array()) {
+            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "box_id and slot_id are required integers"},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
+            return ctx->send(resp.dump(2));
+        }
+        int box_id = req["box_id"].get<int>();
+        std::vector<int> slot_id = req["slot_id"].get<std::vector<int>>();
+        for (int slot : slot_id) {
+            if (slot < 1 || slot > 12) {
+                nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "slot_id is out of range"},{"data", nlohmann::json::object()}};
+                ctx->setContentType("application/json");
+                ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
+                return ctx->send(resp.dump(2));
+            }
+        }
+        // 调用 controller 模块的 resetBoard 方法
+        // box ip is 192.168. box_id * 2 .180
+        std::string box_ip = std::string("192.168.") + std::to_string(box_id * 2) + ".180";
+        auto response = controller_module->resetBoard(box_ip, slot_id);
+        if (response.result == controller::IControllerModule::OperationResult::SUCCESS) {
+            nlohmann::json resp = {{"api_version", 1},{"status", "success"},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_OK);
+            return ctx->send(resp.dump(2));
+        } else {
+            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", response.message},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_INTERNAL_SERVER_ERROR);
+            return ctx->send(resp.dump(2));
+        }
+    });
+
+    // power on box board
+    service->POST("/box/poweron_board", [controller_module](const HttpContextPtr& ctx) {
+        // 解析 JSON 请求体: {"box_id": <int>, "slot_id": array of int}
+        nlohmann::json req;
+        try {
+            req = nlohmann::json::parse(ctx->body());
+        } catch (...) {
+            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "invalid json body"},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
+            return ctx->send(resp.dump(2));
+        }
+        if (!req.contains("box_id") || !req["box_id"].is_number_integer() || !req.contains("slot_id") || !req["slot_id"].is_array()) {
+            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "box_id and slot_id are required integers"},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
+            return ctx->send(resp.dump(2));
+        }
+        int box_id = req["box_id"].get<int>();
+        std::vector<int> slot_id = req["slot_id"].get<std::vector<int>>();
+        for (int slot : slot_id) {
+            if (slot < 1 || slot > 12) {
+                nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "slot_id is out of range"},{"data", nlohmann::json::object()}};
+                ctx->setContentType("application/json");
+                ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
+                return ctx->send(resp.dump(2));
+            }
+        }
+        // 调用 controller 模块的 powerOnChassisBoards 方法
+        std::string box_ip = std::string("192.168.") + std::to_string(box_id * 2) + ".180";
+        auto response = controller_module->powerOnChassisBoards(box_ip, slot_id);
+        if (response.result == controller::IControllerModule::OperationResult::SUCCESS || 
+            response.result == controller::IControllerModule::OperationResult::PARTIAL_SUCCESS) {
+            nlohmann::json resp = {{"api_version", 1},{"status", "success"},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_OK);
+            return ctx->send(resp.dump(2));
+        } else {
+            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", response.message},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_INTERNAL_SERVER_ERROR);
+            return ctx->send(resp.dump(2));
+        }
+    });
+
+    // power off box board
+    service->POST("/box/poweroff_board", [controller_module](const HttpContextPtr& ctx) {
+        // 解析 JSON 请求体: {"box_id": <int>, "slot_id": array of int}
+        nlohmann::json req;
+        try {
+            req = nlohmann::json::parse(ctx->body());
+        } catch (...) {
+            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "invalid json body"},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
+            return ctx->send(resp.dump(2));
+        }
+        if (!req.contains("box_id") || !req["box_id"].is_number_integer() || !req.contains("slot_id") || !req["slot_id"].is_array()) {
+            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "box_id and slot_id are required integers"},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
+            return ctx->send(resp.dump(2));
+        }
+        int box_id = req["box_id"].get<int>();
+        std::vector<int> slot_id = req["slot_id"].get<std::vector<int>>();
+        for (int slot : slot_id) {
+            if (slot < 1 || slot > 12) {
+                nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "slot_id is out of range"},{"data", nlohmann::json::object()}};
+                ctx->setContentType("application/json");
+                ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
+                return ctx->send(resp.dump(2));
+            }
+        }
+        // 调用 controller 模块的 powerOffChassisBoards 方法
+        std::string box_ip = std::string("192.168.") + std::to_string(box_id * 2) + ".180";
+        auto response = controller_module->powerOffChassisBoards(box_ip, slot_id);
+        if (response.result == controller::IControllerModule::OperationResult::SUCCESS || 
+            response.result == controller::IControllerModule::OperationResult::PARTIAL_SUCCESS) {
+            nlohmann::json resp = {{"api_version", 1},{"status", "success"},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_OK);
+            return ctx->send(resp.dump(2));
+        } else {
+            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", response.message},{"data", nlohmann::json::object()}};
+            ctx->setContentType("application/json");
+            ctx->setStatus(HTTP_STATUS_INTERNAL_SERVER_ERROR);
             return ctx->send(resp.dump(2));
         }
     });
