@@ -1,17 +1,20 @@
 # alert 静态库 - DDD分层架构
 add_library(yw_alert STATIC
+    # 模块接口层 - 公共接口实现
+    alert_module.cpp
+    
     # 领域层 (Domain Layer) - 核心业务逻辑
     domain/Alert.cpp
-    domain/AlertRule.cpp
-    domain/AlertRuleEvaluator.cpp
+    domain/alert_rule.cpp
+    domain/alert_rule_evaluator.cpp
     
     # 应用层 (Application Layer) - 应用服务和用例
-    application/AlertEngine.cpp
+    application/alert_engine.cpp
     
     # 基础设施层 (Infrastructure Layer) - 数据访问和外部服务
-    infrastructure/AlertRepository.cpp
-    infrastructure/AlertRuleRepository.cpp
-    infrastructure/DatabaseQueryInterface.cpp
+    infrastructure/alert_repository.cpp
+    infrastructure/alert_rule_repository.cpp
+    infrastructure/database_query_interface.cpp
 )
 
 target_include_directories(yw_alert PUBLIC
@@ -32,4 +35,5 @@ target_include_directories(yw_alert PRIVATE
 target_link_libraries(yw_alert PRIVATE
     nlohmann_json::nlohmann_json
     pqxx
+    spdlog::spdlog_header_only
 )

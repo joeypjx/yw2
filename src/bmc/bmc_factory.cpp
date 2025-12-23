@@ -1,6 +1,6 @@
-#include "../../include/yw/bmc.h"
+#include "bmc/bmc.h"
 #include "bmc_listener.h"
-#include "yw/JsonConfig.h"
+#include "utils/json_config.h"
 #include <mutex>
 
 namespace yw {

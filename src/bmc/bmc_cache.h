@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "yw/bmc_model.h"
+#include "bmc/bmc_model.h"
 
 namespace yw {
 namespace bmc {

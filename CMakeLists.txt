@@ -92,6 +92,11 @@ set(FREEIPMI_LIBRARIES
 )
 set(FREEIPMI_FOUND TRUE)
 
+# 设置输出目录（必须在 add_subdirectory 之前设置，才能影响第三方库）
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
 # 设置libhv构建选项
 set(BUILD_SHARED OFF CACHE BOOL "Build libhv shared library" FORCE)
 set(BUILD_STATIC ON CACHE BOOL "Build libhv static library" FORCE)
@@ -110,11 +115,6 @@ add_subdirectory(third_party/libpqxx)
 
 # 然后设置依赖关系
 # add_dependencies(pqxx libpq_build)
-
-# 设置输出目录
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # 添加子目录
 add_subdirectory(src)

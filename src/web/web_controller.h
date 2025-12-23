@@ -3,18 +3,17 @@
 #include <memory>
 #include <hv/HttpService.h>
 #include <hv/HttpServer.h>
-#include "yw/web.h"
-#include "yw/node.h"
-#include "yw/monitor.h"
-#include "yw/bmc.h"
-#include "yw/controller.h"
-#include "dto/node_dto.h"
-#include "AlertPusher.h"
+#include "web/web.h"
+#include "node/node.h"
+#include "monitor/monitor.h"
+#include "bmc/bmc.h"
+#include "controller/controller.h"
+#include "services/alert_pusher.h"
 
 // Forward declaration for AlertV2
 namespace yw {
 namespace alert {
-    class AlertEngine;
+    class IAlertModule;
 }
 }
 
@@ -29,7 +28,7 @@ public:
                   std::shared_ptr<monitor::IMonitorModule> monitor_module,
                   std::shared_ptr<bmc::IBMCModule> bmc_module,
                   std::shared_ptr<controller::IControllerModule> controller_module,
-                  std::shared_ptr<alert::AlertEngine> alert_engine = nullptr);
+                  std::shared_ptr<alert::IAlertModule> alert_module = nullptr);
 
     ~WebController() override;
 
@@ -44,7 +43,7 @@ private:
     std::shared_ptr<monitor::IMonitorModule> monitor_module_;
     std::shared_ptr<bmc::IBMCModule>        bmc_module_;
     std::shared_ptr<controller::IControllerModule> controller_module_;
-    std::shared_ptr<alert::AlertEngine>  alert_engine_;
+    std::shared_ptr<alert::IAlertModule> alert_module_;
 
     std::unique_ptr<AlertPusher>            pusher_;
 };

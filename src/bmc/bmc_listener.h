@@ -8,9 +8,9 @@
 #include <memory>
 #include <optional>
 
-#include "yw/bmc_model.h"
+#include "bmc/bmc_model.h"
 #include "bmc_repository.h"
-#include "yw/bmc.h"
+#include "bmc/bmc.h"
 #include "bmc_cache.h"
 
 namespace yw {

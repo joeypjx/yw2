@@ -4,7 +4,10 @@ add_library(yw_core STATIC
 )
 
 # 链接第三方库 - 使用PUBLIC实现传递链接
-target_link_libraries(yw_core PUBLIC spdlog::spdlog hv_static nlohmann_json::nlohmann_json)
+target_link_libraries(yw_core PUBLIC spdlog::spdlog_header_only hv_static nlohmann_json::nlohmann_json)
+
+# 链接业务模块（PRIVATE - 仅内部使用）
+target_link_libraries(yw_core PRIVATE yw_alert)
 
 # 公开头文件目录 - 其他链接此库的目标会自动包含
 target_include_directories(yw_core PUBLIC

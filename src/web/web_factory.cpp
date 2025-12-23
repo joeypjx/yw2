@@ -1,18 +1,12 @@
-#include "../../include/yw/web.h"
+#include "web/web.h"
 #include "web_controller.h"
 #include <mutex>
 #include <hv/HttpService.h>
-#include "../../include/yw/node.h"
-#include "../../include/yw/monitor.h"
-#include "../../include/yw/bmc.h"
-#include "../../include/yw/controller.h"
-
-// Forward declaration for AlertV2
-namespace yw {
-namespace alert {
-    class AlertEngine;
-}
-}
+#include "node/node.h"
+#include "monitor/monitor.h"
+#include "bmc/bmc.h"
+#include "controller/controller.h"
+#include "alert/alert.h"
 
 namespace yw {
 namespace web {
@@ -23,8 +17,16 @@ std::shared_ptr<IWebModule> WebFactory::getWebModule(std::shared_ptr<hv::HttpSer
                                                      std::shared_ptr<monitor::IMonitorModule> monitor_module,
                                                      std::shared_ptr<bmc::IBMCModule> bmc_module,
                                                      std::shared_ptr<controller::IControllerModule> controller_module,
-                                                     std::shared_ptr<alert::AlertEngine> alert_engine) {
-    return std::make_shared<WebController>(std::move(server), std::move(service), std::move(node_module), std::move(monitor_module), std::move(bmc_module), std::move(controller_module), std::move(alert_engine));
+                                                     std::shared_ptr<alert::IAlertModule> alert_module) {
+    return std::make_shared<WebController>(
+        std::move(server), 
+        std::move(service), 
+        std::move(node_module), 
+        std::move(monitor_module), 
+        std::move(bmc_module), 
+        std::move(controller_module), 
+        std::move(alert_module)
+    );
 }
 
 } // namespace web

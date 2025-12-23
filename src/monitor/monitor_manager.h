@@ -1,14 +1,14 @@
 #pragma once
 
 #include <memory>
-#include "yw/monitor.h"
+#include "monitor/monitor.h"
 #include "resource_repository.h"
 #include "monitor_cache.h"
 
 // 前向声明，避免在头文件中引入平台相关头
 namespace hv {
     class HttpServer;
-    class HttpService;
+    struct HttpService;
 }
 
 namespace yw { namespace utils { class MulticastScanner; } }

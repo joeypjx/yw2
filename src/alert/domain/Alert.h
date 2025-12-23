@@ -4,26 +4,13 @@
 #include <unordered_map>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include "alert/alert_model.h"  // 使用公共接口的 AlertStatus 定义
 
 namespace yw {
 namespace alert {
 
 // 前向声明
 class AlertRepository;
-
-// 告警状态枚举
-enum class AlertStatus {
-    Pending,    // 匹配但还未满足持续时间条件
-    Firing,     // 触发告警
-    Resolved    // 告警已解决
-};
-
-// JSON序列化支持
-NLOHMANN_JSON_SERIALIZE_ENUM(AlertStatus, {
-    {AlertStatus::Pending, "pending"},
-    {AlertStatus::Firing, "firing"},
-    {AlertStatus::Resolved, "resolved"}
-})
 
 // 告警类
 class Alert {

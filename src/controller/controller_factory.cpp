@@ -1,4 +1,4 @@
-#include "../../include/yw/controller.h"
+#include "controller/controller.h"
 #include "resource_controller.h"
 
 namespace yw {

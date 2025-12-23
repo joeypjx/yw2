@@ -1,17 +1,16 @@
 #include "web_controller.h"
 #include <hv/HttpService.h>
-#include "yw/node.h"
-#include "yw/monitor.h"
-#include "yw/bmc.h"
-#include "yw/bmc_model.h"
-#include "yw/controller.h"
-#include "dto/node_dto.h"
-#include "mapper/NodeMapper.h"
-#include "routes/NodeRoutes.h"
-#include "routes/MetricsRoutes.h"
-#include "routes/BMCRoutes.h"
-#include "routes/AlertRoutes.h"
-#include "../../alert/application/AlertEngine.h"
+#include "node/node.h"
+#include "monitor/monitor.h"
+#include "bmc/bmc.h"
+#include "bmc/bmc_model.h"
+#include "controller/controller.h"
+#include "mapper/node_mapper.h"
+#include "routes/node_routes.h"
+#include "routes/metrics_routes.h"
+#include "routes/bmc_routes.h"
+#include "routes/alert_routes.h"
+#include "alert/alert.h"
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include <iomanip>
@@ -28,14 +27,14 @@ WebController::WebController(std::shared_ptr<hv::HttpServer> server,
                              std::shared_ptr<monitor::IMonitorModule> monitor_module,
                              std::shared_ptr<bmc::IBMCModule> bmc_module,
                              std::shared_ptr<controller::IControllerModule> controller_module,
-                             std::shared_ptr<alert::AlertEngine> alert_engine)
+                             std::shared_ptr<alert::IAlertModule> alert_module)
     : server_(std::move(server)),
       service_(std::move(service)),
       node_module_(std::move(node_module)),
       monitor_module_(std::move(monitor_module)),
       bmc_module_(std::move(bmc_module)),
       controller_module_(std::move(controller_module)),
-      alert_engine_(std::move(alert_engine)) {
+      alert_module_(std::move(alert_module)) {
 
     pusher_ = std::make_unique<AlertPusher>(server_.get());
 
@@ -44,11 +43,11 @@ WebController::WebController(std::shared_ptr<hv::HttpServer> server,
         setupRoutes();
     }
 
-    // 将 Web 层推送能力注入到 alertv2 引擎
-    if (alert_engine_) {
-        alert_engine_->setPushCallback([this](const alert::Alert& alert){
+    // 将 Web 层推送能力注入到 alert 模块
+    if (alert_module_) {
+        alert_module_->setPushCallback([this](const nlohmann::json& alertJson){
             if (pusher_) {
-                pusher_->pushV2(alert);
+                pusher_->pushJson(alertJson);
             }
         });
     }
@@ -66,12 +65,12 @@ void WebController::setupRoutes() {
     routes::registerMetricsRoutes(service_.get(), node_module_.get(), monitor_module_.get(), bmc_module_.get());
     routes::registerBMCRoutes(service_.get(), bmc_module_.get(), controller_module_.get());
     
-    // 注册AlertV2路由（如果AlertV2引擎可用）
-    if (alert_engine_) {
-        routes::registerAlertRoutes(service_.get(), alert_engine_);
-        spdlog::info("AlertV2 routes registered successfully");
+    // 注册告警路由（如果告警模块可用）
+    if (alert_module_) {
+        routes::registerAlertRoutes(service_.get(), alert_module_);
+        spdlog::info("Alert routes registered successfully");
     } else {
-        spdlog::warn("AlertV2 engine not available, skipping AlertV2 routes");
+        spdlog::warn("Alert module not available, skipping alert routes");
     }
 }
 

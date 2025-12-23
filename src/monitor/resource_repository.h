@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include "yw/monitor_model.h"
+#include "monitor/monitor_model.h"
 
 namespace yw {
 namespace monitor {

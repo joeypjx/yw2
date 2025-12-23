@@ -2,7 +2,7 @@
 
 #include <string>
 #include <vector>
-#include "yw/bmc_model.h"
+#include "bmc/bmc_model.h"
 #include <unordered_map>
 
 namespace yw {

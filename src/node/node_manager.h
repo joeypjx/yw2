@@ -1,6 +1,6 @@
 #pragma once
 
-#include "yw/node.h"
+#include "node/node.h"
 
 #include "node_cache.h"
 #include <memory>
@@ -8,7 +8,7 @@
 #include <mutex>
 #include <functional>
 // 前向声明，避免直接依赖 server 头
-namespace hv { class HttpService; }
+namespace hv { struct HttpService; }
 
 namespace yw { namespace utils { class MulticastScanner; } }
 

@@ -1,5 +1,5 @@
 #include "Alert.h"
-#include "../infrastructure/AlertRepository.h"
+#include "../infrastructure/alert_repository.h"
 #include <sstream>
 #include <stdexcept>
 #include <chrono>

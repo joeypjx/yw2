@@ -1,7 +1,7 @@
 #ifndef RESOURCE_CONTROLLER_H
 #define RESOURCE_CONTROLLER_H
 
-#include "../../include/yw/controller.h"
+#include "controller/controller.h"
 #include <string>
 #include <memory>
 #include <vector>

@@ -1,10 +1,12 @@
-#include "yw/app_context.h"
+#include "core/app_context.h"
 #include <spdlog/spdlog.h>
-#include "yw/JsonConfig.h"
-#include "yw/node.h"
-#include "yw/monitor.h"
-#include "yw/bmc.h"
-#include "yw/controller.h"
+#include "utils/json_config.h"
+#include "node/node.h"
+#include "monitor/monitor.h"
+#include "bmc/bmc.h"
+#include "controller/controller.h"
+#include "alert/alert.h"
+#include "web/web.h"
 
 namespace yw {
 namespace core {
@@ -55,7 +57,20 @@ std::shared_ptr<hv::HttpServer> AppContext::getHttpServer() const {
 void AppContext::cleanup() {
     std::lock_guard<std::mutex> lock(mutex_);
     
-    // 先停业务模块（若它们有 stop 可用，可在此扩展调用）
+    // 先停止有生命周期的模块
+    if (alert_module_) {
+        spdlog::info("Stopping AlertV2 module...");
+        try {
+            alert_module_->stop();
+            spdlog::info("AlertV2 module stopped");
+        } catch (const std::exception& e) {
+            spdlog::error("Error stopping AlertV2 module: {}", e.what());
+        }
+    }
+    
+    // 清理所有模块（按依赖顺序）
+    web_module_.reset();
+    alert_module_.reset();
     node_module_.reset();
     monitor_module_.reset();
     bmc_module_.reset();
@@ -134,6 +149,26 @@ std::shared_ptr<yw::bmc::IBMCModule> AppContext::getBMCModule() const {
 std::shared_ptr<yw::controller::IControllerModule> AppContext::getControllerModule() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return controller_module_;
+}
+
+void AppContext::setAlertModule(std::shared_ptr<yw::alert::IAlertModule> m) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    alert_module_ = std::move(m);
+}
+
+void AppContext::setWebModule(std::shared_ptr<yw::web::IWebModule> m) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    web_module_ = std::move(m);
+}
+
+std::shared_ptr<yw::alert::IAlertModule> AppContext::getAlertModule() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return alert_module_;
+}
+
+std::shared_ptr<yw::web::IWebModule> AppContext::getWebModule() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return web_module_;
 }
 
 } // namespace core
