@@ -1,0 +1,58 @@
+-- ============================================================================
+-- Alert 模块数据库表创建脚本
+-- 
+-- 根据 docs/alert/database_schema.md 文档生成
+-- 仅包含表结构创建，不包含索引、触发器、压缩策略等配置
+-- 
+-- 使用方法：
+-- psql "postgres://user:password@host:5432/dbname" -f docs/alert/create_tables.sql
+-- ============================================================================
+
+-- 1. alert_rules - 告警规则表
+-- 用于存储告警规则的配置信息，定义何时触发告警以及告警的详细信息
+CREATE TABLE IF NOT EXISTS alert_rules (
+    -- 主键和标识
+    id                  VARCHAR(100)    PRIMARY KEY,                    -- 系统生成的唯一标识符
+    alert_name          VARCHAR(200)    NOT NULL UNIQUE,                -- 告警规则标识，用户自定义
+    
+    -- 告警规则配置
+    expression          JSONB           NOT NULL,                       -- 告警表达式（JSON格式）
+    for_duration        VARCHAR(20)     NOT NULL,                       -- 满足持续时间才产生告警，支持s/m/h单位
+    severity            VARCHAR(50)     NOT NULL,                       -- 告警等级，用户自定义
+    summary             TEXT            NOT NULL,                       -- 告警摘要，一小段话，用户自定义
+    description         TEXT            NOT NULL DEFAULT '',            -- 告警详情，一大段话，用户自定义，支持占位符{{}}
+    alert_type          VARCHAR(100)    NOT NULL,                       -- 告警类型，用户自定义
+    enabled             BOOLEAN         NOT NULL DEFAULT TRUE,          -- 是否启用，默认为true
+    
+    -- 时间戳
+    created_at          TIMESTAMP       NOT NULL DEFAULT NOW(),         -- 创建时间，系统自动生成
+    updated_at          TIMESTAMP       NOT NULL DEFAULT NOW()          -- 更新时间，系统自动生成
+);
+
+-- 2. alert - 告警事件表
+-- 用于存储系统中实际产生的告警事件，记录告警的完整生命周期
+CREATE TABLE IF NOT EXISTS alert (
+    -- 主键和标识
+    id                  VARCHAR(200)    PRIMARY KEY,                    -- 告警ID，系统生成的唯一标识符
+    fingerprint         VARCHAR(500)    NOT NULL,                       -- 告警指纹，用于去重和识别
+    
+    -- 告警内容
+    labels              JSONB           NOT NULL,                       -- 告警标签，JSON格式
+    annotations         JSONB           NOT NULL,                       -- 告警注释，JSON格式
+    
+    -- 时间戳
+    created_at          TIMESTAMP       NOT NULL DEFAULT NOW(),         -- 第一次匹配时间
+    starts_at           TIMESTAMP,                                      -- 第一次正式触发告警时间
+    updated_at          TIMESTAMP       NOT NULL DEFAULT NOW(),         -- 触发中持续匹配的更新时间
+    ends_at             TIMESTAMP,                                      -- 告警已解决的时间
+    
+    -- 告警状态
+    status              VARCHAR(20)     NOT NULL DEFAULT 'pending',     -- 告警状态：pending/firing/resolved
+    
+    -- 关联信息
+    alert_rule_id       VARCHAR(100),                                  -- 关联的告警规则ID
+    
+    -- 约束
+    CONSTRAINT chk_status CHECK (status IN ('pending', 'firing', 'resolved'))
+);
+
