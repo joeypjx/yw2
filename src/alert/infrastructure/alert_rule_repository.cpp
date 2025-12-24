@@ -116,7 +116,7 @@ bool DatabaseAlertRuleRepository::deleteRule(const std::string& id) {
 
 bool DatabaseAlertRuleRepository::ruleExists(const std::string& id) {
     try {
-        std::string sql = "SELECT COUNT(*) as count FROM alert_rules WHERE id = $1";
+        std::string sql = "SELECT COUNT(*) as count FROM alert_rule WHERE id = $1";
         std::vector<std::string> params = {id};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
@@ -200,7 +200,7 @@ AlertRule DatabaseAlertRuleRepository::parseRuleFromQueryResult(const QueryRow& 
 
 std::string DatabaseAlertRuleRepository::buildInsertSql() {
     return R"(
-        INSERT INTO alert_rules (
+        INSERT INTO alert_rule (
             id, alert_name, expression, for_duration, severity, 
             summary, description, alert_type, enabled, created_at, updated_at
         ) VALUES (
@@ -211,7 +211,7 @@ std::string DatabaseAlertRuleRepository::buildInsertSql() {
 
 std::string DatabaseAlertRuleRepository::buildUpdateSql() {
     return R"(
-        UPDATE alert_rules SET
+        UPDATE alert_rule SET
             alert_name = $1,
             expression = $2::jsonb,
             for_duration = $3,
@@ -230,12 +230,12 @@ std::string DatabaseAlertRuleRepository::buildSelectSql() {
         SELECT 
             id, alert_name, expression, for_duration, severity,
             summary, description, alert_type, enabled, created_at, updated_at
-        FROM alert_rules
+        FROM alert_rule
     )";
 }
 
 std::string DatabaseAlertRuleRepository::buildDeleteSql() {
-    return "DELETE FROM alert_rules WHERE id = $1";
+    return "DELETE FROM alert_rule WHERE id = $1";
 }
 
 } // namespace alert

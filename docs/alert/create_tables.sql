@@ -8,9 +8,9 @@
 -- psql "postgres://user:password@host:5432/dbname" -f docs/alert/create_tables.sql
 -- ============================================================================
 
--- 1. alert_rules - 告警规则表
+-- 1. alert_rule - 告警规则表
 -- 用于存储告警规则的配置信息，定义何时触发告警以及告警的详细信息
-CREATE TABLE IF NOT EXISTS alert_rules (
+CREATE TABLE IF NOT EXISTS alert_rule (
     -- 主键和标识
     id                  VARCHAR(100)    PRIMARY KEY,                    -- 系统生成的唯一标识符
     alert_name          VARCHAR(200)    NOT NULL UNIQUE,                -- 告警规则标识，用户自定义
@@ -29,9 +29,9 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     updated_at          TIMESTAMP       NOT NULL DEFAULT NOW()          -- 更新时间，系统自动生成
 );
 
--- 2. alert - 告警事件表
+-- 2. alert_event - 告警事件表
 -- 用于存储系统中实际产生的告警事件，记录告警的完整生命周期
-CREATE TABLE IF NOT EXISTS alert (
+CREATE TABLE IF NOT EXISTS alert_event (
     -- 主键和标识
     id                  VARCHAR(200)    PRIMARY KEY,                    -- 告警ID，系统生成的唯一标识符
     fingerprint         VARCHAR(500)    NOT NULL,                       -- 告警指纹，用于去重和识别

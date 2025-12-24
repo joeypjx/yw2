@@ -337,7 +337,7 @@ bool DatabaseAlertRepository::deleteAlert(const std::string& id) {
 int DatabaseAlertRepository::deleteAlertsByFingerprintAndStatus(const std::string& fingerprint, const std::string& status) {
     try {
         // 先查询要删除的数量
-        std::string countSql = "SELECT COUNT(*) as count FROM alert WHERE fingerprint = $1 AND status = $2";
+        std::string countSql = "SELECT COUNT(*) as count FROM alert_event WHERE fingerprint = $1 AND status = $2";
         std::vector<std::string> params = {fingerprint, status};
         QueryResult countResult = dbInterface_->executeQuery(countSql, params);
         
@@ -349,7 +349,7 @@ int DatabaseAlertRepository::deleteAlertsByFingerprintAndStatus(const std::strin
         
         // 如果有要删除的告警，执行删除
         if (count > 0) {
-            std::string sql = "DELETE FROM alert WHERE fingerprint = $1 AND status = $2";
+            std::string sql = "DELETE FROM alert_event WHERE fingerprint = $1 AND status = $2";
             dbInterface_->executeQuery(sql, params);
         }
         
@@ -362,7 +362,7 @@ int DatabaseAlertRepository::deleteAlertsByFingerprintAndStatus(const std::strin
 int DatabaseAlertRepository::resolveFiringAlertsByFingerprint(const std::string& fingerprint) {
     try {
         // 先查询要更新的数量
-        std::string countSql = "SELECT COUNT(*) as count FROM alert WHERE fingerprint = $1 AND status = $2";
+        std::string countSql = "SELECT COUNT(*) as count FROM alert_event WHERE fingerprint = $1 AND status = $2";
         std::vector<std::string> params = {fingerprint, "firing"};
         QueryResult countResult = dbInterface_->executeQuery(countSql, params);
         
@@ -375,7 +375,7 @@ int DatabaseAlertRepository::resolveFiringAlertsByFingerprint(const std::string&
         // 如果有要更新的告警，执行更新：将status改为resolved，设置ends_at为当前时间，更新updated_at
         if (count > 0) {
             std::string sql = R"(
-                UPDATE alert SET 
+                UPDATE alert_event SET 
                     status = 'resolved',
                     ends_at = NOW(),
                     updated_at = NOW()
@@ -392,7 +392,7 @@ int DatabaseAlertRepository::resolveFiringAlertsByFingerprint(const std::string&
 
 bool DatabaseAlertRepository::alertExists(const std::string& id) {
     try {
-        std::string sql = "SELECT COUNT(*) FROM alert WHERE id = $1";
+        std::string sql = "SELECT COUNT(*) FROM alert_event WHERE id = $1";
         std::vector<std::string> params = {id};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
@@ -408,7 +408,7 @@ bool DatabaseAlertRepository::alertExists(const std::string& id) {
 
 size_t DatabaseAlertRepository::getAlertCount() {
     try {
-        std::string sql = "SELECT COUNT(*) FROM alert";
+        std::string sql = "SELECT COUNT(*) FROM alert_event";
         
         QueryResult result = dbInterface_->executeQuery(sql);
         if (!result.empty()) {
@@ -465,7 +465,7 @@ Alert DatabaseAlertRepository::parseAlertFromQueryResult(const QueryRow& row) {
 
 std::string DatabaseAlertRepository::buildInsertSql() {
     return R"(
-        INSERT INTO alert (
+        INSERT INTO alert_event (
             id, fingerprint, labels, annotations, created_at, starts_at, 
             updated_at, ends_at, status, alert_rule_id
         ) VALUES (
@@ -480,7 +480,7 @@ std::string DatabaseAlertRepository::buildInsertSql() {
 
 std::string DatabaseAlertRepository::buildUpdateSql() {
     return R"(
-        UPDATE alert SET 
+        UPDATE alert_event SET 
             fingerprint = $1,
             labels = $2,
             annotations = $3,
@@ -498,12 +498,12 @@ std::string DatabaseAlertRepository::buildSelectSql() {
         SELECT 
             id, fingerprint, labels, annotations, created_at, starts_at, 
             updated_at, ends_at, status, alert_rule_id
-        FROM alert
+        FROM alert_event
     )";
 }
 
 std::string DatabaseAlertRepository::buildDeleteSql() {
-    return "DELETE FROM alert WHERE id = $1";
+    return "DELETE FROM alert_event WHERE id = $1";
 }
 
 std::pair<std::string, std::vector<std::string>> DatabaseAlertRepository::buildWhereClause(const AlertFilters& filters) {

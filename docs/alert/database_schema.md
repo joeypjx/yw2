@@ -2,7 +2,7 @@
 
 本文档描述了 Alert 模块使用的所有数据库表结构。Alert 模块的表为普通的 PostgreSQL 表，不是 TimescaleDB 时序表。
 
-## 1. alert_rules - 告警规则表
+## 1. alert_rule - 告警规则表
 
 用于存储告警规则的配置信息，定义何时触发告警以及告警的详细信息。
 
@@ -30,7 +30,7 @@
 - `description` 支持占位符，如 `{{host_ip}}`、`{{mount_point}}` 等，会在生成告警时替换为实际值
 - `updated_at` 字段通过触发器自动更新，每次更新记录时自动设置为当前时间
 
-## 2. alert - 告警事件表
+## 2. alert_event - 告警事件表
 
 用于存储系统中实际产生的告警事件，记录告警的完整生命周期。
 
@@ -72,31 +72,31 @@
 
 ## 表关系说明
 
-- `alert` 表通过 `alert_rule_id` 字段关联到 `alert_rules` 表
-- `alert` 表的 `labels` 字段中的 `host_ip` 可以与 monitor 模块的资源表通过 `host_ip` 进行关联
-- `alert_rules` 表的 `expression` 字段中的 `stable` 和 `metric` 用于匹配 monitor 模块的资源数据
+- `alert_event` 表通过 `alert_rule_id` 字段关联到 `alert_rule` 表
+- `alert_event` 表的 `labels` 字段中的 `host_ip` 可以与 monitor 模块的资源表通过 `host_ip` 进行关联
+- `alert_rule` 表的 `expression` 字段中的 `stable` 和 `metric` 用于匹配 monitor 模块的资源数据
 
 ## 数据流程说明
 
 ### 告警规则创建流程
-1. 用户在系统中创建告警规则，数据保存到 `alert_rules` 表
+1. 用户在系统中创建告警规则，数据保存到 `alert_rule` 表
 2. 告警规则包含表达式、持续时间、严重程度等信息
 3. 规则可以启用或禁用（`enabled` 字段）
 
 ### 告警触发流程
 1. 告警引擎定期检查 monitor 模块的资源数据
-2. 根据 `alert_rules` 表中的规则表达式匹配数据
-3. 如果匹配成功，创建或更新 `alert` 表中的记录
+2. 根据 `alert_rule` 表中的规则表达式匹配数据
+3. 如果匹配成功，创建或更新 `alert_event` 表中的记录
 4. 告警状态从 `pending` 变为 `firing`（满足持续时间后）
 5. 告警条件不再满足时，状态变为 `resolved`
 
 ## 注意事项
 
-1. `alert_rules` 和 `alert` 表都是普通的 PostgreSQL 表，不是 TimescaleDB 时序表
+1. `alert_rule` 和 `alert_event` 表都是普通的 PostgreSQL 表，不是 TimescaleDB 时序表
 2. 两个表都创建了相应的索引以优化查询性能
 3. 两个表都使用触发器自动更新 `updated_at` 字段
-4. `alert_rules.expression` 和 `alert.labels`、`alert.annotations` 字段使用 JSONB 类型，支持高效的 JSON 查询
-5. `alert.status` 字段有 CHECK 约束，确保只能使用预定义的状态值
-6. `alert.fingerprint` 字段用于告警去重，相同指纹的告警会被合并
-7. `alert_rules.alert_name` 字段有 UNIQUE 约束，确保告警规则名称唯一
+4. `alert_rule.expression` 和 `alert_event.labels`、`alert_event.annotations` 字段使用 JSONB 类型，支持高效的 JSON 查询
+5. `alert_event.status` 字段有 CHECK 约束，确保只能使用预定义的状态值
+6. `alert_event.fingerprint` 字段用于告警去重，相同指纹的告警会被合并
+7. `alert_rule.alert_name` 字段有 UNIQUE 约束，确保告警规则名称唯一
 
