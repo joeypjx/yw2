@@ -221,6 +221,9 @@ NodeView toNodeView(const node::NodeExt &ext, const monitor::Resource *res,
     v.component.clear();
   }
 
+  // 设置状态
+  v.status = ext.status;
+
   // 应用状态特殊逻辑
   applyNodeStatusLogic(v.status, prst);
 
