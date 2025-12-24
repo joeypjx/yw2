@@ -5,7 +5,6 @@
 #include "monitor/monitor.h"
 #include "bmc/bmc.h"
 #include "controller/controller.h"
-#include "alert/alert.h"
 #include "web/web.h"
 
 namespace yw {
@@ -57,18 +56,8 @@ std::shared_ptr<hv::HttpServer> AppContext::getHttpServer() const {
 void AppContext::cleanup() {
     std::lock_guard<std::mutex> lock(mutex_);
     
-    // 先停止有生命周期的模块
-    if (alert_module_) {
-        spdlog::info("Stopping AlertV2 module...");
-        try {
-            alert_module_->stop();
-            spdlog::info("AlertV2 module stopped");
-        } catch (const std::exception& e) {
-            spdlog::error("Error stopping AlertV2 module: {}", e.what());
-        }
-    }
-    
     // 清理所有模块（按依赖顺序）
+    // 注意：alert_module_ 的析构函数会自动调用 stop()，无需显式调用
     web_module_.reset();
     alert_module_.reset();
     node_module_.reset();

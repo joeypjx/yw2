@@ -36,4 +36,5 @@ target_link_libraries(yw_alert PRIVATE
     nlohmann_json::nlohmann_json
     pqxx
     spdlog::spdlog_header_only
+    yw_utils
 )

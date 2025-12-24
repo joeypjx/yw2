@@ -20,14 +20,15 @@ target_include_directories(yw_web PRIVATE
 
 # PUBLIC 链接 - 依赖会传递给链接 yw_web 的目标
 target_link_libraries(yw_web PUBLIC
-    yw_core
     yw_alert
 )
 
 # PRIVATE 链接 - 仅内部使用
 target_link_libraries(yw_web PRIVATE
+    spdlog::spdlog_header_only
     hv_static
     nlohmann_json::nlohmann_json
+    yw_utils
 )
 
 

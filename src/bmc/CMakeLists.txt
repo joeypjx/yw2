@@ -14,8 +14,10 @@ target_include_directories(yw_bmc PRIVATE
 )
 
 target_link_libraries(yw_bmc PRIVATE
-    yw_core
+    spdlog::spdlog_header_only
+    nlohmann_json::nlohmann_json
     pqxx
+    yw_utils
 )
 
 

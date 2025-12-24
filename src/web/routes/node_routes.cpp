@@ -16,7 +16,7 @@ namespace web {
 namespace routes {
 
 using json = nlohmann::json;
-using ResponseBuilder = utils::ResponseBuilder;
+using ResponseBuilder = yw::utils::ResponseBuilder;
 
 void registerNodeRoutes(hv::HttpService* service,
                         node::INodeModule* node_module,

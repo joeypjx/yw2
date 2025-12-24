@@ -12,7 +12,7 @@ target_include_directories(yw_controller PRIVATE
 )
 
 target_link_libraries(yw_controller PRIVATE
-    yw_core
+    spdlog::spdlog_header_only
     yw_utils
 )
 

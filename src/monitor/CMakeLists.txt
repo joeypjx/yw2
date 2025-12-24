@@ -15,7 +15,9 @@ target_include_directories(yw_monitor PRIVATE
 )
 
 target_link_libraries(yw_monitor PRIVATE
-    yw_core
+    spdlog::spdlog_header_only
+    hv_static
+    nlohmann_json::nlohmann_json
     yw_utils
     pqxx
 )

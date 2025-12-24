@@ -291,7 +291,7 @@ namespace {
     }
     
     // 辅助函数：发送错误响应
-    void sendErrorResponse(const HttpContextPtr& ctx, http_status status, const std::string& message) {
+    int sendErrorResponse(const HttpContextPtr& ctx, http_status status, const std::string& message) {
         ctx->setStatus(status);
         ctx->setContentType("application/json");
         json resp = {
@@ -300,11 +300,11 @@ namespace {
             {"message", message},
             {"data", json::object()}
         };
-        ctx->send(resp.dump(2));
+        return ctx->send(resp.dump(2));
     }
     
     // 辅助函数：发送成功响应
-    void sendSuccessResponse(const HttpContextPtr& ctx, const std::string& message = "resource received") {
+    int sendSuccessResponse(const HttpContextPtr& ctx, const std::string& message = "resource received") {
         ctx->setContentType("application/json");
         json resp = {
             {"api_version", 1},
@@ -312,7 +312,7 @@ namespace {
             {"message", message},
             {"data", json::object()}
         };
-        ctx->send(resp.dump(2));
+        return ctx->send(resp.dump(2));
     }
 }
 

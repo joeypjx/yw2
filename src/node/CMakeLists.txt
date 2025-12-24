@@ -13,7 +13,9 @@ target_include_directories(yw_node PRIVATE
 )
 
 target_link_libraries(yw_node PRIVATE
-    yw_core
+    spdlog::spdlog_header_only
+    hv_static
+    nlohmann_json::nlohmann_json
     yw_utils
 )
 

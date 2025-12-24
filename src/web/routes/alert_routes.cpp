@@ -11,7 +11,7 @@ namespace web {
 namespace routes {
 
 using json = nlohmann::json;
-using ResponseBuilder = utils::ResponseBuilder;
+using ResponseBuilder = yw::utils::ResponseBuilder;
 
 void registerAlertRoutes(hv::HttpService* service, 
                           std::shared_ptr<yw::alert::IAlertModule> alertModule) {

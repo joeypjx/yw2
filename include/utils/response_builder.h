@@ -5,9 +5,9 @@
 #include <hv/httpdef.h>
 #include <string>
 #include <cstdint>
+#include <vector>
 
 namespace yw {
-namespace web {
 namespace utils {
 
 using json = nlohmann::json;
@@ -34,14 +34,7 @@ public:
      * @param ctx HTTP 上下文
      * @param data 响应数据（JSON 对象）
      */
-    static void sendSuccess(const HttpContextPtr& ctx, const json& data) {
-        json resp = {
-            {"api_version", ApiVersion::V2},
-            {"status", "success"},
-            {"data", data}
-        };
-        sendJson(ctx, resp);
-    }
+    static void sendSuccess(const HttpContextPtr& ctx, const json& data);
 
     /**
      * @brief 构建并发送错误响应（默认 API 版本 2）
@@ -54,16 +47,7 @@ public:
     static void sendError(const HttpContextPtr& ctx, 
                          const std::string& message,
                          http_status status_code = HTTP_STATUS_INTERNAL_SERVER_ERROR,
-                         const json& data = json::object()) {
-        json resp = {
-            {"api_version", ApiVersion::V2},
-            {"status", "error"},
-            {"message", message},
-            {"data", data}
-        };
-        ctx->setStatus(status_code);
-        sendJson(ctx, resp);
-    }
+                         const json& data = json::object());
 
     /**
      * @brief 构建并发送错误响应（使用旧版格式，code 字段）
@@ -76,15 +60,7 @@ public:
     static void sendErrorLegacy(const HttpContextPtr& ctx,
                                http_status code,
                                const std::string& message,
-                               const json& data = json::array()) {
-        json resp = {
-            {"code", code},
-            {"message", message},
-            {"data", data}
-        };
-        ctx->setStatus(code);
-        sendJson(ctx, resp);
-    }
+                               const json& data = json::array());
 
     /**
      * @brief 构建并发送错误响应（使用旧版格式，code 字段）
@@ -98,15 +74,7 @@ public:
     static int sendErrorLegacyWithReturn(const HttpContextPtr& ctx,
                                          http_status code,
                                          const std::string& message,
-                                         const json& data = json::array()) {
-        json resp = {
-            {"code", code},
-            {"message", message},
-            {"data", data}
-        };
-        ctx->setStatus(code);
-        return sendJson(ctx, resp);
-    }
+                                         const json& data = json::array());
 
     /**
      * @brief 发送 JSON 响应
@@ -116,10 +84,7 @@ public:
      * @param indent 缩进空格数（默认 2）
      * @return HTTP 响应状态码
      */
-    static int sendJson(const HttpContextPtr& ctx, const json& json_obj, int indent = 2) {
-        ctx->setContentType("application/json");
-        return ctx->send(json_obj.dump(indent));
-    }
+    static int sendJson(const HttpContextPtr& ctx, const json& json_obj, int indent = 2);
 
     /**
      * @brief 构建并发送成功响应（默认 API 版本 2）
@@ -128,14 +93,7 @@ public:
      * @param data 响应数据（JSON 对象）
      * @return HTTP 响应状态码
      */
-    static int sendSuccessWithReturn(const HttpContextPtr& ctx, const json& data) {
-        json resp = {
-            {"api_version", ApiVersion::V2},
-            {"status", "success"},
-            {"data", data}
-        };
-        return sendJson(ctx, resp);
-    }
+    static int sendSuccessWithReturn(const HttpContextPtr& ctx, const json& data);
 
     /**
      * @brief 构建并发送错误响应（默认 API 版本 2）
@@ -149,16 +107,7 @@ public:
     static int sendErrorWithReturn(const HttpContextPtr& ctx, 
                                    const std::string& message,
                                    http_status status_code = HTTP_STATUS_INTERNAL_SERVER_ERROR,
-                                   const json& data = json::object()) {
-        json resp = {
-            {"api_version", ApiVersion::V2},
-            {"status", "error"},
-            {"message", message},
-            {"data", data}
-        };
-        ctx->setStatus(status_code);
-        return sendJson(ctx, resp);
-    }
+                                   const json& data = json::object());
 
     /**
      * @brief 验证必需参数是否存在
@@ -221,26 +170,7 @@ public:
      * @param param_value 参数字符串
      * @return 字符串列表
      */
-    static std::vector<std::string> parseCommaSeparated(const std::string& param_value) {
-        std::vector<std::string> result;
-        if (param_value.empty()) {
-            return result;
-        }
-
-        std::string current_item;
-        for (size_t i = 0; i <= param_value.size(); ++i) {
-            if (i == param_value.size() || param_value[i] == ',') {
-                std::string trimmed = trim(current_item);
-                if (!trimmed.empty()) {
-                    result.push_back(std::move(trimmed));
-                }
-                current_item.clear();
-            } else {
-                current_item.push_back(param_value[i]);
-            }
-        }
-        return result;
-    }
+    static std::vector<std::string> parseCommaSeparated(const std::string& param_value);
 
 private:
     /**
@@ -249,20 +179,8 @@ private:
      * @param str 输入字符串
      * @return 去除空白后的字符串
      */
-    static std::string trim(const std::string& str) {
-        if (str.empty()) {
-            return str;
-        }
-        size_t start = str.find_first_not_of(" \t\r\n");
-        if (start == std::string::npos) {
-            return "";
-        }
-        size_t end = str.find_last_not_of(" \t\r\n");
-        return str.substr(start, end - start + 1);
-    }
+    static std::string trim(const std::string& str);
 };
 
 } // namespace utils
-} // namespace web
 } // namespace yw
-
