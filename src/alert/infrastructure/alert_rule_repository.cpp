@@ -1,9 +1,9 @@
 #include "alert_rule_repository.h"
 #include "database_query_interface.h"
+#include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <sstream>
 #include <algorithm>
-#include <iostream>
 
 namespace yw {
 namespace alert {
@@ -150,7 +150,7 @@ AlertRule DatabaseAlertRuleRepository::parseRuleFromQueryResult(const QueryRow& 
         
         // 解析enabled字段
         std::string enabledStr = row.getValue("enabled");
-        std::cout << "从数据库解析enabled字段: '" << enabledStr << "'" << std::endl;
+        spdlog::debug("从数据库解析enabled字段: '{}'", enabledStr);
         
         // 更宽松的布尔值解析
         bool enabled = false;
@@ -161,7 +161,7 @@ AlertRule DatabaseAlertRuleRepository::parseRuleFromQueryResult(const QueryRow& 
             enabled = true;
         }
         
-        std::cout << "解析后的enabled值: " << (enabled ? "true" : "false") << std::endl;
+        spdlog::debug("解析后的enabled值: {}", enabled ? "true" : "false");
         rule.setEnabled(enabled);
         
         // 解析expression

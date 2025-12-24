@@ -1,6 +1,7 @@
 #include "alert_engine.h"
 #include "../domain/alert_rule_evaluator.h"
 #include "utils/json_config.h"
+#include <spdlog/spdlog.h>
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -37,7 +38,7 @@ AlertEngine::~AlertEngine() {
 
 void AlertEngine::start(int intervalSeconds) {
     if (running_) {
-        std::cout << "告警引擎已经在运行中" << std::endl;
+        spdlog::debug("告警引擎已经在运行中");
         return;
     }
     
@@ -51,7 +52,7 @@ void AlertEngine::start(int intervalSeconds) {
     running_ = true;
     workerThread_ = std::thread(&AlertEngine::workerLoop, this);
     
-    std::cout << "告警引擎已启动，评估间隔: " << intervalSeconds_ << " 秒" << std::endl;
+    spdlog::debug("告警引擎已启动，评估间隔: {} 秒", intervalSeconds_);
 }
 
 void AlertEngine::stop() {
@@ -59,7 +60,7 @@ void AlertEngine::stop() {
         return;
     }
     
-    std::cout << "正在停止告警引擎..." << std::endl;
+    spdlog::debug("正在停止告警引擎...");
     shouldStop_ = true;
     
     if (workerThread_.joinable()) {
@@ -67,11 +68,11 @@ void AlertEngine::stop() {
     }
     
     running_ = false;
-    std::cout << "告警引擎已停止" << std::endl;
+    spdlog::debug("告警引擎已停止");
 }
 
 void AlertEngine::workerLoop() {
-    std::cout << "告警引擎工作线程已启动" << std::endl;
+    spdlog::debug("告警引擎工作线程已启动");
     
     while (!shouldStop_) {
         try {
@@ -84,23 +85,23 @@ void AlertEngine::workerLoop() {
             std::this_thread::sleep_for(std::chrono::seconds(intervalSeconds_));
             
         } catch (const std::exception& e) {
-            std::cerr << "告警引擎评估过程中发生错误: " << e.what() << std::endl;
+            spdlog::error("告警引擎评估过程中发生错误: {}", e.what());
             // 发生错误时等待一段时间再继续
             std::this_thread::sleep_for(std::chrono::seconds(intervalSeconds_));
         }
     }
     
-    std::cout << "告警引擎工作线程已退出" << std::endl;
+    spdlog::debug("告警引擎工作线程已退出");
 }
 
 void AlertEngine::initialize() {
     try {
         // 从数据库加载所有启用的告警规则
         rules_ = alertRuleRepo_->getEnabledRules();
-        std::cout << "已加载 " << rules_.size() << " 个启用的告警规则到内存" << std::endl;
+        spdlog::debug("已加载 {} 个启用的告警规则到内存", rules_.size());
         
         if (rules_.empty()) {
-            std::cout << "警告: 没有找到任何启用的告警规则" << std::endl;
+            spdlog::warn("没有找到任何启用的告警规则");
         }
         
     } catch (const std::exception& e) {
@@ -112,19 +113,19 @@ int AlertEngine::performEvaluation() {
     auto startTime = std::chrono::system_clock::now();
     
     try {
-        std::cout << "\n=== 开始告警评估 ===" << std::endl;
+        spdlog::debug("=== 开始告警评估 ===");
         
         // 1. 评估所有告警规则，生成当前全量告警
         std::vector<Alert> currentAlerts = evaluateAllRules();
-        std::cout << "生成了 " << currentAlerts.size() << " 个告警" << std::endl;
+        spdlog::debug("生成了 {} 个告警", currentAlerts.size());
         
         // 2. 处理告警状态更新
         int processedCount = processAlertStatusUpdates(currentAlerts);
-        std::cout << "处理了 " << processedCount << " 个告警状态更新" << std::endl;
+        spdlog::debug("处理了 {} 个告警状态更新", processedCount);
         
         // 3. 更新告警到数据库
         int updatedCount = updateAlertsToDatabase(currentAlerts);
-        std::cout << "更新了 " << updatedCount << " 个告警到数据库" << std::endl;
+        spdlog::debug("更新了 {} 个告警到数据库", updatedCount);
         
         // 更新统计信息
         totalEvaluations_++;
@@ -134,12 +135,12 @@ int AlertEngine::performEvaluation() {
         auto endTime = std::chrono::system_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
         
-        std::cout << "告警评估完成，耗时: " << duration << " 毫秒" << std::endl;
+        spdlog::debug("告警评估完成，耗时: {} 毫秒", duration);
         
         return currentAlerts.size();
         
     } catch (const std::exception& e) {
-        std::cerr << "告警评估失败: " << e.what() << std::endl;
+        spdlog::error("告警评估失败: {}", e.what());
         throw;
     }
 }
@@ -148,7 +149,7 @@ int AlertEngine::performEvaluationForAlive() {
     auto startTime = std::chrono::system_clock::now();
     
     try {
-        std::cout << "\n=== 开始检查节点存活状态 ===" << std::endl;
+        spdlog::debug("=== 开始检查节点存活状态 ===");
         
         // 查询每个节点 IP 的最新时间，并在数据库层面直接计算时间差（秒）
         // 这样避免了时区转换的复杂性
@@ -164,7 +165,7 @@ int AlertEngine::performEvaluationForAlive() {
         
         QueryResult result = dbInterface_->executeQuery(sql);
         
-        std::cout << "找到 " << result.size() << " 个节点" << std::endl;
+        spdlog::debug("找到 {} 个节点", result.size());
         
         int alertCount = 0;
         
@@ -175,7 +176,7 @@ int AlertEngine::performEvaluationForAlive() {
             std::string secondsSinceLastAliveStr = row.getValue("seconds_since_last_alive");
             
             if (latestTimeStr.empty() || secondsSinceLastAliveStr.empty()) {
-                std::cout << "节点 " << hostIp << ": 无记录" << std::endl;
+                spdlog::debug("节点 {}: 无记录", hostIp);
                 continue;
             }
             
@@ -184,14 +185,12 @@ int AlertEngine::performEvaluationForAlive() {
             try {
                 secondsSinceLastAlive = std::stoi(secondsSinceLastAliveStr);
             } catch (const std::exception& e) {
-                std::cerr << "节点 " << hostIp << ": 解析时间差失败: " << secondsSinceLastAliveStr << std::endl;
+                spdlog::error("节点 {}: 解析时间差失败: {}", hostIp, secondsSinceLastAliveStr);
                 continue;
             }
             
             // 输出节点信息
-            std::cout << "节点 " << hostIp 
-                      << ": 最新心跳时间 " << latestTimeStr 
-                      << ", 距离现在 " << secondsSinceLastAlive << " 秒" << std::endl;
+            spdlog::debug("节点 {}: 最新心跳时间 {}, 距离现在 {} 秒", hostIp, latestTimeStr, secondsSinceLastAlive);
             
             std::unordered_map<std::string, std::string> fingerprintTags;
             fingerprintTags["host_ip"] = hostIp;
@@ -239,7 +238,7 @@ int AlertEngine::performEvaluationForAlive() {
                         // 保存到数据库
                         bool success = newAlert.updateInDatabase(alertRepo_);
                         if (success) {
-                            std::cout << "成功创建节点心跳超时告警: " << hostIp << " (指纹: " << fingerprint << ")" << std::endl;
+                            spdlog::debug("成功创建节点心跳超时告警: {} (指纹: {})", hostIp, fingerprint);
                             alertCount++;
                             
                             // 节点心跳超时告警直接设为 Firing 状态，需要推送
@@ -247,21 +246,21 @@ int AlertEngine::performEvaluationForAlive() {
                                 pushCallback_(newAlert);
                             }
                         } else {
-                            std::cerr << "创建节点心跳超时告警失败: " << hostIp << std::endl;
+                            spdlog::error("创建节点心跳超时告警失败: {}", hostIp);
                         }
                     }
                 } catch (const std::exception& e) {
-                    std::cerr << "处理节点心跳超时告警时发生错误: " << hostIp << " - " << e.what() << std::endl;
+                    spdlog::error("处理节点心跳超时告警时发生错误: {} - {}", hostIp, e.what());
                 }
             } else {
                 // 如果节点正常（<= 5秒），检查是否有已存在的告警需要解决
                 try {
                     int resolvedCount = alertRepo_->resolveFiringAlertsByFingerprint(fingerprint);
                     if (resolvedCount > 0) {
-                        std::cout << "已解决 " << resolvedCount << " 个节点心跳超时告警: " << hostIp << std::endl;
+                        spdlog::debug("已解决 {} 个节点心跳超时告警: {}", resolvedCount, hostIp);
                     }
                 } catch (const std::exception& e) {
-                    std::cerr << "处理节点恢复时发生错误: " << hostIp << " - " << e.what() << std::endl;
+                    spdlog::error("处理节点恢复时发生错误: {} - {}", hostIp, e.what());
                 }
             }
         }
@@ -269,12 +268,12 @@ int AlertEngine::performEvaluationForAlive() {
         auto endTime = std::chrono::system_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
         
-        std::cout << "节点存活状态检查完成，耗时: " << duration << " 毫秒，创建/更新了 " << alertCount << " 个告警" << std::endl;
+        spdlog::debug("节点存活状态检查完成，耗时: {} 毫秒，创建/更新了 {} 个告警", duration, alertCount);
         
         return result.size();
         
     } catch (const std::exception& e) {
-        std::cerr << "检查节点存活状态失败: " << e.what() << std::endl;
+        spdlog::error("检查节点存活状态失败: {}", e.what());
         throw;
     }
 }
@@ -290,13 +289,13 @@ std::vector<Alert> AlertEngine::evaluateAllRules() {
             AlertRuleEvaluator evaluator(dbInterface_, nodeModule_);
             auto alerts = evaluator.evaluateRule(rule);
             
-            std::cout << "规则 '" << rule.getAlertName() << "' 生成了 " << alerts.size() << " 个告警" << std::endl;
+            spdlog::debug("规则 '{}' 生成了 {} 个告警", rule.getAlertName(), alerts.size());
             
             // 将生成的告警添加到总列表
             allAlerts.insert(allAlerts.end(), alerts.begin(), alerts.end());
             
         } catch (const std::exception& e) {
-            std::cerr << "评估规则 '" << rule.getAlertName() << "' 时出错: " << e.what() << std::endl;
+            spdlog::error("评估规则 '{}' 时出错: {}", rule.getAlertName(), e.what());
         }
     }
     
@@ -308,8 +307,8 @@ int AlertEngine::processAlertStatusUpdates(const std::vector<Alert>& currentAler
         // 获取当前数据库中firing和pending状态的告警指纹（只获取硬件资源类型）
         auto currentFiringFingerprints = getCurrentFiringFingerprints();
         auto currentPendingFingerprints = getCurrentPendingFingerprints();
-        std::cout << "数据库中当前firing告警数量（硬件资源）: " << currentFiringFingerprints.size() << std::endl;
-        std::cout << "数据库中当前pending告警数量（硬件资源）: " << currentPendingFingerprints.size() << std::endl;
+        spdlog::debug("数据库中当前firing告警数量（硬件资源）: {}", currentFiringFingerprints.size());
+        spdlog::debug("数据库中当前pending告警数量（硬件资源）: {}", currentPendingFingerprints.size());
         
         // 获取当前生成的告警指纹
         std::unordered_set<std::string> currentAlertFingerprints;
@@ -337,7 +336,7 @@ int AlertEngine::processAlertStatusUpdates(const std::vector<Alert>& currentAler
                 
                 // 检查节点是否有新数据，如果没有新数据，保持告警状态不变
                 if (!hasNodeRecentData(*alert)) {
-                    std::cout << "Firing告警节点无新数据，保持状态: " << fingerprint << std::endl;
+                    spdlog::debug("Firing告警节点无新数据，保持状态: {}", fingerprint);
                     continue;
                 }
                 
@@ -345,10 +344,10 @@ int AlertEngine::processAlertStatusUpdates(const std::vector<Alert>& currentAler
                 int resolvedCount = alertRepo_->resolveFiringAlertsByFingerprint(fingerprint);
                 if (resolvedCount > 0) {
                     processedCount += resolvedCount;
-                    std::cout << "已解决 " << resolvedCount << " 个Firing告警: " << fingerprint << std::endl;
+                    spdlog::debug("已解决 {} 个Firing告警: {}", resolvedCount, fingerprint);
                 }
             } catch (const std::exception& e) {
-                std::cerr << "解决firing告警 " << fingerprint << " 时出错: " << e.what() << std::endl;
+                spdlog::error("解决firing告警 {} 时出错: {}", fingerprint, e.what());
             }
         }
         
@@ -366,25 +365,25 @@ int AlertEngine::processAlertStatusUpdates(const std::vector<Alert>& currentAler
                 if (alert) {
                     // 检查节点是否有新数据，如果没有新数据，保持告警状态不变
                     if (!hasNodeRecentData(*alert)) {
-                        std::cout << "Pending告警节点无新数据，保持状态: " << fingerprint << std::endl;
+                        spdlog::debug("Pending告警节点无新数据，保持状态: {}", fingerprint);
                         continue;
                     }
                     // 节点有新数据但不满足条件，删除所有相同fingerprint的pending状态告警
                     int deletedCount = alertRepo_->deleteAlertsByFingerprintAndStatus(fingerprint, "pending");
                     if (deletedCount > 0) {
                         processedCount += deletedCount;
-                        std::cout << "已删除 " << deletedCount << " 个Pending告警: " << fingerprint << std::endl;
+                        spdlog::debug("已删除 {} 个Pending告警: {}", deletedCount, fingerprint);
                     }
                 }
             } catch (const std::exception& e) {
-                std::cerr << "删除pending告警 " << fingerprint << " 时出错: " << e.what() << std::endl;
+                spdlog::error("删除pending告警 {} 时出错: {}", fingerprint, e.what());
             }
         }
         
         return processedCount;
         
     } catch (const std::exception& e) {
-        std::cerr << "处理告警状态更新时出错: " << e.what() << std::endl;
+        spdlog::error("处理告警状态更新时出错: {}", e.what());
         return 0;
     }
 }
@@ -411,7 +410,7 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<Alert>& alerts) {
                             bool success = existingAlert->updateInDatabase(alertRepo_);
                             if (success) {
                                 successCount++;
-                                std::cout << "Pending告警转为Firing: " << alertCopy.getFingerprint() << std::endl;
+                                spdlog::debug("Pending告警转为Firing: {}", alertCopy.getFingerprint());
                                 
                                 // 状态转换时调用推送回调
                                 if (pushCallback_) {
@@ -420,7 +419,7 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<Alert>& alerts) {
                             }
                         } else {
                             // 保持pending状态，不需要更新数据库
-                            std::cout << "Pending告警继续等待: " << alertCopy.getFingerprint() << std::endl;
+                            spdlog::debug("Pending告警继续等待: {}", alertCopy.getFingerprint());
                         }
                         continue; // 跳过创建新告警
                     } else if (alertCopy.getStatus() == AlertStatus::Firing) {
@@ -429,7 +428,7 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<Alert>& alerts) {
                         bool success = existingAlert->updateInDatabase(alertRepo_);
                         if (success) {
                             successCount++;
-                            std::cout << "Pending告警转为Firing: " << alertCopy.getFingerprint() << std::endl;
+                            spdlog::debug("Pending告警转为Firing: {}", alertCopy.getFingerprint());
                             
                             // 状态转换时调用推送回调
                             if (pushCallback_) {
@@ -444,7 +443,7 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<Alert>& alerts) {
                     bool success = existingAlert->updateInDatabase(alertRepo_);
                     if (success) {
                         successCount++;
-                        std::cout << "更新现有Firing告警: " << alertCopy.getFingerprint() << std::endl;
+                        spdlog::debug("更新现有Firing告警: {}", alertCopy.getFingerprint());
                     }
                     continue; // 跳过创建新告警
                 }
@@ -455,8 +454,9 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<Alert>& alerts) {
             bool success = alertCopy.updateInDatabase(alertRepo_);
             if (success) {
                 successCount++;
-                std::cout << "创建/更新告警: " << alertCopy.getFingerprint() << " (状态: " 
-                         << (alertCopy.getStatus() == AlertStatus::Pending ? "Pending" : "Firing") << ")" << std::endl;
+                spdlog::debug("创建/更新告警: {} (状态: {})", 
+                             alertCopy.getFingerprint(),
+                             alertCopy.getStatus() == AlertStatus::Pending ? "Pending" : "Firing");
                 
                 // 只有新创建的firing告警才调用推送回调
                 if (alertCopy.getStatus() == AlertStatus::Firing && pushCallback_) {
@@ -464,7 +464,7 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<Alert>& alerts) {
                 }
             }
         } catch (const std::exception& e) {
-            std::cerr << "更新告警到数据库失败: " << e.what() << std::endl;
+            spdlog::error("更新告警到数据库失败: {}", e.what());
         }
     }
     
@@ -488,7 +488,7 @@ std::unordered_set<std::string> AlertEngine::getCurrentPendingFingerprints() {
             }
         }
     } catch (const std::exception& e) {
-        std::cerr << "获取pending告警指纹时出错: " << e.what() << std::endl;
+        spdlog::error("获取pending告警指纹时出错: {}", e.what());
     }
     
     return fingerprints;
@@ -500,18 +500,18 @@ bool AlertEngine::addAlertRule(const AlertRule& rule) {
         // 1. 保存到数据库
         bool dbSuccess = alertRuleRepo_->saveRule(rule);
         if (!dbSuccess) {
-            std::cerr << "保存告警规则到数据库失败: " << rule.getId() << std::endl;
+            spdlog::error("保存告警规则到数据库失败: {}", rule.getId());
             return false;
         }
         
         // 2. 添加到内存
         rules_.push_back(rule);
         
-        std::cout << "成功添加告警规则: " << rule.getId() << " (" << rule.getAlertName() << ")" << std::endl;
+        spdlog::debug("成功添加告警规则: {} ({})", rule.getId(), rule.getAlertName());
         return true;
         
     } catch (const std::exception& e) {
-        std::cerr << "添加告警规则失败: " << e.what() << std::endl;
+        spdlog::error("添加告警规则失败: {}", e.what());
         return false;
     }
 }
@@ -521,7 +521,7 @@ bool AlertEngine::updateAlertRule(const AlertRule& rule) {
         // 1. 更新数据库
         bool dbSuccess = alertRuleRepo_->saveRule(rule);
         if (!dbSuccess) {
-            std::cerr << "更新告警规则到数据库失败: " << rule.getId() << std::endl;
+            spdlog::error("更新告警规则到数据库失败: {}", rule.getId());
             return false;
         }
         
@@ -529,18 +529,18 @@ bool AlertEngine::updateAlertRule(const AlertRule& rule) {
         for (auto& existingRule : rules_) {
             if (existingRule.getId() == rule.getId()) {
                 existingRule = rule;
-                std::cout << "成功更新告警规则: " << rule.getId() << " (" << rule.getAlertName() << ")" << std::endl;
+                spdlog::debug("成功更新告警规则: {} ({})", rule.getId(), rule.getAlertName());
                 return true;
             }
         }
         
         // 如果内存中没有找到，添加到内存
         rules_.push_back(rule);
-        std::cout << "告警规则在内存中不存在，已添加到内存: " << rule.getId() << std::endl;
+        spdlog::debug("告警规则在内存中不存在，已添加到内存: {}", rule.getId());
         return true;
         
     } catch (const std::exception& e) {
-        std::cerr << "更新告警规则失败: " << e.what() << std::endl;
+        spdlog::error("更新告警规则失败: {}", e.what());
         return false;
     }
 }
@@ -550,7 +550,7 @@ bool AlertEngine::deleteAlertRule(const std::string& ruleId) {
         // 1. 从数据库删除
         bool dbSuccess = alertRuleRepo_->deleteRule(ruleId);
         if (!dbSuccess) {
-            std::cerr << "从数据库删除告警规则失败: " << ruleId << std::endl;
+            spdlog::error("从数据库删除告警规则失败: {}", ruleId);
             return false;
         }
         
@@ -562,15 +562,15 @@ bool AlertEngine::deleteAlertRule(const std::string& ruleId) {
         
         if (it != rules_.end()) {
             rules_.erase(it);
-            std::cout << "成功删除告警规则: " << ruleId << std::endl;
+            spdlog::debug("成功删除告警规则: {}", ruleId);
             return true;
         } else {
-            std::cout << "告警规则在内存中不存在: " << ruleId << std::endl;
+            spdlog::debug("告警规则在内存中不存在: {}", ruleId);
             return true; // 数据库已删除，即使内存中没有也算成功
         }
         
     } catch (const std::exception& e) {
-        std::cerr << "删除告警规则失败: " << e.what() << std::endl;
+        spdlog::error("删除告警规则失败: {}", e.what());
         return false;
     }
 }
@@ -595,7 +595,7 @@ std::shared_ptr<AlertRule> AlertEngine::getAlertRuleById(const std::string& rule
         return nullptr;
         
     } catch (const std::exception& e) {
-        std::cerr << "获取告警规则失败: " << e.what() << std::endl;
+        spdlog::error("获取告警规则失败: {}", e.what());
         return nullptr;
     }
 }
@@ -609,7 +609,7 @@ std::vector<Alert> AlertEngine::getAlertsByStatus(const std::string& status) {
     try {
         return alertRepo_->getAlertsByStatus(status);
     } catch (const std::exception& e) {
-        std::cerr << "根据状态获取告警失败: " << e.what() << std::endl;
+        spdlog::error("根据状态获取告警失败: {}", e.what());
         return {};
     }
 }
@@ -618,7 +618,7 @@ std::vector<Alert> AlertEngine::getAlertsByHostIp(const std::string& hostIp) {
     try {
         return alertRepo_->getAlertsByHostIp(hostIp);
     } catch (const std::exception& e) {
-        std::cerr << "根据主机IP获取告警失败: " << e.what() << std::endl;
+        spdlog::error("根据主机IP获取告警失败: {}", e.what());
         return {};
     }
 }
@@ -627,7 +627,7 @@ std::vector<Alert> AlertEngine::getAlertsByBoxId(int boxId) {
     try {
         return alertRepo_->getAlertsByBoxId(boxId);
     } catch (const std::exception& e) {
-        std::cerr << "根据机箱号获取告警失败: " << e.what() << std::endl;
+        spdlog::error("根据机箱号获取告警失败: {}", e.what());
         return {};
     }
 }
@@ -636,7 +636,7 @@ std::vector<Alert> AlertEngine::getAlertsBySlotId(int slotId) {
     try {
         return alertRepo_->getAlertsBySlotId(slotId);
     } catch (const std::exception& e) {
-        std::cerr << "根据板卡号获取告警失败: " << e.what() << std::endl;
+        spdlog::error("根据板卡号获取告警失败: {}", e.what());
         return {};
     }
 }
@@ -645,7 +645,7 @@ std::vector<Alert> AlertEngine::getAlertsByTimeRange(const std::string& startTim
     try {
         return alertRepo_->getAlertsByTimeRange(startTime, endTime);
     } catch (const std::exception& e) {
-        std::cerr << "根据时间范围获取告警失败: " << e.what() << std::endl;
+        spdlog::error("根据时间范围获取告警失败: {}", e.what());
         return {};
     }
 }
@@ -654,7 +654,7 @@ std::vector<Alert> AlertEngine::getAlertsByAlertType(const std::string& alertTyp
     try {
         return alertRepo_->getAlertsByAlertType(alertType);
     } catch (const std::exception& e) {
-        std::cerr << "根据告警类型获取告警失败: " << e.what() << std::endl;
+        spdlog::error("根据告警类型获取告警失败: {}", e.what());
         return {};
     }
 }
@@ -663,7 +663,7 @@ std::vector<Alert> AlertEngine::getAlertsBySeverity(const std::string& severity)
     try {
         return alertRepo_->getAlertsBySeverity(severity);
     } catch (const std::exception& e) {
-        std::cerr << "根据严重程度获取告警失败: " << e.what() << std::endl;
+        spdlog::error("根据严重程度获取告警失败: {}", e.what());
         return {};
     }
 }
@@ -672,7 +672,7 @@ std::vector<Alert> AlertEngine::getAlertsByDescription(const std::string& descri
     try {
         return alertRepo_->getAlertsByDescription(description);
     } catch (const std::exception& e) {
-        std::cerr << "根据描述获取告警失败: " << e.what() << std::endl;
+        spdlog::error("根据描述获取告警失败: {}", e.what());
         return {};
     }
 }
@@ -681,7 +681,7 @@ std::vector<Alert> AlertEngine::getAlertsExceptPending() {
     try {
         return alertRepo_->getAlertsExceptPending();
     } catch (const std::exception& e) {
-        std::cerr << "获取除Pending外的告警失败: " << e.what() << std::endl;
+        spdlog::error("获取除Pending外的告警失败: {}", e.what());
         return {};
     }
 }
@@ -690,7 +690,7 @@ std::vector<Alert> AlertEngine::getAlertsByFilters(const AlertFilters& filters) 
     try {
         return alertRepo_->getAlertsByFilters(filters);
     } catch (const std::exception& e) {
-        std::cerr << "根据过滤条件获取告警失败: " << e.what() << std::endl;
+        spdlog::error("根据过滤条件获取告警失败: {}", e.what());
         return {};
     }
 }
@@ -699,7 +699,7 @@ std::shared_ptr<Alert> AlertEngine::getAlertById(const std::string& alertId) {
     try {
         return alertRepo_->getAlertById(alertId);
     } catch (const std::exception& e) {
-        std::cerr << "根据ID获取告警失败: " << e.what() << std::endl;
+        spdlog::error("根据ID获取告警失败: {}", e.what());
         return nullptr;
     }
 }
@@ -709,7 +709,7 @@ size_t AlertEngine::getAlertCount() {
     try {
         return alertRepo_->getAlertCount();
     } catch (const std::exception& e) {
-        std::cerr << "获取告警总数失败: " << e.what() << std::endl;
+        spdlog::error("获取告警总数失败: {}", e.what());
         return 0;
     }
 }
@@ -742,7 +742,7 @@ std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& 
             // 保存到数据库
             bool success = existingAlert->updateInDatabase(alertRepo_);
             if (success) {
-                std::cout << "更新现有组件告警: " << fingerprint << std::endl;
+                spdlog::debug("更新现有组件告警: {}", fingerprint);
                 
                 // 组件告警直接设为 Firing 状态，需要推送
                 if (pushCallback_) {
@@ -751,7 +751,7 @@ std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& 
                 
                 return existingAlert;
             } else {
-                std::cerr << "更新现有组件告警失败: " << fingerprint << std::endl;
+                spdlog::error("更新现有组件告警失败: {}", fingerprint);
                 return nullptr;
             }
         }
@@ -786,7 +786,7 @@ std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& 
         // 保存到数据库
         bool success = newAlert.updateInDatabase(alertRepo_);
         if (success) {
-            std::cout << "成功创建组件告警: " << fingerprint << " (组件: " << instanceId << ")" << std::endl;
+            spdlog::debug("成功创建组件告警: {} (组件: {})", fingerprint, instanceId);
             
             // 组件告警直接设为 Firing 状态，需要推送
             if (pushCallback_) {
@@ -795,12 +795,12 @@ std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& 
             
             return std::make_shared<Alert>(newAlert);
         } else {
-            std::cerr << "创建组件告警失败: " << fingerprint << std::endl;
+            spdlog::error("创建组件告警失败: {}", fingerprint);
             return nullptr;
         }
         
     } catch (const std::exception& e) {
-        std::cerr << "创建组件告警时发生错误: " << e.what() << std::endl;
+        spdlog::error("创建组件告警时发生错误: {}", e.what());
         return nullptr;
     }
 }
@@ -840,7 +840,7 @@ std::shared_ptr<Alert> AlertEngine::createBoardTypeChangeAlert(int box_id, int s
         // 保存到数据库
         bool success = newAlert.updateInDatabase(alertRepo_);
         if (success) {
-            std::cout << "成功创建板卡类型变化告警: " << fingerprint << " (机箱: " << box_id << ", 槽位: " << slot_id << ")" << std::endl;
+            spdlog::debug("成功创建板卡类型变化告警: {} (机箱: {}, 槽位: {})", fingerprint, box_id, slot_id);
             
             // 推送告警
             if (pushCallback_) {
@@ -849,12 +849,12 @@ std::shared_ptr<Alert> AlertEngine::createBoardTypeChangeAlert(int box_id, int s
             
             return std::make_shared<Alert>(newAlert);
         } else {
-            std::cerr << "创建板卡类型变化告警失败: " << fingerprint << std::endl;
+            spdlog::error("创建板卡类型变化告警失败: {}", fingerprint);
             return nullptr;
         }
         
     } catch (const std::exception& e) {
-        std::cerr << "创建板卡类型变化告警时发生错误: " << e.what() << std::endl;
+        spdlog::error("创建板卡类型变化告警时发生错误: {}", e.what());
         return nullptr;
     }
 }
@@ -866,12 +866,12 @@ bool AlertEngine::shouldTransitionToFiring(const Alert& pendingAlert) {
         auto labels = pendingAlert.getLabels();
         auto alertNameIt = labels.find("alert_name");
         if (alertNameIt == labels.end()) {
-            std::cerr << "Pending告警缺少alert_name标签: " << pendingAlert.getFingerprint() << std::endl;
+            spdlog::error("Pending告警缺少alert_name标签: {}", pendingAlert.getFingerprint());
             return false;
         }
         
         std::string alertName = alertNameIt->second;
-        std::cout << "检查Pending告警是否应该转为Firing: " << alertName << " (指纹: " << pendingAlert.getFingerprint() << ")" << std::endl;
+        spdlog::debug("检查Pending告警是否应该转为Firing: {} (指纹: {})", alertName, pendingAlert.getFingerprint());
         
         // 查找对应的告警规则
         AlertRule* rule = nullptr;
@@ -883,42 +883,42 @@ bool AlertEngine::shouldTransitionToFiring(const Alert& pendingAlert) {
         }
         
         if (!rule) {
-            std::cerr << "未找到告警规则: " << alertName << std::endl;
+            spdlog::error("未找到告警规则: {}", alertName);
             return false;
         }
         
         // 解析for字段（持续时间）
         std::string forDuration = rule->getFor();
-        std::cout << "告警规则的for字段: '" << forDuration << "'" << std::endl;
+        spdlog::debug("告警规则的for字段: '{}'", forDuration);
         
         if (forDuration.empty()) {
             // 如果没有设置for字段，默认立即转为firing
-            std::cout << "for字段为空，立即转为Firing" << std::endl;
+            spdlog::debug("for字段为空，立即转为Firing");
             return true;
         }
         
         // 解析持续时间（支持s/m/h单位）
         int durationSeconds = parseDuration(forDuration);
-        std::cout << "解析的持续时间: " << durationSeconds << " 秒" << std::endl;
+        spdlog::debug("解析的持续时间: {} 秒", durationSeconds);
         
         if (durationSeconds <= 0) {
-            std::cout << "持续时间解析失败或为0，立即转为Firing" << std::endl;
+            spdlog::debug("持续时间解析失败或为0，立即转为Firing");
             return true; // 解析失败，默认立即转为firing
         }
         
         // 计算告警创建时间到现在的持续时间
         std::string createdAt = pendingAlert.getCreatedAt();
-        std::cout << "告警创建时间: " << createdAt << std::endl;
+        spdlog::debug("告警创建时间: {}", createdAt);
         
         if (createdAt.empty()) {
-            std::cerr << "告警创建时间为空" << std::endl;
+            spdlog::error("告警创建时间为空");
             return false;
         }
         
         // 解析创建时间
         auto createdTime = parseISOTime(createdAt);
         if (createdTime == std::chrono::system_clock::time_point{}) {
-            std::cerr << "解析创建时间失败" << std::endl;
+            spdlog::error("解析创建时间失败");
             return false;
         }
         
@@ -926,16 +926,16 @@ bool AlertEngine::shouldTransitionToFiring(const Alert& pendingAlert) {
         auto now = std::chrono::system_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - createdTime);
         
-        std::cout << "告警已持续: " << duration.count() << " 秒，需要: " << durationSeconds << " 秒" << std::endl;
+        spdlog::debug("告警已持续: {} 秒，需要: {} 秒", duration.count(), durationSeconds);
         
         // 如果持续时间大于等于for字段设置的时间，则转为firing
         bool shouldFire = duration.count() >= durationSeconds;
-        std::cout << "是否应该转为Firing: " << (shouldFire ? "是" : "否") << std::endl;
+        spdlog::debug("是否应该转为Firing: {}", shouldFire ? "是" : "否");
         
         return shouldFire;
         
     } catch (const std::exception& e) {
-        std::cerr << "检查Pending告警是否应该转为Firing时出错: " << e.what() << std::endl;
+        spdlog::error("检查Pending告警是否应该转为Firing时出错: {}", e.what());
         return false;
     }
 }
@@ -977,14 +977,14 @@ int AlertEngine::parseDuration(const std::string& duration) {
                 return number;
         }
     } catch (const std::exception& e) {
-        std::cerr << "解析持续时间失败: " << duration << " - " << e.what() << std::endl;
+        spdlog::error("解析持续时间失败: {} - {}", duration, e.what());
         return 0;
     }
 }
 
 std::chrono::system_clock::time_point AlertEngine::parseISOTime(const std::string& isoTime) {
     try {
-        std::cout << "开始解析时间: " << isoTime << std::endl;
+        spdlog::debug("开始解析时间: {}", isoTime);
         
         // 解析时间字符串 (例如: 2024-01-01T12:00:00.000)
         std::tm tm = {};
@@ -996,7 +996,7 @@ std::chrono::system_clock::time_point AlertEngine::parseISOTime(const std::strin
             timeStr.pop_back();
         }
         
-        std::cout << "处理后的时间字符串: " << timeStr << std::endl;
+        spdlog::debug("处理后的时间字符串: {}", timeStr);
         
         // 解析时间（支持毫秒）
         ss.str(timeStr);
@@ -1009,7 +1009,7 @@ std::chrono::system_clock::time_point AlertEngine::parseISOTime(const std::strin
             ss.str(timeStr);
             ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
             if (ss.fail()) {
-                std::cerr << "解析时间失败，格式错误: " << isoTime << " (处理后: " << timeStr << ")" << std::endl;
+                spdlog::error("解析时间失败，格式错误: {} (处理后: {})", isoTime, timeStr);
                 return std::chrono::system_clock::time_point{};
             }
         }
@@ -1022,17 +1022,17 @@ std::chrono::system_clock::time_point AlertEngine::parseISOTime(const std::strin
             if (ss.fail()) {
                 milliseconds = 0;
             }
-            std::cout << "解析到毫秒: " << milliseconds << std::endl;
+            spdlog::debug("解析到毫秒: {}", milliseconds);
         }
         
         // 转换为time_point（使用本地时间）
         auto time_t = std::mktime(&tm);
         if (time_t == -1) {
-            std::cerr << "解析时间失败，mktime返回-1: " << isoTime << std::endl;
+            spdlog::error("解析时间失败，mktime返回-1: {}", isoTime);
             return std::chrono::system_clock::time_point{};
         }
         
-        std::cout << "mktime成功，time_t: " << time_t << std::endl;
+        spdlog::debug("mktime成功，time_t: {}", time_t);
         
         auto result = std::chrono::system_clock::from_time_t(time_t);
         
@@ -1042,7 +1042,7 @@ std::chrono::system_clock::time_point AlertEngine::parseISOTime(const std::strin
         return result;
         
     } catch (const std::exception& e) {
-        std::cerr << "解析时间失败: " << isoTime << " - " << e.what() << std::endl;
+        spdlog::error("解析时间失败: {} - {}", isoTime, e.what());
         return std::chrono::system_clock::time_point{};
     }
 }
@@ -1072,7 +1072,7 @@ std::unordered_set<std::string> AlertEngine::getCurrentFiringFingerprints() {
             }
         }
     } catch (const std::exception& e) {
-        std::cerr << "获取firing告警指纹时出错: " << e.what() << std::endl;
+        spdlog::error("获取firing告警指纹时出错: {}", e.what());
     }
     
     return fingerprints;
@@ -1156,7 +1156,7 @@ bool AlertEngine::hasNodeRecentData(const Alert& alert, int seconds) {
         return false;
         
     } catch (const std::exception& e) {
-        std::cerr << "检查节点是否有新数据时出错: " << e.what() << std::endl;
+        spdlog::error("检查节点是否有新数据时出错: {}", e.what());
         // 出错时假设有新数据（保守策略）
         return true;
     }
