@@ -4,6 +4,7 @@
 #include <vector>
 #include <cstdint>
 #include <unordered_map>
+#include <map>
 #include <nlohmann/json.hpp>
 
 namespace yw {
@@ -83,7 +84,9 @@ struct NodeResource {
 // 资源明细 - 组件级别
 // --------------------
 
-struct ComponentCpuResource { double load = 0.0; };
+struct ComponentCpuResource {
+    double load = 0.0;
+};
 struct ComponentMemoryResource { 
     std::uint64_t mem_used = 0; 
     std::uint64_t mem_limit = 0;
@@ -102,7 +105,10 @@ struct ComponentResource {
     ComponentNetworkResource network;
 };
 
-struct ComponentConfig { std::string name; std::string id; };
+struct ComponentConfig {
+    std::string name;
+    std::string id;
+};
 
 struct ComponentEntry {
     std::string     instance_id;
@@ -170,12 +176,61 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Resource,
 // --------------------
 
 struct CpuPoint {
-    std::int64_t timestamp = 0; double usage_percent = 0.0; double load_avg_1m = 0.0; double load_avg_5m = 0.0; double load_avg_15m = 0.0; int core_count = 0; int core_allocated = 0; double temperature = 0.0; double voltage = 0.0; double current = 0.0; double power = 0.0;
+    std::int64_t timestamp = 0;
+    double usage_percent = 0.0;
+    double load_avg_1m = 0.0;
+    double load_avg_5m = 0.0;
+    double load_avg_15m = 0.0;
+    int core_count = 0;
+    int core_allocated = 0;
+    double temperature = 0.0;
+    double voltage = 0.0;
+    double current = 0.0;
+    double power = 0.0;
 };
-struct MemoryPoint { std::int64_t timestamp = 0; std::uint64_t total = 0; std::uint64_t used = 0; std::uint64_t free = 0; double usage_percent = 0.0; };
-struct NetworkPoint { std::int64_t timestamp = 0; std::string interface; std::uint64_t rx_bytes = 0; std::uint64_t tx_bytes = 0; std::uint64_t rx_packets = 0; std::uint64_t tx_packets = 0; std::uint64_t rx_errors = 0; std::uint64_t tx_errors = 0; double rx_rate = 0.0; double tx_rate = 0.0; double rx_drop_rate = 0.0; double tx_drop_rate = 0.0; int state = 0; };
-struct DiskPoint { std::int64_t timestamp = 0; std::string device; std::string mount_point; std::uint64_t total = 0; std::uint64_t used = 0; std::uint64_t free = 0; double usage_percent = 0.0; };
-struct GpuPoint { std::int64_t timestamp = 0; int index = 0; std::string name; double compute_usage = 0.0; double mem_usage = 0.0; std::uint64_t mem_used = 0; std::uint64_t mem_total = 0; double temperature = 0.0; double power = 0.0; };
+struct MemoryPoint {
+    std::int64_t timestamp = 0;
+    std::uint64_t total = 0;
+    std::uint64_t used = 0;
+    std::uint64_t free = 0;
+    double usage_percent = 0.0;
+};
+struct NetworkPoint {
+    std::int64_t timestamp = 0;
+    std::string interface;
+    std::uint64_t rx_bytes = 0;
+    std::uint64_t tx_bytes = 0;
+    std::uint64_t rx_packets = 0;
+    std::uint64_t tx_packets = 0;
+    std::uint64_t rx_errors = 0;
+    std::uint64_t tx_errors = 0;
+    double rx_rate = 0.0;
+    double tx_rate = 0.0;
+    double rx_drop_rate = 0.0;
+    double tx_drop_rate = 0.0;
+    int state = 0;
+};
+struct DiskPoint {
+    std::int64_t timestamp = 0;
+    std::string device;
+    std::string mount_point;
+    std::uint64_t total = 0;
+    std::uint64_t used = 0;
+    std::uint64_t free = 0;
+    double usage_percent = 0.0;
+};
+struct GpuPoint { 
+    std::int64_t timestamp = 0; 
+    int index = 0; 
+    std::string name; 
+    double compute_usage = 0.0; 
+    double mem_usage = 0.0; 
+    std::uint64_t mem_used = 0; 
+    std::uint64_t mem_total = 0; 
+    double temperature = 0.0; 
+    double power = 0.0; 
+    int free = 0; 
+};
 
 struct MetricsSeries {
     std::vector<CpuPoint> cpu;
@@ -186,7 +241,35 @@ struct MetricsSeries {
 };
 
 struct ResourceWindow {
-    int box_id = 0; int cpu_id = 0; std::string host_ip; int slot_id = 0; std::string time_range; MetricsSeries metrics;
+    int box_id = 0;
+    int cpu_id = 0;
+    std::string host_ip;
+    int slot_id = 0;
+    std::string time_range;
+    MetricsSeries metrics;
+};
+
+// --------------------
+// 导出数据结构
+// --------------------
+
+struct ExportDataPoint {
+    std::string timestamp;  // 格式: "2024-01-01 00:00:00"
+    double cpu_usage_percent = 0.0;
+    double memory_usage_percent = 0.0;
+    std::map<std::string, double> disk_usage_percent;  // key: mount_point, value: usage_percent
+    std::map<std::string, double> network_rx_rate;     // key: interface, value: rx_rate
+    std::map<std::string, double> network_tx_rate;     // key: interface, value: tx_rate
+    std::map<std::string, double> gpu_compute_usage;   // key: gpu_index, value: compute_usage
+    std::map<std::string, double> gpu_mem_usage;       // key: gpu_index, value: mem_usage
+};
+
+struct ExportData {
+    std::string start_time;  // 格式: "2024-01-01 00:00:00"
+    std::string end_time;     // 格式: "2024-01-01 00:00:00"
+    std::string ip;
+    std::vector<std::string> type;  // 包含的指标类型
+    std::vector<ExportDataPoint> data;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(CpuPoint,
@@ -198,11 +281,19 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(NetworkPoint,
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(DiskPoint,
     device, mount_point, total, used, free, usage_percent, timestamp)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(GpuPoint,
-    index, name, compute_usage, mem_usage, mem_used, mem_total, temperature, power, timestamp)
+    index, name, compute_usage, mem_usage, mem_used, mem_total, temperature, power, free, timestamp)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MetricsSeries,
     cpu, disk, gpu, network, memory)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ResourceWindow,
     box_id, cpu_id, host_ip, metrics, slot_id, time_range)
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ExportDataPoint,
+    timestamp, cpu_usage_percent, memory_usage_percent,
+    disk_usage_percent, network_rx_rate, network_tx_rate,
+    gpu_compute_usage, gpu_mem_usage)
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ExportData,
+    start_time, end_time, ip, type, data)
 
 } // namespace monitor
 } // namespace yw

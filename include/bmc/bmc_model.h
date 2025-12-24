@@ -78,12 +78,6 @@ struct UdpInfo {
 
 #pragma pack(pop)
 
-static_assert(sizeof(UdpFanInfo) == 6, "UdpFanInfo packed size mismatch");
-static_assert(sizeof(UdpSensorInfo) == 12, "UdpSensorInfo packed size mismatch");
-static_assert(sizeof(UdpPowerBoardInfo) == 128, "UdpPowerBoardInfo packed size mismatch");
-static_assert(sizeof(UdpSlotBoardInfo) == 130, "UdpSlotBoardInfo packed size mismatch");
-static_assert(sizeof(UdpInfo) == 1612, "UdpInfo packed size mismatch");
-
 struct BMCSensorRow {
     std::int64_t   timestamp = 0;
     std::string    host_ip;

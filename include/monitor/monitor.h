@@ -3,64 +3,85 @@
 #include <memory>
 #include <vector>
 #include <string>
-#include <map>
 #include "monitor/monitor_model.h"
 
 // 前向声明
 namespace hv { struct HttpService; }
-namespace yw { namespace node { class INodeModule; } }
 
 namespace yw {
 namespace monitor {
 
 struct Resource; // 前向声明，避免在公共头包含私有实现头
 
-// 导出数据结构
-struct ExportDataPoint {
-    std::string timestamp;  // 格式: "2024-01-01 00:00:00"
-    double cpu_usage_percent = 0.0;
-    double memory_usage_percent = 0.0;
-    std::map<std::string, double> disk_usage_percent;  // key: mount_point, value: usage_percent
-    std::map<std::string, double> network_rx_rate;     // key: interface, value: rx_rate
-    std::map<std::string, double> network_tx_rate;     // key: interface, value: tx_rate
-    std::map<std::string, double> gpu_compute_usage;   // key: gpu_index, value: compute_usage
-    std::map<std::string, double> gpu_mem_usage;        // key: gpu_index, value: mem_usage
-};
-
-struct ExportData {
-    std::string start_time;  // 格式: "2024-01-01 00:00:00"
-    std::string end_time;    // 格式: "2024-01-01 00:00:00"
-    std::string ip;
-    std::vector<std::string> type;  // 包含的指标类型
-    std::vector<ExportDataPoint> data;
-};
-
+/**
+ * @brief 监控模块接口
+ * 
+ * 提供节点资源监控和历史数据查询功能，包括资源快照、指标序列查询和数据导出等。
+ */
 class IMonitorModule {
 public:
     virtual ~IMonitorModule() = default;
-    // 根据节点IP返回最近一次上报的资源快照；未命中返回 nullptr
+
+    // ========== 资源查询 ==========
+
+    /**
+     * @brief 获取指定节点的最近一次资源快照
+     * 
+     * @param host_ip 节点IP地址
+     * @return 节点的资源快照，包含CPU、内存、网络、磁盘、GPU等资源信息；如果节点不存在或未上报数据返回 nullptr
+     */
     virtual std::shared_ptr<Resource> getNodeResource(const std::string& host_ip) const = 0;
 
-    // 查询一段时间窗口内的指标序列（kinds: cpu/memory/network/disk/gpu 空表示全部）
-    // duration 允许简写：1h/5m/10s（仅单一单位）
+    // ========== 指标序列查询 ==========
+
+    /**
+     * @brief 查询指定节点在指定时间范围内的指标序列数据
+     * 
+     * @param host_ip 节点IP地址
+     * @param duration 时间范围，支持格式：
+     *   - 简写格式：数字+单位（如 "1h", "5m", "30s"）
+     *   - PostgreSQL interval 格式（如 "1 hour", "5 minutes"）
+     * @param kinds 指标类型列表，可选值：cpu、memory、network、disk、gpu；空向量表示查询全部类型
+     * @return 指标序列数据，包含CPU、内存、网络、磁盘、GPU等各类指标的时序数据
+     */
     virtual MetricsSeries queryMetricsSeries(const std::string& host_ip,
                                              const std::string& duration,
                                              const std::vector<std::string>& kinds) const = 0;
 
-    // 导出节点历史数据（按 export.md 格式）
-    // start_time, end_time 为秒级时间戳
-    // types 指定要导出的指标类型，为空表示全部
+    // ========== 数据导出 ==========
+
+    /**
+     * @brief 导出节点历史数据（按 export.md 格式）
+     * 
+     * 将指定时间范围内的节点监控数据导出为统一格式，用于数据分析和报表生成。
+     * 
+     * @param host_ip 节点IP地址
+     * @param start_time 开始时间（秒级时间戳）
+     * @param end_time 结束时间（秒级时间戳）
+     * @param types 要导出的指标类型列表，可选值：cpu、memory、network、disk、gpu；空向量表示导出全部类型
+     * @return 导出数据，包含时间范围、节点IP、指标类型和数据点列表
+     */
     virtual ExportData exportNodeData(const std::string& host_ip,
                                       std::int64_t start_time,
                                       std::int64_t end_time,
                                       const std::vector<std::string>& types) const = 0;
 };
 
+/**
+ * @brief 监控模块工厂类
+ * 
+ * 负责创建和获取监控模块实例。
+ */
 class MonitorFactory {
 public:
+    /**
+     * @brief 创建监控模块实例
+     * 
+     * @param service HTTP服务实例，用于接收节点上报的监控数据
+     * @return 监控模块的共享指针，如果创建失败可能返回 nullptr
+     */
     static std::shared_ptr<IMonitorModule> getMonitorModule(
-        std::shared_ptr<hv::HttpService> service,
-        std::shared_ptr<node::INodeModule> node_module);
+        std::shared_ptr<hv::HttpService> service);
 };
 
 } // namespace monitor

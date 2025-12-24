@@ -164,7 +164,7 @@ bool createAndRegisterModules(std::shared_ptr<yw::core::AppContext> app_context)
     // 创建核心模块
     auto node_module = yw::node::NodeFactory::getNodeModule(app_context->getHttpService());
     auto monitor_module = yw::monitor::MonitorFactory::getMonitorModule(
-        app_context->getHttpService(), node_module);
+        app_context->getHttpService());
     auto bmc_module = yw::bmc::BMCFactory::getBMCModule();
     auto controller_module = yw::controller::ControllerFactory::getControllerModule();
     

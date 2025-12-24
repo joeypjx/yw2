@@ -366,7 +366,8 @@ SELECT
     COALESCE(ROUND(AVG(metrics.mem_used)), 0)::bigint AS mem_used,
     COALESCE(ROUND(AVG(metrics.mem_total)), 0)::bigint AS mem_total,
     COALESCE(AVG(metrics.temperature), 0) AS temperature,
-    COALESCE(AVG(metrics.power), 0) AS power
+    COALESCE(AVG(metrics.power), 0) AS power,
+    COALESCE(ROUND(AVG(metrics.free)), 0)::integer AS free
 FROM
     gpu_dims AS dims
 CROSS JOIN
@@ -397,6 +398,7 @@ ORDER BY
             p.mem_total     = row[6].as<long long>(0);
             p.temperature   = row[7].as<double>(0);
             p.power         = row[8].as<double>(0);
+            p.free          = row[9].as<int>(0);
             std::string key = std::string("gpu_") + std::to_string(index);
             out.gpu[key].push_back(std::move(p));
         }
@@ -623,11 +625,12 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
             "    COALESCE(ROUND(AVG(mem_used)), 0)::bigint AS mem_used, "
             "    COALESCE(ROUND(AVG(mem_total)), 0)::bigint AS mem_total, "
             "    COALESCE(AVG(temperature), 0) AS temperature, "
-            "    COALESCE(AVG(power), 0) AS power "
+            "    COALESCE(AVG(power), 0) AS power, "
+            "    COALESCE(ROUND(AVG(free)), 0)::integer AS free "
             "FROM ( "
             "    SELECT "
             "        time_bucket_gapfill(" + bucket_interval + ", time, to_timestamp($2), to_timestamp($3)) AS bucket, "
-            "        gpu_index, name, compute_usage, mem_usage, mem_used, mem_total, temperature, power "
+            "        gpu_index, name, compute_usage, mem_usage, mem_used, mem_total, temperature, power, free "
             "    FROM resource_gpu "
             "    WHERE host_ip = $1::inet "
             "      AND time >= to_timestamp($2) AND time <= to_timestamp($3) "
@@ -647,6 +650,7 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
             p.mem_total     = row[6].as<long long>(0);
             p.temperature   = row[7].as<double>(0);
             p.power         = row[8].as<double>(0);
+            p.free          = row[9].as<int>(0);
             std::string key = std::string("gpu_") + std::to_string(index);
             out.gpu[key].push_back(std::move(p));
         }

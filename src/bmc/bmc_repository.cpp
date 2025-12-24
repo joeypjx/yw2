@@ -238,6 +238,7 @@ SELECT DISTINCT ON (sensorname)
     sensoralmtype
 FROM bmc_sensor
 WHERE host_ip = $1::inet
+  AND "time" >= NOW() - INTERVAL '5 minutes'
 ORDER BY sensorname, "time" DESC
 )SQL";
     pqxx::result r = tx.exec_params(bmc_query, host_ip);

@@ -63,8 +63,7 @@ void registerMetricsRoutes(hv::HttpService* service,
                     std::unordered_map<std::string, bmc::BMCSensorRow> bmc_sensors;
                     if (bmc_module) {
                         try {
-                            // 暂时不使用最新BMC传感器数据，因为数据量太大
-                            // bmc_sensors = bmc_module->getLatestBMCSensor(nx.host_ip);
+                            bmc_sensors = bmc_module->getLatestBMCSensor(nx.host_ip);
                         } catch (const std::exception& e) {
                             spdlog::warn("Failed to get BMC sensors for {}: {}", nx.host_ip, e.what());
                             // 继续处理，使用空的传感器数据
