@@ -14,10 +14,9 @@ target_include_directories(yw_bmc PRIVATE
 )
 
 target_link_libraries(yw_bmc PRIVATE
-    spdlog::spdlog_header_only
-    nlohmann_json::nlohmann_json
-    pqxx
     yw_utils
+    pqxx
+    # spdlog, nlohmann_json 通过 yw_utils 的 PUBLIC 链接自动传递
 )
 
 

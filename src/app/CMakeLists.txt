@@ -1,15 +1,9 @@
 # 创建可执行文件
 add_executable(yw_app main.cpp)
 
-# 链接第三方库
-target_link_libraries(yw_app PRIVATE
-    spdlog::spdlog_header_only
-    hv_static
-    nlohmann_json::nlohmann_json
-)
-
 # 链接业务模块
 # 注意：yw_web PUBLIC 链接了 yw_alert，会自动传递
+# spdlog, hv_static, nlohmann_json 通过 yw_utils 的 PUBLIC 链接自动传递
 target_link_libraries(yw_app PRIVATE 
     yw_core
     yw_node 

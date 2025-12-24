@@ -33,8 +33,7 @@ target_include_directories(yw_alert PRIVATE
 )
 
 target_link_libraries(yw_alert PRIVATE
-    nlohmann_json::nlohmann_json
-    pqxx
-    spdlog::spdlog_header_only
     yw_utils
+    pqxx
+    # spdlog, nlohmann_json 通过 yw_utils 的 PUBLIC 链接自动传递
 )

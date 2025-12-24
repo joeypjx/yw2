@@ -15,10 +15,8 @@ target_include_directories(yw_monitor PRIVATE
 )
 
 target_link_libraries(yw_monitor PRIVATE
-    spdlog::spdlog_header_only
-    hv_static
-    nlohmann_json::nlohmann_json
     yw_utils
     pqxx
+    # spdlog, hv_static, nlohmann_json 通过 yw_utils 的 PUBLIC 链接自动传递
 )
 

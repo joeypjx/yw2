@@ -21,10 +21,10 @@ src/
 
 ### 1. core（核心模块）
 - **依赖**：
-  - `spdlog`, `hv_static`, `nlohmann_json` (第三方库，PRIVATE)
   - `yw_utils` (PRIVATE) - 使用 JsonConfig 读取配置
+  - `spdlog`, `hv_static`, `nlohmann_json` 通过 `yw_utils` 的 PUBLIC 链接自动传递
 - **被依赖**：`app`（使用 AppContext）
-- **说明**：提供应用上下文和基础服务。不依赖任何业务模块，只使用前向声明管理模块指针。各业务模块直接链接第三方库，不通过 core 传递依赖
+- **说明**：提供应用上下文和基础服务。不依赖任何业务模块，只使用前向声明管理模块指针。第三方库依赖通过 `yw_utils` 传递
 
 ### 2. utils（工具模块）
 - **依赖**：
@@ -37,44 +37,49 @@ src/
   - `bmc` - 使用 JsonConfig
   - `alert` - 使用 JsonConfig
   - `app` - 使用 JsonConfig
-  - `web` - 使用 ResponseBuilder（通过 yw_utils 传递）
-- **说明**：提供通用工具函数（JSON配置、持续时间解析、组播扫描、HTTP响应构建等）
+  - `web` - 使用 ResponseBuilder
+- **说明**：提供通用工具函数和类：
+  - `JsonConfig` - JSON配置文件读取
+  - `DurationUtils` - 持续时间解析工具
+  - `MulticastScanner` - 组播扫描工具
+  - `ResponseBuilder` - HTTP响应构建工具（从 `src/web/utils/` 移动到 `yw_utils` 模块）
 
 ### 3. node（节点模块）
 - **依赖**：
-  - `spdlog`, `hv_static`, `nlohmann_json` (第三方库)
   - `yw_utils` (PRIVATE)
+  - `spdlog`, `hv_static`, `nlohmann_json` 通过 `yw_utils` 的 PUBLIC 链接自动传递
 - **被依赖**：`web`, `alert`（运行时注入）
 - **说明**：管理节点信息和状态，提供节点查询接口
 
 ### 4. monitor（监控模块）
 - **依赖**：
-  - `spdlog`, `hv_static`, `nlohmann_json` (第三方库)
   - `yw_utils` (PRIVATE)
   - `pqxx` (PostgreSQL客户端)
+  - `spdlog`, `hv_static`, `nlohmann_json` 通过 `yw_utils` 的 PUBLIC 链接自动传递
 - **被依赖**：`web`（运行时注入）
 - **说明**：处理节点资源监控数据，提供资源查询和导出功能
 
 ### 5. bmc（BMC模块）
 - **依赖**：
-  - `spdlog`, `nlohmann_json` (第三方库)
-  - `pqxx` (PostgreSQL客户端)
   - `yw_utils` (PRIVATE) - 使用 JsonConfig 读取配置
+  - `pqxx` (PostgreSQL客户端)
+  - `spdlog`, `nlohmann_json` 通过 `yw_utils` 的 PUBLIC 链接自动传递
 - **被依赖**：`web`（运行时注入）
 - **说明**：处理BMC传感器数据，提供BMC信息查询接口
 
 ### 6. controller（控制器模块）
 - **依赖**：
-  - `spdlog` (第三方库)
   - `yw_utils` (PRIVATE)
+  - `spdlog` 通过 `yw_utils` 的 PUBLIC 链接自动传递
 - **被依赖**：`web`（运行时注入）
 - **说明**：提供资源控制功能
 
 ### 7. alert（告警模块）
 - **依赖**：
-  - `nlohmann_json`, `pqxx`, `spdlog` (第三方库)
   - `yw_utils` (PRIVATE) - 使用 JsonConfig 读取配置
+  - `pqxx` (PostgreSQL客户端)
   - `node::INodeModule` (运行时注入，非编译时依赖)
+  - `spdlog`, `nlohmann_json` 通过 `yw_utils` 的 PUBLIC 链接自动传递
 - **被依赖**：
   - `web` (PUBLIC)
 - **说明**：处理告警规则和事件，使用DDD分层架构
@@ -82,18 +87,18 @@ src/
 ### 8. web（Web模块）
 - **依赖**：
   - `yw_alert` (PUBLIC) - 依赖会传递给链接 yw_web 的目标
-  - `spdlog`, `hv_static`, `nlohmann_json` (第三方库，PRIVATE)
+  - `yw_utils` (PRIVATE) - 使用 ResponseBuilder 构建HTTP响应
+  - `spdlog`, `hv_static`, `nlohmann_json` 通过 `yw_utils` 的 PUBLIC 链接自动传递
 - **运行时依赖**（通过接口注入）：
   - `node::INodeModule`
   - `monitor::IMonitorModule`
   - `bmc::IBMCModule`
   - `controller::IControllerModule`
   - `alert::IAlertModule`
-- **说明**：提供HTTP API路由，聚合所有业务模块的功能
+- **说明**：提供HTTP API路由，聚合所有业务模块的功能。使用 `yw::utils::ResponseBuilder` 构建标准化的HTTP响应
 
 ### 9. app（应用入口）
 - **依赖**：
-  - `spdlog`, `hv_static`, `nlohmann_json` (第三方库)
   - `yw_utils` (PRIVATE) - 使用 JsonConfig 读取配置
   - 所有业务模块：
     - `yw_core` (使用 AppContext)
@@ -102,6 +107,7 @@ src/
     - `yw_web`
     - `yw_bmc`
     - `yw_controller`
+  - `spdlog`, `hv_static`, `nlohmann_json` 通过 `yw_utils` 的 PUBLIC 链接自动传递
 - **说明**：负责模块初始化、依赖注入和启动
 
 ## 运行时依赖关系
@@ -140,16 +146,18 @@ app (main.cpp)
      │        │
      ├─> yw_node ──────> yw_utils ──> [spdlog, hv, nlohmann_json]
      ├─> yw_monitor ────> yw_utils ──> [spdlog, hv, nlohmann_json]
-     ├─> yw_web ────────> [spdlog, hv, nlohmann_json]
+     ├─> yw_web ────────> yw_utils ──> [spdlog, hv, nlohmann_json]
      ├─> yw_bmc ────────> yw_utils ──> [spdlog, nlohmann_json]
      ├─> yw_alert ──────> yw_utils ──> [spdlog, nlohmann_json, pqxx]
      └─> yw_controller ─> yw_utils ──> [spdlog]
            │
-           └─> yw_utils ──> [spdlog, nlohmann_json]
+           └─> yw_utils ──> [spdlog, hv, nlohmann_json]
 
 说明：
-- 各模块直接链接第三方库，不通过 core 传递依赖
-- yw_utils 被多个模块依赖，提供 JsonConfig、MulticastScanner、DurationUtils 等工具
+- yw_utils 使用 PUBLIC 链接第三方库（spdlog, hv_static, nlohmann_json），依赖会自动传递
+- 依赖 yw_utils 的模块不需要显式链接第三方库，通过 yw_utils 的 PUBLIC 链接自动传递
+- yw_utils 被多个模块依赖，提供 JsonConfig、MulticastScanner、DurationUtils、ResponseBuilder 等工具
+- yw_web 依赖 yw_utils 以使用 ResponseBuilder 构建HTTP响应
 ```
 
 ### 运行时依赖（接口注入）
@@ -205,9 +213,11 @@ app
 - 依赖会传递给链接 `yw_web` 的目标（如 `yw_app`）
 
 ### 第三方库链接策略
-- 各模块直接链接需要的第三方库（spdlog, hv_static, nlohmann_json）
+- `yw_utils` 使用 `PUBLIC` 链接第三方库（spdlog, hv_static, nlohmann_json），依赖会自动传递
+- 依赖 `yw_utils` 的模块不需要显式链接这些第三方库，通过 `yw_utils` 的 `PUBLIC` 链接自动传递
+- 各模块只需链接 `yw_utils`，即可自动获得所需的第三方库依赖
 - 不再通过 `yw_core` 传递第三方库依赖
-- `yw_core` 的第三方库依赖改为 PRIVATE，仅内部使用
+- `yw_core` 的第三方库依赖改为通过 `yw_utils` 传递
 
 ### PRIVATE 链接
 - 大部分模块依赖都是 PRIVATE
@@ -234,4 +244,9 @@ app
    - 每个模块可以独立编译
    - 模块之间通过接口解耦
    - 便于测试和维护
+
+5. **工具类组织**：
+   - 通用工具类应放在 `yw_utils` 模块中
+   - `ResponseBuilder` 已从 `src/web/utils/` 移动到 `yw_utils` 模块
+   - 工具类的实现应拆分到 `.cpp` 文件，模板函数保留在头文件
 

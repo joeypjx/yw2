@@ -12,7 +12,7 @@ target_include_directories(yw_controller PRIVATE
 )
 
 target_link_libraries(yw_controller PRIVATE
-    spdlog::spdlog_header_only
     yw_utils
+    # spdlog 通过 yw_utils 的 PUBLIC 链接自动传递
 )
 

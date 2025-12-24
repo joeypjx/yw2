@@ -3,12 +3,10 @@ add_library(yw_core STATIC
     app_context.cpp
 )
 
-# 链接第三方库 - 使用PRIVATE，因为各模块直接链接第三方库
+# 链接第三方库 - 使用PRIVATE，因为各模块通过 yw_utils 传递依赖
 target_link_libraries(yw_core PRIVATE 
-    spdlog::spdlog_header_only 
-    hv_static 
-    nlohmann_json::nlohmann_json
     yw_utils
+    # spdlog, hv_static, nlohmann_json 通过 yw_utils 的 PUBLIC 链接自动传递
 )
 
 # 公开头文件目录 - 其他链接此库的目标会自动包含
