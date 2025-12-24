@@ -66,6 +66,7 @@ struct GpuResource {
     std::uint64_t mem_total = 0;
     double        temperature = 0.0;
     double        power = 0.0;
+    int           free = 0;
 };
 
 struct NodeResource {
@@ -83,7 +84,11 @@ struct NodeResource {
 // --------------------
 
 struct ComponentCpuResource { double load = 0.0; };
-struct ComponentMemoryResource { std::uint64_t mem_used = 0; std::uint64_t mem_limit = 0; };
+struct ComponentMemoryResource { 
+    std::uint64_t mem_used = 0; 
+    std::uint64_t mem_limit = 0;
+    double        mem_usage = 0.0;
+};
 struct ComponentNetworkResource {
     std::uint64_t tx = 0;
     std::uint64_t rx = 0;
@@ -105,6 +110,7 @@ struct ComponentEntry {
     int             index = 0;
     ComponentConfig config;
     std::string     state;
+    std::string     type;
     ComponentResource resource;
 };
 
@@ -133,7 +139,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(DiskPartition,
     device, mount_point, total, used, free, usage_percent)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(GpuResource,
-    index, name, compute_usage, mem_usage, mem_used, mem_total, temperature, power)
+    index, name, compute_usage, mem_usage, mem_used, mem_total, temperature, power, free)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(NodeResource,
     cpu, memory, network, disk, gpu, gpu_allocated, gpu_num)
@@ -142,7 +148,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ComponentCpuResource,
     load)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ComponentMemoryResource,
-    mem_used, mem_limit)
+    mem_used, mem_limit, mem_usage)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ComponentNetworkResource,
     tx, rx, rx_rate, tx_rate)
@@ -154,7 +160,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ComponentConfig,
     name, id)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ComponentEntry,
-    instance_id, uuid, index, config, state, resource)
+    instance_id, uuid, index, config, state, type, resource)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Resource,
     host_ip, resource, component)

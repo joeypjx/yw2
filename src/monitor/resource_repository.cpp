@@ -78,13 +78,14 @@ void ResourceRepository::save(const Resource& data) {
     // GPU（节点级冗余字段可一起存）
     for (const auto& g : data.resource.gpu) {
         tx.exec_params(
-            "INSERT INTO resource_gpu(time, host_ip, gpu_index, name, compute_usage, mem_usage, mem_used, mem_total, temperature, power, gpu_allocated, gpu_num)"
-            " VALUES (now(), $1::inet, $2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+            "INSERT INTO resource_gpu(time, host_ip, gpu_index, name, compute_usage, mem_usage, mem_used, mem_total, temperature, power, free, gpu_allocated, gpu_num)"
+            " VALUES (now(), $1::inet, $2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
             data.host_ip,
             g.index, g.name,
             g.compute_usage, g.mem_usage,
             g.mem_used, g.mem_total,
             g.temperature, g.power,
+            g.free,
             data.resource.gpu_allocated, data.resource.gpu_num
         );
     }
@@ -92,13 +93,14 @@ void ResourceRepository::save(const Resource& data) {
     // Component
     for (const auto& comp : data.component) {
         tx.exec_params(
-            "INSERT INTO component_resource(time, host_ip, instance_id, uuid, idx, name, container_id, state, cpu_load, mem_used, mem_limit, net_tx, net_rx, net_rx_rate, net_tx_rate)"
-            " VALUES (now(), $1::inet, $2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
+            "INSERT INTO resource_component(time, host_ip, instance_id, uuid, idx, name, container_id, state, type, cpu_load, mem_used, mem_limit, mem_usage, net_tx, net_rx, net_rx_rate, net_tx_rate)"
+            " VALUES (now(), $1::inet, $2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)",
             data.host_ip,
             comp.instance_id, comp.uuid, comp.index,
-            comp.config.name, comp.config.id, comp.state,
+            comp.config.name, comp.config.id, comp.state, comp.type,
             comp.resource.cpu.load,
             comp.resource.memory.mem_used, comp.resource.memory.mem_limit,
+            comp.resource.memory.mem_usage,
             comp.resource.network.tx, comp.resource.network.rx,
             comp.resource.network.rx_rate, comp.resource.network.tx_rate
         );
