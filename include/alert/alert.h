@@ -7,7 +7,6 @@
 #include "alert/alert_model.h"
 
 namespace yw {
-namespace node { class INodeModule; }
 namespace alert {
 
 // 前向声明内部实现类
@@ -170,12 +169,10 @@ public:
     /**
      * @brief 创建告警模块
      * @param dbConnInfo 数据库连接字符串
-     * @param nodeModule 节点模块指针（可选，用于获取节点信息）
      * @return 告警模块智能指针，失败返回nullptr
      */
     static std::shared_ptr<IAlertModule> createAlertModule(
-        const std::string& dbConnInfo,
-        node::INodeModule* nodeModule = nullptr);
+        const std::string& dbConnInfo);
 };
 
 } // namespace alert

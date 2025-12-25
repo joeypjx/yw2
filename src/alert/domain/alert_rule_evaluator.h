@@ -7,10 +7,6 @@
 #include <memory>
 
 namespace yw {
-namespace node {
-    class INodeModule;  // 前向声明
-}
-
 namespace alert {
 
 // 前向声明
@@ -20,8 +16,7 @@ struct AlertCondition;
 
 class AlertRuleEvaluator {
 public:
-    explicit AlertRuleEvaluator(std::shared_ptr<DatabaseQueryInterface> dbInterface,
-                             node::INodeModule* nodeModule = nullptr);
+    explicit AlertRuleEvaluator(std::shared_ptr<DatabaseQueryInterface> dbInterface);
     
     std::vector<AlertEvent> evaluateRule(const AlertRule& rule);
     static std::string convertRuleToSQL(const AlertRule& rule);
@@ -30,7 +25,6 @@ public:
 
 private:
     std::shared_ptr<DatabaseQueryInterface> dbInterface_;
-    node::INodeModule* nodeModule_;  // 可选的 node 模块，用于获取 box_id 和 slot_id
     
     static std::string buildWhereConditions(const AlertRule& rule);
     static std::string buildTagConditions(const std::vector<std::unordered_map<std::string, std::string>>& tags);

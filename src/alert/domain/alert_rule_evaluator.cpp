@@ -1,6 +1,6 @@
 #include "alert_rule_evaluator.h"
 #include "alert_rule.h"
-#include "node/node.h"
+#include "utils/ip_address_utils.h"
 #include <sstream>
 #include <algorithm>
 #include <regex>
@@ -8,9 +8,8 @@
 namespace yw {
 namespace alert {
 
-AlertRuleEvaluator::AlertRuleEvaluator(std::shared_ptr<DatabaseQueryInterface> dbInterface,
-                                      node::INodeModule* nodeModule)
-    : dbInterface_(dbInterface), nodeModule_(nodeModule) {}
+AlertRuleEvaluator::AlertRuleEvaluator(std::shared_ptr<DatabaseQueryInterface> dbInterface)
+    : dbInterface_(dbInterface) {}
 
 std::vector<AlertEvent> AlertRuleEvaluator::evaluateRule(const AlertRule& rule) {
 
@@ -81,13 +80,11 @@ std::vector<AlertEvent> AlertRuleEvaluator::convertQueryResultToAlerts(const Que
         labels["host_ip"] = hostIp;
         labels["value"] = std::to_string(metricValue);
         
-        // 通过 host_ip 获取 box_id 和 slot_id
-        if (nodeModule_) {
-            auto nodeOpt = nodeModule_->getNodeByIP(hostIp);
-            if (nodeOpt.has_value()) {
-                labels["box_id"] = std::to_string(nodeOpt->box_id);
-                labels["slot_id"] = std::to_string(nodeOpt->slot_id);
-            }
+        // 通过 host_ip 获取 box_id 和 slot_id（使用 IPAddressUtils 工具类）
+        auto boxSlotInfo = yw::utils::IPAddressUtils::parseHostIP(hostIp);
+        if (boxSlotInfo.has_value()) {
+            labels["box_id"] = std::to_string(boxSlotInfo->box_id);
+            labels["slot_id"] = std::to_string(boxSlotInfo->slot_id);
         }
         
         // 添加标签列的值

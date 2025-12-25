@@ -16,10 +16,8 @@ namespace alert {
 
 AlertEngine::AlertEngine(std::shared_ptr<DatabaseQueryInterface> dbInterface,
                          std::shared_ptr<AlertRuleRepository> alertRuleRepo,
-                         std::shared_ptr<AlertEventRepository> alertRepo,
-                         node::INodeModule* nodeModule)
+                         std::shared_ptr<AlertEventRepository> alertRepo)
     : dbInterface_(dbInterface), alertRuleRepo_(alertRuleRepo), alertRepo_(alertRepo),
-      nodeModule_(nodeModule),
       running_(false), shouldStop_(false), intervalSeconds_(5),
       totalEvaluations_(0), totalAlertsGenerated_(0),
       lastEvaluationTime_(std::chrono::system_clock::now()),
@@ -169,7 +167,7 @@ std::vector<AlertEvent> AlertEngine::evaluateAllRules() {
         
         try {
             // 使用AlertRuleEvaluator评估规则
-            AlertRuleEvaluator evaluator(dbInterface_, nodeModule_);
+            AlertRuleEvaluator evaluator(dbInterface_);
             auto alerts = evaluator.evaluateRule(rule);
             
             spdlog::debug("规则 '{}' 生成了 {} 个告警", rule.getAlertName(), alerts.size());

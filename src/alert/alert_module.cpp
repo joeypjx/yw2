@@ -193,8 +193,7 @@ private:
 //=============================================================================
 
 std::shared_ptr<IAlertModule> AlertFactory::createAlertModule(
-    const std::string& dbConnInfo,
-    node::INodeModule* nodeModule) {
+    const std::string& dbConnInfo) {
     
     try {
         // 创建数据库连接
@@ -211,7 +210,7 @@ std::shared_ptr<IAlertModule> AlertFactory::createAlertModule(
         
         // 创建 AlertEngine（仅用于评估引擎功能）
         auto engine = std::make_shared<AlertEngine>(
-            dbInterface, alertRuleRepo, alertRepo, nodeModule);
+            dbInterface, alertRuleRepo, alertRepo);
         
         // 返回适配器，直接使用服务类
         return std::make_shared<AlertModuleAdapter>(

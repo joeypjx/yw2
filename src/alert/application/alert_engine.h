@@ -17,10 +17,6 @@
 #include <functional>
 
 namespace yw {
-namespace node {
-    class INodeModule;  // 前向声明
-}
-
 namespace alert {
 
 /**
@@ -32,8 +28,7 @@ class AlertEngine {
 public:
     AlertEngine(std::shared_ptr<DatabaseQueryInterface> dbInterface,
                 std::shared_ptr<AlertRuleRepository> alertRuleRepo,
-                std::shared_ptr<AlertEventRepository> alertRepo,
-                node::INodeModule* nodeModule = nullptr);
+                std::shared_ptr<AlertEventRepository> alertRepo);
     ~AlertEngine();
     void start(int intervalSeconds = 5);
     void stop();
@@ -43,7 +38,6 @@ private:
     std::shared_ptr<DatabaseQueryInterface> dbInterface_;
     std::shared_ptr<AlertRuleRepository> alertRuleRepo_;
     std::shared_ptr<AlertEventRepository> alertRepo_;
-    node::INodeModule* nodeModule_;  // 可选的 node 模块，用于获取 box_id 和 slot_id
     
     // 服务类实例
     std::shared_ptr<AlertCreationFactory> alertFactory_;

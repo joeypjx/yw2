@@ -4,6 +4,7 @@ add_library(yw_utils STATIC
     duration_utils.cpp
     time_utils.cpp
     postgresql_connection_pool.cpp
+    ip_address_utils.cpp
     response_builder.cpp
 )
 

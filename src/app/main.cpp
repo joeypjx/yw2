@@ -121,8 +121,7 @@ std::shared_ptr<yw::alert::IAlertModule> createAlertModule(
         );
         
         // 使用工厂创建告警模块
-        auto alert_module = yw::alert::AlertFactory::createAlertModule(
-            conninfo, node_module.get());
+        auto alert_module = yw::alert::AlertFactory::createAlertModule(conninfo);
         
         if (!alert_module) {
             spdlog::error("Failed to create alert module");

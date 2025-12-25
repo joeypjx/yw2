@@ -28,19 +28,22 @@ src/
 
 ### 2. utils（工具模块）
 - **依赖**：
-  - `spdlog`, `nlohmann_json`, `hv_static` (第三方库，PUBLIC)
+  - `spdlog`, `nlohmann_json`, `hv_static`, `pqxx` (第三方库，PUBLIC)
 - **被依赖**：
   - `core` - 使用 JsonConfig
   - `node` - 使用 MulticastScanner, JsonConfig
-  - `monitor` - 使用 MulticastScanner, JsonConfig, DurationUtils
+  - `monitor` - 使用 MulticastScanner, JsonConfig, DurationUtils, PostgreSQLConnectionPool
   - `controller` - 链接但未直接使用（可能是预留）
-  - `bmc` - 使用 JsonConfig
-  - `alert` - 使用 JsonConfig
+  - `bmc` - 使用 JsonConfig, PostgreSQLConnectionPool
+  - `alert` - 使用 JsonConfig, IPAddressUtils, TimeUtils, DurationUtils, PostgreSQLConnectionPool
   - `app` - 使用 JsonConfig
   - `web` - 使用 ResponseBuilder
 - **说明**：提供通用工具函数和类：
   - `JsonConfig` - JSON配置文件读取
   - `DurationUtils` - 持续时间解析工具
+  - `TimeUtils` - ISO时间字符串解析工具
+  - `IPAddressUtils` - IP地址与机箱槽位转换工具
+  - `PostgreSQLConnectionPool` - PostgreSQL数据库连接池
   - `MulticastScanner` - 组播扫描工具
   - `ResponseBuilder` - HTTP响应构建工具（从 `src/web/utils/` 移动到 `yw_utils` 模块）
 
@@ -48,24 +51,24 @@ src/
 - **依赖**：
   - `yw_utils` (PRIVATE)
   - `spdlog`, `hv_static`, `nlohmann_json` 通过 `yw_utils` 的 PUBLIC 链接自动传递
-- **被依赖**：`web`, `alert`（运行时注入）
+- **被依赖**：`web`（运行时注入）
 - **说明**：管理节点信息和状态，提供节点查询接口
 
 ### 4. monitor（监控模块）
 - **依赖**：
-  - `yw_utils` (PRIVATE)
-  - `pqxx` (PostgreSQL客户端)
+  - `yw_utils` (PRIVATE) - 使用 JsonConfig, PostgreSQLConnectionPool
+  - `pqxx` (PostgreSQL客户端，通过 yw_utils 的 PUBLIC 链接自动传递)
   - `spdlog`, `hv_static`, `nlohmann_json` 通过 `yw_utils` 的 PUBLIC 链接自动传递
 - **被依赖**：`web`（运行时注入）
-- **说明**：处理节点资源监控数据，提供资源查询和导出功能
+- **说明**：处理节点资源监控数据，提供资源查询和导出功能。使用 `PostgreSQLConnectionPool` 进行数据库连接管理
 
 ### 5. bmc（BMC模块）
 - **依赖**：
-  - `yw_utils` (PRIVATE) - 使用 JsonConfig 读取配置
-  - `pqxx` (PostgreSQL客户端)
+  - `yw_utils` (PRIVATE) - 使用 JsonConfig, PostgreSQLConnectionPool
+  - `pqxx` (PostgreSQL客户端，通过 yw_utils 的 PUBLIC 链接自动传递)
   - `spdlog`, `nlohmann_json` 通过 `yw_utils` 的 PUBLIC 链接自动传递
 - **被依赖**：`web`（运行时注入）
-- **说明**：处理BMC传感器数据，提供BMC信息查询接口
+- **说明**：处理BMC传感器数据，提供BMC信息查询接口。使用 `PostgreSQLConnectionPool` 进行数据库连接管理
 
 ### 6. controller（控制器模块）
 - **依赖**：
@@ -76,13 +79,12 @@ src/
 
 ### 7. alert（告警模块）
 - **依赖**：
-  - `yw_utils` (PRIVATE) - 使用 JsonConfig 读取配置
-  - `pqxx` (PostgreSQL客户端)
-  - `node::INodeModule` (运行时注入，非编译时依赖)
+  - `yw_utils` (PRIVATE) - 使用 JsonConfig, IPAddressUtils, TimeUtils, DurationUtils, PostgreSQLConnectionPool
+  - `pqxx` (PostgreSQL客户端，通过 yw_utils 的 PUBLIC 链接自动传递)
   - `spdlog`, `nlohmann_json` 通过 `yw_utils` 的 PUBLIC 链接自动传递
 - **被依赖**：
   - `web` (PUBLIC)
-- **说明**：处理告警规则和事件，使用DDD分层架构
+- **说明**：处理告警规则和事件，使用DDD分层架构。使用 `IPAddressUtils` 进行IP地址与机箱槽位转换，使用 `PostgreSQLConnectionPool` 进行数据库连接管理。不再依赖 `node::INodeModule`
 
 ### 8. web（Web模块）
 - **依赖**：
@@ -119,7 +121,7 @@ src/
 2. monitor_module   // 创建监控模块
 3. bmc_module       // 创建BMC模块
 4. controller_module // 创建控制器模块
-5. alert_module     // 创建告警模块（依赖 node_module）
+5. alert_module     // 创建告警模块（独立创建，不再依赖 node_module）
 6. web_module       // 创建Web模块（依赖所有其他模块）
 ```
 
@@ -131,7 +133,7 @@ app (main.cpp)
   ├─> monitor_module
   ├─> bmc_module
   ├─> controller_module
-  ├─> alert_module (注入 node_module)
+  ├─> alert_module (独立创建，不再需要 node_module 注入)
   └─> web_module (注入所有模块)
 ```
 
@@ -154,10 +156,11 @@ app (main.cpp)
            └─> yw_utils ──> [spdlog, hv, nlohmann_json]
 
 说明：
-- yw_utils 使用 PUBLIC 链接第三方库（spdlog, hv_static, nlohmann_json），依赖会自动传递
+- yw_utils 使用 PUBLIC 链接第三方库（spdlog, hv_static, nlohmann_json, pqxx），依赖会自动传递
 - 依赖 yw_utils 的模块不需要显式链接第三方库，通过 yw_utils 的 PUBLIC 链接自动传递
-- yw_utils 被多个模块依赖，提供 JsonConfig、MulticastScanner、DurationUtils、ResponseBuilder 等工具
+- yw_utils 被多个模块依赖，提供 JsonConfig、MulticastScanner、DurationUtils、TimeUtils、IPAddressUtils、PostgreSQLConnectionPool、ResponseBuilder 等工具
 - yw_web 依赖 yw_utils 以使用 ResponseBuilder 构建HTTP响应
+- yw_alert、yw_monitor、yw_bmc 使用 PostgreSQLConnectionPool 进行数据库连接管理
 ```
 
 ### 运行时依赖（接口注入）
@@ -166,7 +169,7 @@ app (main.cpp)
 app
  │
  ├─> node_module
- │     └─> (注入到) alert_module
+ │     └─> (注入到) web_module
  │
  ├─> monitor_module
  │     └─> (注入到) web_module
@@ -177,7 +180,7 @@ app
  ├─> controller_module
  │     └─> (注入到) web_module
  │
- ├─> alert_module
+ ├─> alert_module (独立创建，使用 IPAddressUtils 替代 node_module)
  │     └─> (注入到) web_module
  │
  └─> web_module
@@ -248,5 +251,16 @@ app
 5. **工具类组织**：
    - 通用工具类应放在 `yw_utils` 模块中
    - `ResponseBuilder` 已从 `src/web/utils/` 移动到 `yw_utils` 模块
+   - `PostgreSQLConnectionPool` 已从 `src/alert/infrastructure/` 移动到 `yw_utils` 模块，供所有模块复用
    - 工具类的实现应拆分到 `.cpp` 文件，模板函数保留在头文件
+
+6. **数据库连接管理**：
+   - 所有使用 PostgreSQL 的模块（alert、monitor、bmc）都使用 `PostgreSQLConnectionPool` 进行连接管理
+   - 连接池提供连接复用、线程安全、自动重连等功能
+   - 通过 `ConnectionGuard` (RAII) 自动管理连接的获取和释放
+
+7. **IP地址解析**：
+   - `alert` 模块使用 `IPAddressUtils` 工具类进行IP地址与机箱槽位转换
+   - 不再依赖 `node::INodeModule` 获取节点信息
+   - 提高了模块独立性和性能
 
