@@ -31,19 +31,6 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${CMAKE_SOURCE_DIR}/third_party/libfreeipmi/libfreeipmi/include)
 link_directories(${CMAKE_SOURCE_DIR}/third_party/libfreeipmi/libfreeipmi/.libs)
 
-## openipmi
-include_directories(${CMAKE_SOURCE_DIR}/third_party/openipmi/include)
-link_directories(${CMAKE_SOURCE_DIR}/third_party/openipmi/lib/.libs)
-
-# 设置OpenIPMI选项
-set(OPENIPMI_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/third_party/openipmi/include")
-set(OPENIPMI_LIBRARIES
-    "${CMAKE_SOURCE_DIR}/third_party/openipmi/lib/.libs/libOpenIPMI.a"
-    "${CMAKE_SOURCE_DIR}/third_party/openipmi/unix/.libs/libOpenIPMIposix.a"
-    "${CMAKE_SOURCE_DIR}/third_party/openipmi/utils/.libs/libOpenIPMIutils.a"
-)
-set(OPENIPMI_FOUND TRUE)
-
 # 设置 libpq 构建输出目录
 # set(LIBPQ_BUILD_DIR "${CMAKE_BINARY_DIR}/third_party/postgres")
 # set(LIBPQ_LIBRARY_PATH "${CMAKE_SOURCE_DIR}/third_party/postgres/src/interfaces/libpq/libpq.a")
