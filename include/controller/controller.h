@@ -90,12 +90,6 @@ namespace controller {
             const std::vector<int>& slot_numbers,
             uint32_t req_id = 0) = 0;
 
-        /**
-         * @brief 自检板卡IP地址检查连通性
-         * @param ipAddress 板卡IP地址
-         * @return true表示ping通，false表示ping不通
-         */
-        virtual bool selfcheckBoard(const std::string& ipAddress) = 0;
     };
 
     /**

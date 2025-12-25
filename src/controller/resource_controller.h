@@ -34,15 +34,6 @@ public:
         const std::vector<int>& slot_numbers,
         uint32_t req_id = 0) override;
 
-    bool selfcheckBoard(const std::string& ipAddress) override;
-
-    /**
-     * @brief 自检板卡IP地址检查连通性（静态方法，保持向后兼容）
-     * @param ipAddress 板卡IP地址
-     * @return true表示ping通，false表示ping不通
-     */
-    static bool SelfcheckBoard(const std::string& ipAddress);
-
     // 工具方法（原先来自 TcpClient）
     static std::string binaryToString(const BinaryData& data) {
         return std::string(data.begin(), data.end());
