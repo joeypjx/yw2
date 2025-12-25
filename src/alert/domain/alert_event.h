@@ -10,13 +10,13 @@ namespace yw {
 namespace alert {
 
 // 前向声明
-class AlertRepository;
+class AlertEventRepository;
 
-// 告警类
-class Alert {
+// 告警事件类
+class AlertEvent {
 public:
-    Alert() = default;
-    Alert(const std::string& fingerprint, const std::unordered_map<std::string, std::string>& labels,
+    AlertEvent() = default;
+    AlertEvent(const std::string& fingerprint, const std::unordered_map<std::string, std::string>& labels,
           const std::unordered_map<std::string, std::string>& annotations);
     
     // 获取器方法
@@ -61,7 +61,7 @@ public:
     
     // JSON序列化方法
     nlohmann::json toJson() const;
-    static Alert fromJson(const nlohmann::json& j);
+    static AlertEvent fromJson(const nlohmann::json& j);
     
     // 工具方法
     static std::string generateFingerprint(const std::string& alertName, 
@@ -69,7 +69,7 @@ public:
     void updateTimestamp();
     
     // 数据库更新方法
-    bool updateInDatabase(std::shared_ptr<AlertRepository> repository);
+    bool updateInDatabase(std::shared_ptr<AlertEventRepository> repository);
 
 private:
     std::string id_;                                                      // 本次告警的ID，系统自动生成
@@ -83,11 +83,11 @@ private:
     AlertStatus status_ = AlertStatus::Pending;                          // 告警状态
     
     // 私有辅助方法
-    bool updateExistingAlert(const Alert& existingAlert, std::shared_ptr<AlertRepository> repository);
+    bool updateExistingAlert(const AlertEvent& existingAlert, std::shared_ptr<AlertEventRepository> repository);
 };
 
 // JSON序列化支持
-inline void to_json(nlohmann::json& j, const Alert& a) {
+inline void to_json(nlohmann::json& j, const AlertEvent& a) {
     j = nlohmann::json{
         {"id", a.getId()},
         {"fingerprint", a.getFingerprint()},
@@ -101,8 +101,8 @@ inline void to_json(nlohmann::json& j, const Alert& a) {
     };
 }
 
-inline void from_json(const nlohmann::json& j, Alert& a) {
-    a = Alert::fromJson(j);
+inline void from_json(const nlohmann::json& j, AlertEvent& a) {
+    a = AlertEvent::fromJson(j);
 }
 
 } // namespace alert

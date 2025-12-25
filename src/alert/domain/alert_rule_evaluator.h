@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Alert.h"
+#include "alert_event.h"
 #include "../infrastructure/database_query_interface.h"
 #include <string>
 #include <vector>
@@ -23,9 +23,9 @@ public:
     explicit AlertRuleEvaluator(std::shared_ptr<DatabaseQueryInterface> dbInterface,
                              node::INodeModule* nodeModule = nullptr);
     
-    std::vector<Alert> evaluateRule(const AlertRule& rule);
+    std::vector<AlertEvent> evaluateRule(const AlertRule& rule);
     static std::string convertRuleToSQL(const AlertRule& rule);
-    std::vector<Alert> convertQueryResultToAlerts(const QueryResult& result, 
+    std::vector<AlertEvent> convertQueryResultToAlerts(const QueryResult& result, 
                                                         const AlertRule& rule);
 
 private:

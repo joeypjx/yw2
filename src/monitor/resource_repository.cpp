@@ -1,18 +1,28 @@
 #include "resource_repository.h"
+#include "utils/postgresql_connection_pool.h"
 #include <pqxx/pqxx>
 #include <unordered_set>
 
 namespace yw {
 namespace monitor {
 
- 
+ResourceRepository::ResourceRepository(const std::string& conninfo,
+                                       size_t minConnections,
+                                       size_t maxConnections)
+    : connectionPool_(std::make_unique<yw::utils::PostgreSQLConnectionPool>(conninfo, minConnections, maxConnections)) {
+}
 
-ResourceRepository::ResourceRepository(const std::string& conninfo)
-    : conninfo_(conninfo) {}
+ResourceRepository::~ResourceRepository() = default;
 
 void ResourceRepository::save(const Resource& data) {
-    pqxx::connection c(conninfo_);
-    pqxx::work tx{c};
+    // 从连接池获取连接
+    yw::utils::ConnectionGuard guard(*connectionPool_);
+    auto conn = guard.get();
+    if (!conn) {
+        throw std::runtime_error("无法从连接池获取连接");
+    }
+    
+    pqxx::work tx{*conn};
 
     // Alive 心跳
     tx.exec_params(
@@ -116,8 +126,14 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
     std::unordered_set<std::string> need(kinds.begin(), kinds.end());
     const bool query_all = need.empty();
 
-    pqxx::connection c(conninfo_);
-    pqxx::read_transaction tx{c};
+    // 从连接池获取连接
+    yw::utils::ConnectionGuard guard(*connectionPool_);
+    auto conn = guard.get();
+    if (!conn) {
+        throw std::runtime_error("无法从连接池获取连接");
+    }
+    
+    pqxx::read_transaction tx{*conn};
 
     // CPU - 每10秒聚合平均值
     if (query_all || need.count("cpu")) {
@@ -420,8 +436,14 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
     std::unordered_set<std::string> need(kinds.begin(), kinds.end());
     const bool query_all = need.empty();
 
-    pqxx::connection c(conninfo_);
-    pqxx::read_transaction tx{c};
+    // 从连接池获取连接
+    yw::utils::ConnectionGuard guard(*connectionPool_);
+    auto conn = guard.get();
+    if (!conn) {
+        throw std::runtime_error("无法从连接池获取连接");
+    }
+    
+    pqxx::read_transaction tx{*conn};
 
     // 根据时间范围动态调整 bucket 大小，避免生成过多bucket
     // 1小时以内：10秒，1-6小时：1分钟，6-24小时：5分钟，超过24小时：15分钟

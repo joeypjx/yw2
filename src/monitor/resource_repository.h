@@ -1,14 +1,33 @@
 #pragma once
 
 #include <string>
+#include <memory>
 #include "monitor/monitor_model.h"
+
+// 前向声明
+namespace yw {
+namespace utils {
+    class PostgreSQLConnectionPool;
+    class ConnectionGuard;
+}
+}
 
 namespace yw {
 namespace monitor {
 
 class ResourceRepository {
 public:
-    explicit ResourceRepository(const std::string& conninfo);
+    /**
+     * @brief 构造函数
+     * @param conninfo 数据库连接信息
+     * @param minConnections 连接池最小连接数（默认2）
+     * @param maxConnections 连接池最大连接数（默认10）
+     */
+    explicit ResourceRepository(const std::string& conninfo,
+                               size_t minConnections = 2,
+                               size_t maxConnections = 10);
+    
+    ~ResourceRepository();
 
     // 将一次 /resource 的 data 写入 TimescaleDB（多表，单事务）
     void save(const Resource& data);
@@ -29,7 +48,7 @@ public:
                                      const std::vector<std::string>& kinds);
 
 private:
-    std::string conninfo_;
+    std::unique_ptr<yw::utils::PostgreSQLConnectionPool> connectionPool_;
 };
 
 } // namespace monitor

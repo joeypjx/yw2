@@ -2,15 +2,34 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 #include "bmc/bmc_model.h"
 #include <unordered_map>
+
+// 前向声明
+namespace yw {
+namespace utils {
+    class PostgreSQLConnectionPool;
+    class ConnectionGuard;
+}
+}
 
 namespace yw {
 namespace bmc {
 
 class BMCRepository {
 public:
-    explicit BMCRepository(const std::string& conninfo);
+    /**
+     * @brief 构造函数
+     * @param conninfo 数据库连接信息
+     * @param minConnections 连接池最小连接数（默认2）
+     * @param maxConnections 连接池最大连接数（默认10）
+     */
+    explicit BMCRepository(const std::string& conninfo,
+                          size_t minConnections = 2,
+                          size_t maxConnections = 10);
+    
+    ~BMCRepository();
 
     // 将一次 UdpInfo 报文写入 TimescaleDB（bmc_fan / bmc_sensor）
     void save(const UdpInfo& pkt);
@@ -27,7 +46,7 @@ public:
         const std::string& host_ip);
 
 private:
-    std::string conninfo_;
+    std::unique_ptr<yw::utils::PostgreSQLConnectionPool> connectionPool_;
 };
 
 } // namespace bmc

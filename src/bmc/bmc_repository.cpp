@@ -1,4 +1,5 @@
 #include "bmc_repository.h"
+#include "utils/postgresql_connection_pool.h"
 #include <pqxx/pqxx>
 #include <string>
 
@@ -34,12 +35,23 @@ static std::string calculateHostIP(int box_id, int slot_id) {
 }
 } // namespace
 
-BMCRepository::BMCRepository(const std::string& conninfo)
-    : conninfo_(conninfo) {}
+BMCRepository::BMCRepository(const std::string& conninfo,
+                             size_t minConnections,
+                             size_t maxConnections)
+    : connectionPool_(std::make_unique<yw::utils::PostgreSQLConnectionPool>(conninfo, minConnections, maxConnections)) {
+}
+
+BMCRepository::~BMCRepository() = default;
 
 void BMCRepository::save(const UdpInfo& pkt) {
-    pqxx::connection c(conninfo_);
-    pqxx::work tx{c};
+    // 从连接池获取连接
+    yw::utils::ConnectionGuard guard(*connectionPool_);
+    auto conn = guard.get();
+    if (!conn) {
+        throw std::runtime_error("无法从连接池获取连接");
+    }
+    
+    pqxx::work tx{*conn};
 
     // bmc_fan: 遍历 6 个风扇（根据协议更新）
     for (int i = 0; i < 6; ++i) {
@@ -152,8 +164,15 @@ std::unordered_map<std::string, std::vector<BMCSensorRow>> BMCRepository::queryB
     const std::string& host_ip,
     const std::string& duration) {
     std::unordered_map<std::string, std::vector<BMCSensorRow>> out;
-    pqxx::connection c(conninfo_);
-    pqxx::read_transaction tx{c};
+    
+    // 从连接池获取连接
+    yw::utils::ConnectionGuard guard(*connectionPool_);
+    auto conn = guard.get();
+    if (!conn) {
+        throw std::runtime_error("无法从连接池获取连接");
+    }
+    
+    pqxx::read_transaction tx{*conn};
 
     const char* bmc_query = R"SQL(
 WITH bucket_series AS (
@@ -223,8 +242,15 @@ ORDER BY
 std::unordered_map<std::string, BMCSensorRow> BMCRepository::getLatestBMCSensor(
     const std::string& host_ip) {
     std::unordered_map<std::string, BMCSensorRow> out;
-    pqxx::connection c(conninfo_);
-    pqxx::read_transaction tx{c};
+    
+    // 从连接池获取连接
+    yw::utils::ConnectionGuard guard(*connectionPool_);
+    auto conn = guard.get();
+    if (!conn) {
+        throw std::runtime_error("无法从连接池获取连接");
+    }
+    
+    pqxx::read_transaction tx{*conn};
 
     const char* bmc_query = R"SQL(
 SELECT DISTINCT ON (sensorname)

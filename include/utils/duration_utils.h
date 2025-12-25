@@ -36,6 +36,14 @@ public:
      */
     static std::string parseToPgStandard(const std::string& duration, const std::string& default_interval = "1 minute");
 
+    /**
+     * 解析时间字符串为秒数
+     * @param duration 时间字符串，支持格式：123s、123m、123h
+     * @param default_seconds 默认秒数，当解析失败时返回
+     * @return 秒数
+     */
+    static int parseToSeconds(const std::string& duration, int default_seconds = 0);
+
 private:
     /**
      * 内部解析函数，提取数值和单位

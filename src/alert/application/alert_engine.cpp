@@ -1,6 +1,11 @@
 #include "alert_engine.h"
+#include "alert_creation_factory.h"
+#include "alert_rule_service.h"
+#include "alert_query_service.h"
 #include "../domain/alert_rule_evaluator.h"
 #include "utils/json_config.h"
+#include "utils/duration_utils.h"
+#include "utils/time_utils.h"
 #include <spdlog/spdlog.h>
 #include <iostream>
 #include <sstream>
@@ -11,12 +16,11 @@ namespace alert {
 
 AlertEngine::AlertEngine(std::shared_ptr<DatabaseQueryInterface> dbInterface,
                          std::shared_ptr<AlertRuleRepository> alertRuleRepo,
-                         std::shared_ptr<AlertRepository> alertRepo,
+                         std::shared_ptr<AlertEventRepository> alertRepo,
                          node::INodeModule* nodeModule)
     : dbInterface_(dbInterface), alertRuleRepo_(alertRuleRepo), alertRepo_(alertRepo),
       nodeModule_(nodeModule),
       running_(false), shouldStop_(false), intervalSeconds_(5),
-      heartbeatTimeoutSeconds_(yw::utils::JsonConfig::Get<int>("alert.heartbeat_timeout_seconds", 5)),
       totalEvaluations_(0), totalAlertsGenerated_(0),
       lastEvaluationTime_(std::chrono::system_clock::now()),
       startTime_(std::chrono::system_clock::now()) {
@@ -28,8 +32,13 @@ AlertEngine::AlertEngine(std::shared_ptr<DatabaseQueryInterface> dbInterface,
         throw std::invalid_argument("AlertRuleRepository不能为空");
     }
     if (!alertRepo_) {
-        throw std::invalid_argument("AlertRepository不能为空");
+        throw std::invalid_argument("AlertEventRepository不能为空");
     }
+    
+    // 初始化服务类
+    alertFactory_ = std::make_shared<AlertCreationFactory>(alertRepo_, dbInterface_);
+    alertRuleService_ = std::make_shared<AlertRuleService>(alertRuleRepo_);
+    alertQueryService_ = std::make_shared<AlertQueryService>(alertRepo_);
 }
 
 AlertEngine::~AlertEngine() {
@@ -52,6 +61,11 @@ void AlertEngine::start(int intervalSeconds) {
     running_ = true;
     workerThread_ = std::thread(&AlertEngine::workerLoop, this);
     
+    // 启动节点存活检查（使用相同的间隔）
+    if (alertFactory_) {
+        alertFactory_->startAliveCheck(intervalSeconds);
+    }
+    
     spdlog::debug("告警引擎已启动，评估间隔: {} 秒", intervalSeconds_);
 }
 
@@ -62,6 +76,11 @@ void AlertEngine::stop() {
     
     spdlog::debug("正在停止告警引擎...");
     shouldStop_ = true;
+    
+    // 停止节点存活检查
+    if (alertFactory_) {
+        alertFactory_->stopAliveCheck();
+    }
     
     if (workerThread_.joinable()) {
         workerThread_.join();
@@ -78,8 +97,6 @@ void AlertEngine::workerLoop() {
         try {
             // 执行评估
             performEvaluation();
-
-            performEvaluationForAlive();
             
             // 等待下次评估
             std::this_thread::sleep_for(std::chrono::seconds(intervalSeconds_));
@@ -96,13 +113,9 @@ void AlertEngine::workerLoop() {
 
 void AlertEngine::initialize() {
     try {
-        // 从数据库加载所有启用的告警规则
-        rules_ = alertRuleRepo_->getEnabledRules();
-        spdlog::debug("已加载 {} 个启用的告警规则到内存", rules_.size());
-        
-        if (rules_.empty()) {
-            spdlog::warn("没有找到任何启用的告警规则");
-        }
+        // 通过 AlertRuleService 重新加载规则
+        alertRuleService_->reloadRules();
+        spdlog::debug("告警引擎初始化完成");
         
     } catch (const std::exception& e) {
         throw std::runtime_error("初始化告警引擎失败: " + std::string(e.what()));
@@ -116,7 +129,7 @@ int AlertEngine::performEvaluation() {
         spdlog::debug("=== 开始告警评估 ===");
         
         // 1. 评估所有告警规则，生成当前全量告警
-        std::vector<Alert> currentAlerts = evaluateAllRules();
+        std::vector<AlertEvent> currentAlerts = evaluateAllRules();
         spdlog::debug("生成了 {} 个告警", currentAlerts.size());
         
         // 2. 处理告警状态更新
@@ -145,144 +158,14 @@ int AlertEngine::performEvaluation() {
     }
 }
 
-int AlertEngine::performEvaluationForAlive() {
-    auto startTime = std::chrono::system_clock::now();
+std::vector<AlertEvent> AlertEngine::evaluateAllRules() {
+    std::vector<AlertEvent> allAlerts;
+                        
+    // 从 AlertRuleService 获取所有规则
+    auto rules = alertRuleService_->getAllAlertRules();
     
-    try {
-        spdlog::debug("=== 开始检查节点存活状态 ===");
-        
-        // 查询每个节点 IP 的最新时间，并在数据库层面直接计算时间差（秒）
-        // 这样避免了时区转换的复杂性
-        std::string sql = R"(
-            SELECT 
-                host_ip::text as host_ip, 
-                MAX(time) as latest_time,
-                EXTRACT(EPOCH FROM (NOW() - MAX(time)))::int as seconds_since_last_alive
-            FROM resource_alive 
-            GROUP BY host_ip 
-            ORDER BY host_ip
-        )";
-        
-        QueryResult result = dbInterface_->executeQuery(sql);
-        
-        spdlog::debug("找到 {} 个节点", result.size());
-        
-        int alertCount = 0;
-        
-        // 遍历每个节点，检查最新时间
-        for (const auto& row : result.rows) {
-            std::string hostIp = row.getValue("host_ip");
-            std::string latestTimeStr = row.getValue("latest_time");
-            std::string secondsSinceLastAliveStr = row.getValue("seconds_since_last_alive");
-            
-            if (latestTimeStr.empty() || secondsSinceLastAliveStr.empty()) {
-                spdlog::debug("节点 {}: 无记录", hostIp);
-                continue;
-            }
-            
-            // 从数据库查询结果中获取时间差（秒）
-            int secondsSinceLastAlive = 0;
-            try {
-                secondsSinceLastAlive = std::stoi(secondsSinceLastAliveStr);
-            } catch (const std::exception& e) {
-                spdlog::error("节点 {}: 解析时间差失败: {}", hostIp, secondsSinceLastAliveStr);
-                continue;
-            }
-            
-            // 输出节点信息
-            spdlog::debug("节点 {}: 最新心跳时间 {}, 距离现在 {} 秒", hostIp, latestTimeStr, secondsSinceLastAlive);
-            
-            std::unordered_map<std::string, std::string> fingerprintTags;
-            fingerprintTags["host_ip"] = hostIp;
-            std::string fingerprint = Alert::generateFingerprint("节点心跳超时", fingerprintTags);
-
-            // 如果超过配置的阈值未心跳，创建 firing 告警
-            if (secondsSinceLastAlive > heartbeatTimeoutSeconds_) {
-                try {
-                    // 检查是否已存在相同 fingerprint 的 firing 告警
-                    auto existingAlerts = alertRepo_->getAlertsByFingerprintAndStatus(fingerprint, "firing");
-                    
-                    if (existingAlerts.size() > 0) {
-                        
-                        // do not do anything
-                    } else {
-                        // 创建新告警的标签和注释
-                        std::unordered_map<std::string, std::string> alertLabels;
-                        std::unordered_map<std::string, std::string> alertAnnotations;
-                        
-                        // 设置基本标签
-                        alertLabels["alert_name"] = "节点心跳超时";
-                        alertLabels["alert_type"] = "availability";
-                        alertLabels["severity"] = "严重";
-                        alertLabels["host_ip"] = hostIp;
-                        
-                        // 设置描述
-                        std::string description = "节点 " + hostIp + " 心跳超时，距离最新心跳已 " + 
-                                                std::to_string(secondsSinceLastAlive) + " 秒";
-                        alertLabels["description"] = description;
-                        alertLabels["summary"] = "节点心跳超时";
-                        
-                        // 设置注释
-                        alertAnnotations["description"] = description;
-                        alertAnnotations["summary"] = "节点 " + hostIp + " 心跳超时";
-                        alertAnnotations["monitoring_source"] = "alive_check";
-                        alertAnnotations["last_alive_time"] = latestTimeStr;
-                        alertAnnotations["seconds_since_last_alive"] = std::to_string(secondsSinceLastAlive);
-                        
-                        // 创建新告警
-                        Alert newAlert(fingerprint, alertLabels, alertAnnotations);
-                        newAlert.setStatus(AlertStatus::Firing);
-                        newAlert.setStartsAt(newAlert.getCreatedAt());
-                        newAlert.setEndsAt("");
-                        
-                        // 保存到数据库
-                        bool success = newAlert.updateInDatabase(alertRepo_);
-                        if (success) {
-                            spdlog::debug("成功创建节点心跳超时告警: {} (指纹: {})", hostIp, fingerprint);
-                            alertCount++;
-                            
-                            // 节点心跳超时告警直接设为 Firing 状态，需要推送
-                            if (pushCallback_) {
-                                pushCallback_(newAlert);
-                            }
-                        } else {
-                            spdlog::error("创建节点心跳超时告警失败: {}", hostIp);
-                        }
-                    }
-                } catch (const std::exception& e) {
-                    spdlog::error("处理节点心跳超时告警时发生错误: {} - {}", hostIp, e.what());
-                }
-            } else {
-                // 如果节点正常（<= 5秒），检查是否有已存在的告警需要解决
-                try {
-                    int resolvedCount = alertRepo_->resolveFiringAlertsByFingerprint(fingerprint);
-                    if (resolvedCount > 0) {
-                        spdlog::debug("已解决 {} 个节点心跳超时告警: {}", resolvedCount, hostIp);
-                    }
-                } catch (const std::exception& e) {
-                    spdlog::error("处理节点恢复时发生错误: {} - {}", hostIp, e.what());
-                }
-            }
-        }
-        
-        auto endTime = std::chrono::system_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-        
-        spdlog::debug("节点存活状态检查完成，耗时: {} 毫秒，创建/更新了 {} 个告警", duration, alertCount);
-        
-        return result.size();
-        
-    } catch (const std::exception& e) {
-        spdlog::error("检查节点存活状态失败: {}", e.what());
-        throw;
-    }
-}
-
-std::vector<Alert> AlertEngine::evaluateAllRules() {
-    std::vector<Alert> allAlerts;
-    
-    for (size_t i = 0; i < rules_.size(); ++i) {
-        const auto& rule = rules_[i];
+    for (size_t i = 0; i < rules.size(); ++i) {
+        const auto& rule = rules[i];
         
         try {
             // 使用AlertRuleEvaluator评估规则
@@ -302,7 +185,7 @@ std::vector<Alert> AlertEngine::evaluateAllRules() {
     return allAlerts;
 }
 
-int AlertEngine::processAlertStatusUpdates(const std::vector<Alert>& currentAlerts) {
+int AlertEngine::processAlertStatusUpdates(const std::vector<AlertEvent>& currentAlerts) {
     try {
         // 获取当前数据库中firing和pending状态的告警指纹（只获取硬件资源类型）
         auto currentFiringFingerprints = getCurrentFiringFingerprints();
@@ -388,13 +271,13 @@ int AlertEngine::processAlertStatusUpdates(const std::vector<Alert>& currentAler
     }
 }
 
-int AlertEngine::updateAlertsToDatabase(const std::vector<Alert>& alerts) {
+int AlertEngine::updateAlertsToDatabase(const std::vector<AlertEvent>& alerts) {
     int successCount = 0;
     
     for (const auto& alert : alerts) {
         try {
             // 创建非const副本以调用updateInDatabase方法
-            Alert alertCopy = alert;
+            AlertEvent alertCopy = alert;
             
             // 检查数据库中是否已存在相同指纹的告警
             auto existingAlert = alertRepo_->getAlertByFingerprint(alertCopy.getFingerprint());
@@ -450,7 +333,7 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<Alert>& alerts) {
             }
             
             // 如果不存在现有告警，或者需要创建新告警，则正常处理
-            // Alert::updateInDatabase 方法会处理重复检查，所以这里可以安全调用
+            // AlertEvent::updateInDatabase 方法会处理重复检查，所以这里可以安全调用
             bool success = alertCopy.updateInDatabase(alertRepo_);
             if (success) {
                 successCount++;
@@ -471,8 +354,12 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<Alert>& alerts) {
     return successCount;
 }
 
-void AlertEngine::setPushCallback(std::function<void(const Alert&)> callback) {
+void AlertEngine::setPushCallback(std::function<void(const AlertEvent&)> callback) {
     pushCallback_ = std::move(callback);
+    // 同时设置到 AlertFactory
+    if (alertFactory_) {
+        alertFactory_->setPushCallback(pushCallback_);
+    }
 }
 
 std::unordered_set<std::string> AlertEngine::getCurrentPendingFingerprints() {
@@ -494,373 +381,9 @@ std::unordered_set<std::string> AlertEngine::getCurrentPendingFingerprints() {
     return fingerprints;
 }
 
-// 告警规则管理方法实现
-bool AlertEngine::addAlertRule(const AlertRule& rule) {
-    try {
-        // 1. 保存到数据库
-        bool dbSuccess = alertRuleRepo_->saveRule(rule);
-        if (!dbSuccess) {
-            spdlog::error("保存告警规则到数据库失败: {}", rule.getId());
-            return false;
-        }
-        
-        // 2. 添加到内存
-        rules_.push_back(rule);
-        
-        spdlog::debug("成功添加告警规则: {} ({})", rule.getId(), rule.getAlertName());
-        return true;
-        
-    } catch (const std::exception& e) {
-        spdlog::error("添加告警规则失败: {}", e.what());
-        return false;
-    }
-}
-
-bool AlertEngine::updateAlertRule(const AlertRule& rule) {
-    try {
-        // 1. 更新数据库
-        bool dbSuccess = alertRuleRepo_->saveRule(rule);
-        if (!dbSuccess) {
-            spdlog::error("更新告警规则到数据库失败: {}", rule.getId());
-            return false;
-        }
-        
-        // 2. 更新内存中的规则
-        for (auto& existingRule : rules_) {
-            if (existingRule.getId() == rule.getId()) {
-                existingRule = rule;
-                spdlog::debug("成功更新告警规则: {} ({})", rule.getId(), rule.getAlertName());
-                return true;
-            }
-        }
-        
-        // 如果内存中没有找到，添加到内存
-        rules_.push_back(rule);
-        spdlog::debug("告警规则在内存中不存在，已添加到内存: {}", rule.getId());
-        return true;
-        
-    } catch (const std::exception& e) {
-        spdlog::error("更新告警规则失败: {}", e.what());
-        return false;
-    }
-}
-
-bool AlertEngine::deleteAlertRule(const std::string& ruleId) {
-    try {
-        // 1. 从数据库删除
-        bool dbSuccess = alertRuleRepo_->deleteRule(ruleId);
-        if (!dbSuccess) {
-            spdlog::error("从数据库删除告警规则失败: {}", ruleId);
-            return false;
-        }
-        
-        // 2. 从内存删除
-        auto it = std::find_if(rules_.begin(), rules_.end(),
-                               [&ruleId](const AlertRule& rule) {
-                                   return rule.getId() == ruleId;
-                               });
-        
-        if (it != rules_.end()) {
-            rules_.erase(it);
-            spdlog::debug("成功删除告警规则: {}", ruleId);
-            return true;
-        } else {
-            spdlog::debug("告警规则在内存中不存在: {}", ruleId);
-            return true; // 数据库已删除，即使内存中没有也算成功
-        }
-        
-    } catch (const std::exception& e) {
-        spdlog::error("删除告警规则失败: {}", e.what());
-        return false;
-    }
-}
-
-std::shared_ptr<AlertRule> AlertEngine::getAlertRuleById(const std::string& ruleId) {
-    try {
-        // 先从内存查找
-        for (const auto& rule : rules_) {
-            if (rule.getId() == ruleId) {
-                return std::make_shared<AlertRule>(rule);
-            }
-        }
-        
-        // 如果内存中没有，从数据库查找
-        auto rule = alertRuleRepo_->getRuleById(ruleId);
-        if (rule) {
-            // 添加到内存中
-            rules_.push_back(*rule);
-            return rule;
-        }
-        
-        return nullptr;
-        
-    } catch (const std::exception& e) {
-        spdlog::error("获取告警规则失败: {}", e.what());
-        return nullptr;
-    }
-}
-
-std::vector<AlertRule> AlertEngine::getAllAlertRules() const {
-    return rules_;
-}
-
-// 告警查询方法实现
-std::vector<Alert> AlertEngine::getAlertsByStatus(const std::string& status) {
-    try {
-        return alertRepo_->getAlertsByStatus(status);
-    } catch (const std::exception& e) {
-        spdlog::error("根据状态获取告警失败: {}", e.what());
-        return {};
-    }
-}
-
-std::vector<Alert> AlertEngine::getAlertsByHostIp(const std::string& hostIp) {
-    try {
-        return alertRepo_->getAlertsByHostIp(hostIp);
-    } catch (const std::exception& e) {
-        spdlog::error("根据主机IP获取告警失败: {}", e.what());
-        return {};
-    }
-}
-
-std::vector<Alert> AlertEngine::getAlertsByBoxId(int boxId) {
-    try {
-        return alertRepo_->getAlertsByBoxId(boxId);
-    } catch (const std::exception& e) {
-        spdlog::error("根据机箱号获取告警失败: {}", e.what());
-        return {};
-    }
-}
-
-std::vector<Alert> AlertEngine::getAlertsBySlotId(int slotId) {
-    try {
-        return alertRepo_->getAlertsBySlotId(slotId);
-    } catch (const std::exception& e) {
-        spdlog::error("根据板卡号获取告警失败: {}", e.what());
-        return {};
-    }
-}
-
-std::vector<Alert> AlertEngine::getAlertsByTimeRange(const std::string& startTime, const std::string& endTime) {
-    try {
-        return alertRepo_->getAlertsByTimeRange(startTime, endTime);
-    } catch (const std::exception& e) {
-        spdlog::error("根据时间范围获取告警失败: {}", e.what());
-        return {};
-    }
-}
-
-std::vector<Alert> AlertEngine::getAlertsByAlertType(const std::string& alertType) {
-    try {
-        return alertRepo_->getAlertsByAlertType(alertType);
-    } catch (const std::exception& e) {
-        spdlog::error("根据告警类型获取告警失败: {}", e.what());
-        return {};
-    }
-}
-
-std::vector<Alert> AlertEngine::getAlertsBySeverity(const std::string& severity) {
-    try {
-        return alertRepo_->getAlertsBySeverity(severity);
-    } catch (const std::exception& e) {
-        spdlog::error("根据严重程度获取告警失败: {}", e.what());
-        return {};
-    }
-}
-
-std::vector<Alert> AlertEngine::getAlertsByDescription(const std::string& description) {
-    try {
-        return alertRepo_->getAlertsByDescription(description);
-    } catch (const std::exception& e) {
-        spdlog::error("根据描述获取告警失败: {}", e.what());
-        return {};
-    }
-}
-
-std::vector<Alert> AlertEngine::getAlertsExceptPending() {
-    try {
-        return alertRepo_->getAlertsExceptPending();
-    } catch (const std::exception& e) {
-        spdlog::error("获取除Pending外的告警失败: {}", e.what());
-        return {};
-    }
-}
-
-std::vector<Alert> AlertEngine::getAlertsByFilters(const AlertFilters& filters) {
-    try {
-        return alertRepo_->getAlertsByFilters(filters);
-    } catch (const std::exception& e) {
-        spdlog::error("根据过滤条件获取告警失败: {}", e.what());
-        return {};
-    }
-}
-
-std::shared_ptr<Alert> AlertEngine::getAlertById(const std::string& alertId) {
-    try {
-        return alertRepo_->getAlertById(alertId);
-    } catch (const std::exception& e) {
-        spdlog::error("根据ID获取告警失败: {}", e.what());
-        return nullptr;
-    }
-}
-
-// 告警数量查询方法实现
-size_t AlertEngine::getAlertCount() {
-    try {
-        return alertRepo_->getAlertCount();
-    } catch (const std::exception& e) {
-        spdlog::error("获取告警总数失败: {}", e.what());
-        return 0;
-    }
-}
-
-// 告警创建方法实现
-std::shared_ptr<Alert> AlertEngine::createAlertFromComponent(const std::string& hostIp,
-                                                           const std::string& instanceId,
-                                                           const std::string& uuid,
-                                                           int index,
-                                                           const std::string& status,
-                                                           const std::string& stack_name,
-                                                           const std::string& component_name) {
-    try {
-        // 生成指纹（与AlertRoutes中的逻辑保持一致）
-        std::string fingerprint = "业务组件状态异常|host_ip=" + hostIp + "|instance_id=" + instanceId + "|uuid=" + uuid + "|index=" + std::to_string(index);
-        
-        // 检查是否已存在相同的告警
-        auto existingAlert = alertRepo_->getAlertByFingerprint(fingerprint);
-        if (existingAlert) {
-            // 如果已存在，更新现有告警
-            existingAlert->setStatus(AlertStatus::Firing);
-            existingAlert->setUpdatedNow();
-            existingAlert->setStartsAt(existingAlert->getUpdatedAt());
-            existingAlert->setEndsAt(""); // 清空结束时间 
-            
-            // 更新描述
-            std::string description = hostIp + " 节点上业务(" + stack_name + ") 组件(" + component_name + ") 状态为 " + status;
-            existingAlert->addLabel("description", description);
-            
-            // 保存到数据库
-            bool success = existingAlert->updateInDatabase(alertRepo_);
-            if (success) {
-                spdlog::debug("更新现有组件告警: {}", fingerprint);
-                
-                // 组件告警直接设为 Firing 状态，需要推送
-                if (pushCallback_) {
-                    pushCallback_(*existingAlert);
-                }
-                
-                return existingAlert;
-            } else {
-                spdlog::error("更新现有组件告警失败: {}", fingerprint);
-                return nullptr;
-            }
-        }
-        
-        // 创建新组件告警的标签和注释
-        std::unordered_map<std::string, std::string> alertLabels;
-        std::unordered_map<std::string, std::string> alertAnnotations;
-
-        // 设置基本标签
-        alertLabels["alert_name"] = "业务组件状态异常";
-        alertLabels["alert_type"] = "业务链路";
-        alertLabels["severity"] = "严重";
-        alertLabels["host_ip"] = hostIp;
-        alertLabels["instance_id"] = instanceId;
-        alertLabels["uuid"] = uuid;
-        alertLabels["index"] = std::to_string(index);
-        alertLabels["value"] = status;
-        alertLabels["stack_name"] = stack_name;
-        alertLabels["component_name"] = component_name;
-        
-        // 设置描述
-        std::string description = hostIp + " 节点上业务(" + stack_name + ") 组件(" + component_name + ") 状态为 " + status;
-        alertAnnotations["summary"] = "业务组件状态异常";
-        alertAnnotations["description"] = description;
-        
-        // 创建新组件告警
-        Alert newAlert(fingerprint, alertLabels, alertAnnotations);
-        newAlert.setStatus(AlertStatus::Firing);
-        newAlert.setStartsAt(newAlert.getCreatedAt());
-        newAlert.setEndsAt("");
-        
-        // 保存到数据库
-        bool success = newAlert.updateInDatabase(alertRepo_);
-        if (success) {
-            spdlog::debug("成功创建组件告警: {} (组件: {})", fingerprint, instanceId);
-            
-            // 组件告警直接设为 Firing 状态，需要推送
-            if (pushCallback_) {
-                pushCallback_(newAlert);
-            }
-            
-            return std::make_shared<Alert>(newAlert);
-        } else {
-            spdlog::error("创建组件告警失败: {}", fingerprint);
-            return nullptr;
-        }
-        
-    } catch (const std::exception& e) {
-        spdlog::error("创建组件告警时发生错误: {}", e.what());
-        return nullptr;
-    }
-}
-
-std::shared_ptr<Alert> AlertEngine::createBoardTypeChangeAlert(int box_id, int slot_id,
-                                                               const std::string& cached_board_type,
-                                                               const std::string& new_board_type) {
-    try {
-        // 生成指纹（使用 box_id 和 slot_id）
-        std::string fingerprint = "节点板卡类型变化|box_id=" + std::to_string(box_id) + "|slot_id=" + std::to_string(slot_id);
-        
-        // 创建新板卡类型变化告警的标签和注释
-        std::unordered_map<std::string, std::string> alertLabels;
-        std::unordered_map<std::string, std::string> alertAnnotations;
-        
-        // 设置基本标签
-        alertLabels["alert_name"] = "节点板卡类型变化";
-        alertLabels["alert_type"] = "硬件状态";
-        alertLabels["severity"] = "警告";
-        alertLabels["box_id"] = std::to_string(box_id);
-        alertLabels["slot_id"] = std::to_string(slot_id);
-        alertLabels["cached_board_type"] = cached_board_type;
-        alertLabels["new_board_type"] = new_board_type;
-        
-        // 设置描述
-        std::string description = "机箱 " + std::to_string(box_id) + " 槽位 " + std::to_string(slot_id) + 
-                                " 的板卡类型从 " + cached_board_type + " 变为 " + new_board_type;
-        alertAnnotations["summary"] = "节点板卡类型变化";
-        alertAnnotations["description"] = description;
-        
-        // 创建新板卡类型变化告警
-        Alert newAlert(fingerprint, alertLabels, alertAnnotations);
-        newAlert.setStatus(AlertStatus::Firing);
-        newAlert.setStartsAt(newAlert.getCreatedAt());
-        newAlert.setEndsAt(newAlert.getCreatedAt()); // 已解决状态，结束时间等于创建时间
-        
-        // 保存到数据库
-        bool success = newAlert.updateInDatabase(alertRepo_);
-        if (success) {
-            spdlog::debug("成功创建板卡类型变化告警: {} (机箱: {}, 槽位: {})", fingerprint, box_id, slot_id);
-            
-            // 推送告警
-            if (pushCallback_) {
-                pushCallback_(newAlert);
-            }
-            
-            return std::make_shared<Alert>(newAlert);
-        } else {
-            spdlog::error("创建板卡类型变化告警失败: {}", fingerprint);
-            return nullptr;
-        }
-        
-    } catch (const std::exception& e) {
-        spdlog::error("创建板卡类型变化告警时发生错误: {}", e.what());
-        return nullptr;
-    }
-}
 
 // 私有辅助方法
-bool AlertEngine::shouldTransitionToFiring(const Alert& pendingAlert) {
+bool AlertEngine::shouldTransitionToFiring(const AlertEvent& pendingAlert) {
     try {
         // 从告警的标签中获取告警名称
         auto labels = pendingAlert.getLabels();
@@ -875,7 +398,8 @@ bool AlertEngine::shouldTransitionToFiring(const Alert& pendingAlert) {
         
         // 查找对应的告警规则
         AlertRule* rule = nullptr;
-        for (auto& r : rules_) {
+        auto rules = alertRuleService_->getAllAlertRules();
+        for (auto& r : rules) {
             if (r.getAlertName() == alertName) {
                 rule = &r;
                 break;
@@ -898,7 +422,7 @@ bool AlertEngine::shouldTransitionToFiring(const Alert& pendingAlert) {
         }
         
         // 解析持续时间（支持s/m/h单位）
-        int durationSeconds = parseDuration(forDuration);
+        int durationSeconds = yw::utils::DurationUtils::parseToSeconds(forDuration);
         spdlog::debug("解析的持续时间: {} 秒", durationSeconds);
         
         if (durationSeconds <= 0) {
@@ -916,7 +440,7 @@ bool AlertEngine::shouldTransitionToFiring(const Alert& pendingAlert) {
         }
         
         // 解析创建时间
-        auto createdTime = parseISOTime(createdAt);
+        auto createdTime = yw::utils::TimeUtils::parseISOTime(createdAt);
         if (createdTime == std::chrono::system_clock::time_point{}) {
             spdlog::error("解析创建时间失败");
             return false;
@@ -940,124 +464,7 @@ bool AlertEngine::shouldTransitionToFiring(const Alert& pendingAlert) {
     }
 }
 
-int AlertEngine::parseDuration(const std::string& duration) {
-    try {
-        if (duration.empty()) {
-            return 0;
-        }
-        
-        // 提取数字部分
-        std::string numberStr;
-        char unit = 's'; // 默认单位
-        
-        for (char c : duration) {
-            if (std::isdigit(c)) {
-                numberStr += c;
-            } else if (c == 's' || c == 'm' || c == 'h') {
-                unit = c;
-                break;
-            }
-        }
-        
-        if (numberStr.empty()) {
-            return 0;
-        }
-        
-        int number = std::stoi(numberStr);
-        
-        // 转换为秒
-        switch (unit) {
-            case 's':
-                return number;
-            case 'm':
-                return number * 60;
-            case 'h':
-                return number * 3600;
-            default:
-                return number;
-        }
-    } catch (const std::exception& e) {
-        spdlog::error("解析持续时间失败: {} - {}", duration, e.what());
-        return 0;
-    }
-}
 
-std::chrono::system_clock::time_point AlertEngine::parseISOTime(const std::string& isoTime) {
-    try {
-        spdlog::debug("开始解析时间: {}", isoTime);
-        
-        // 解析时间字符串 (例如: 2024-01-01T12:00:00.000)
-        std::tm tm = {};
-        std::istringstream ss(isoTime);
-        
-        // 处理时间字符串，移除Z后缀（如果存在）
-        std::string timeStr = isoTime;
-        if (timeStr.back() == 'Z') {
-            timeStr.pop_back();
-        }
-        
-        spdlog::debug("处理后的时间字符串: {}", timeStr);
-        
-        // 解析时间（支持毫秒）
-        ss.str(timeStr);
-        
-        // 尝试解析不同的时间格式
-        ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%S");
-        if (ss.fail()) {
-            // 如果T格式失败，尝试空格格式
-            ss.clear();
-            ss.str(timeStr);
-            ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
-            if (ss.fail()) {
-                spdlog::error("解析时间失败，格式错误: {} (处理后: {})", isoTime, timeStr);
-                return std::chrono::system_clock::time_point{};
-            }
-        }
-        
-        // 处理毫秒部分（如果存在）
-        int milliseconds = 0;
-        if (ss.peek() == '.') {
-            ss.ignore(); // 跳过 '.'
-            ss >> milliseconds;
-            if (ss.fail()) {
-                milliseconds = 0;
-            }
-            spdlog::debug("解析到毫秒: {}", milliseconds);
-        }
-        
-        // 转换为time_point（使用本地时间）
-        auto time_t = std::mktime(&tm);
-        if (time_t == -1) {
-            spdlog::error("解析时间失败，mktime返回-1: {}", isoTime);
-            return std::chrono::system_clock::time_point{};
-        }
-        
-        spdlog::debug("mktime成功，time_t: {}", time_t);
-        
-        auto result = std::chrono::system_clock::from_time_t(time_t);
-        
-        // 添加毫秒
-        result += std::chrono::milliseconds(milliseconds);
-        
-        return result;
-        
-    } catch (const std::exception& e) {
-        spdlog::error("解析时间失败: {} - {}", isoTime, e.what());
-        return std::chrono::system_clock::time_point{};
-    }
-}
-
-std::string AlertEngine::generateAlertId() {
-    // 生成基于时间戳的唯一ID
-    auto now = std::chrono::system_clock::now();
-    auto time_t = std::chrono::system_clock::to_time_t(now);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        now.time_since_epoch()) % 1000;
-    
-    std::stringstream ss;
-    ss << "alert_" << time_t << "_" << ms.count();
-    return ss.str();
-}
 
 std::unordered_set<std::string> AlertEngine::getCurrentFiringFingerprints() {
     std::unordered_set<std::string> fingerprints;
@@ -1078,7 +485,7 @@ std::unordered_set<std::string> AlertEngine::getCurrentFiringFingerprints() {
     return fingerprints;
 }
 
-bool AlertEngine::hasNodeRecentData(const Alert& alert, int seconds) {
+bool AlertEngine::hasNodeRecentData(const AlertEvent& alert, int seconds) {
     try {
         // 从告警的labels中获取必要信息
         std::string hostIp = alert.getLabel("host_ip");

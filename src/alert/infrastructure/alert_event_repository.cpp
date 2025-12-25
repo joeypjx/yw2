@@ -1,6 +1,6 @@
-#include "alert_repository.h"
+#include "alert_event_repository.h"
 #include "database_query_interface.h"
-#include "../domain/Alert.h"
+#include "../domain/alert_event.h"
 #include <stdexcept>
 #include <sstream>
 #include <algorithm>
@@ -10,14 +10,14 @@
 namespace yw {
 namespace alert {
 
-DatabaseAlertRepository::DatabaseAlertRepository(std::shared_ptr<DatabaseQueryInterface> dbInterface)
+DatabaseAlertEventRepository::DatabaseAlertEventRepository(std::shared_ptr<DatabaseQueryInterface> dbInterface)
     : dbInterface_(dbInterface) {
     if (!dbInterface_) {
         throw std::invalid_argument("DatabaseQueryInterface不能为空");
     }
 }
 
-bool DatabaseAlertRepository::saveAlert(const Alert& alert) {
+bool DatabaseAlertEventRepository::saveAlert(const AlertEvent& alert) {
     try {
         // 检查告警是否已存在
         if (alertExists(alert.getId())) {
@@ -72,7 +72,7 @@ bool DatabaseAlertRepository::saveAlert(const Alert& alert) {
     }
 }
 
-std::shared_ptr<Alert> DatabaseAlertRepository::getAlertById(const std::string& id) {
+std::shared_ptr<AlertEvent> DatabaseAlertEventRepository::getAlertById(const std::string& id) {
     try {
         std::string sql = buildSelectSql() + " WHERE id = $1";
         std::vector<std::string> params = {id};
@@ -82,14 +82,14 @@ std::shared_ptr<Alert> DatabaseAlertRepository::getAlertById(const std::string& 
             return nullptr;
         }
         
-        Alert alert = parseAlertFromQueryResult(result[0]);
-        return std::make_shared<Alert>(alert);
+        AlertEvent alert = parseAlertFromQueryResult(result[0]);
+        return std::make_shared<AlertEvent>(alert);
     } catch (const std::exception& e) {
         throw std::runtime_error("根据ID获取告警失败: " + std::string(e.what()));
     }
 }
 
-std::shared_ptr<Alert> DatabaseAlertRepository::getAlertByFingerprint(const std::string& fingerprint) {
+std::shared_ptr<AlertEvent> DatabaseAlertEventRepository::getAlertByFingerprint(const std::string& fingerprint) {
     try {
         std::string sql = buildSelectSql() + " WHERE fingerprint = $1 ORDER BY created_at DESC LIMIT 1";
         std::vector<std::string> params = {fingerprint};
@@ -99,21 +99,21 @@ std::shared_ptr<Alert> DatabaseAlertRepository::getAlertByFingerprint(const std:
             return nullptr;
         }
         
-        Alert alert = parseAlertFromQueryResult(result[0]);
-        return std::make_shared<Alert>(alert);
+        AlertEvent alert = parseAlertFromQueryResult(result[0]);
+        return std::make_shared<AlertEvent>(alert);
     } catch (const std::exception& e) {
         throw std::runtime_error("根据指纹获取告警失败: " + std::string(e.what()));
     }
 }
 
-std::vector<Alert> DatabaseAlertRepository::getAlertsByFingerprintAndStatus(const std::string& fingerprint, const std::string& status) {
+std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByFingerprintAndStatus(const std::string& fingerprint, const std::string& status) {
     try {
         std::string sql = buildSelectSql() + " WHERE fingerprint = $1 AND status = $2 ORDER BY created_at DESC";
         std::vector<std::string> params = {fingerprint, status};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
         
-        std::vector<Alert> alerts;
+        std::vector<AlertEvent> alerts;
         for (const auto& row : result.rows) {
             alerts.push_back(parseAlertFromQueryResult(row));
         }
@@ -124,14 +124,14 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsByFingerprintAndStatus(cons
     }
 }
 
-std::vector<Alert> DatabaseAlertRepository::getAlertsByStatus(const std::string& status) {
+std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByStatus(const std::string& status) {
     try {
         std::string sql = buildSelectSql() + " WHERE status = $1 ORDER BY created_at DESC";
         std::vector<std::string> params = {status};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
         
-        std::vector<Alert> alerts;
+        std::vector<AlertEvent> alerts;
         for (const auto& row : result.rows) {
             alerts.push_back(parseAlertFromQueryResult(row));
         }
@@ -142,7 +142,7 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsByStatus(const std::string&
     }
 }
 
-std::vector<Alert> DatabaseAlertRepository::getAlertsByHostIp(const std::string& hostIp) {
+std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByHostIp(const std::string& hostIp) {
     try {
         // 从 labels JSON 中查询 host_ip
         std::string sql = buildSelectSql() + " WHERE labels->>'host_ip' = $1 ORDER BY created_at DESC";
@@ -150,7 +150,7 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsByHostIp(const std::string&
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
         
-        std::vector<Alert> alerts;
+        std::vector<AlertEvent> alerts;
         for (const auto& row : result.rows) {
             alerts.push_back(parseAlertFromQueryResult(row));
         }
@@ -161,7 +161,7 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsByHostIp(const std::string&
     }
 }
 
-std::vector<Alert> DatabaseAlertRepository::getAlertsByBoxId(int boxId) {
+std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByBoxId(int boxId) {
     try {
         // 从 labels JSON 中查询 box_id
         std::string sql = buildSelectSql() + " WHERE labels->>'box_id' = $1 ORDER BY created_at DESC";
@@ -169,7 +169,7 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsByBoxId(int boxId) {
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
         
-        std::vector<Alert> alerts;
+        std::vector<AlertEvent> alerts;
         for (const auto& row : result.rows) {
             alerts.push_back(parseAlertFromQueryResult(row));
         }
@@ -180,7 +180,7 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsByBoxId(int boxId) {
     }
 }
 
-std::vector<Alert> DatabaseAlertRepository::getAlertsBySlotId(int slotId) {
+std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsBySlotId(int slotId) {
     try {
         // 从 labels JSON 中查询 slot_id
         std::string sql = buildSelectSql() + " WHERE labels->>'slot_id' = $1 ORDER BY created_at DESC";
@@ -188,7 +188,7 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsBySlotId(int slotId) {
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
         
-        std::vector<Alert> alerts;
+        std::vector<AlertEvent> alerts;
         for (const auto& row : result.rows) {
             alerts.push_back(parseAlertFromQueryResult(row));
         }
@@ -199,7 +199,7 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsBySlotId(int slotId) {
     }
 }
 
-std::vector<Alert> DatabaseAlertRepository::getAlertsByTimeRange(const std::string& startTime, const std::string& endTime) {
+std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByTimeRange(const std::string& startTime, const std::string& endTime) {
     try {
         // 根据 created_at 时间范围查询告警
         std::string sql = buildSelectSql() + " WHERE created_at >= $1::timestamp AND created_at <= $2::timestamp ORDER BY created_at DESC";
@@ -207,7 +207,7 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsByTimeRange(const std::stri
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
         
-        std::vector<Alert> alerts;
+        std::vector<AlertEvent> alerts;
         for (const auto& row : result.rows) {
             alerts.push_back(parseAlertFromQueryResult(row));
         }
@@ -218,14 +218,14 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsByTimeRange(const std::stri
     }
 }
 
-std::vector<Alert> DatabaseAlertRepository::getAlertsByAlertType(const std::string& alertType) {
+std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByAlertType(const std::string& alertType) {
     try {
         std::string sql = buildSelectSql() + " WHERE labels->>'alert_type' = $1 ORDER BY created_at DESC";
         std::vector<std::string> params = {alertType};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
         
-        std::vector<Alert> alerts;
+        std::vector<AlertEvent> alerts;
         for (const auto& row : result.rows) {
             alerts.push_back(parseAlertFromQueryResult(row));
         }
@@ -236,14 +236,14 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsByAlertType(const std::stri
     }
 }
 
-std::vector<Alert> DatabaseAlertRepository::getAlertsBySeverity(const std::string& severity) {
+std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsBySeverity(const std::string& severity) {
     try {
         std::string sql = buildSelectSql() + " WHERE labels->>'severity' = $1 ORDER BY created_at DESC";
         std::vector<std::string> params = {severity};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
         
-        std::vector<Alert> alerts;
+        std::vector<AlertEvent> alerts;
         for (const auto& row : result.rows) {
             alerts.push_back(parseAlertFromQueryResult(row));
         }
@@ -254,7 +254,7 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsBySeverity(const std::strin
     }
 }
 
-std::vector<Alert> DatabaseAlertRepository::getAlertsByDescription(const std::string& description) {
+std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByDescription(const std::string& description) {
     try {
         // 从 annotations JSON 中查询 description，支持模糊匹配
         std::string sql = buildSelectSql() + " WHERE annotations->>'description' LIKE $1 ORDER BY created_at DESC";
@@ -262,7 +262,7 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsByDescription(const std::st
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
         
-        std::vector<Alert> alerts;
+        std::vector<AlertEvent> alerts;
         for (const auto& row : result.rows) {
             alerts.push_back(parseAlertFromQueryResult(row));
         }
@@ -273,13 +273,13 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsByDescription(const std::st
     }
 }
 
-std::vector<Alert> DatabaseAlertRepository::getAlertsExceptPending() {
+std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsExceptPending() {
     try {
         std::string sql = buildSelectSql() + " WHERE status != 'pending' ORDER BY created_at DESC";
         
         QueryResult result = dbInterface_->executeQuery(sql);
         
-        std::vector<Alert> alerts;
+        std::vector<AlertEvent> alerts;
         for (const auto& row : result.rows) {
             alerts.push_back(parseAlertFromQueryResult(row));
         }
@@ -290,7 +290,7 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsExceptPending() {
     }
 }
 
-std::vector<Alert> DatabaseAlertRepository::getAlertsByFilters(const AlertFilters& filters) {
+std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByFilters(const AlertFilters& filters) {
     try {
         // 构建 WHERE 子句和参数
         auto [whereClause, params] = buildWhereClause(filters);
@@ -311,7 +311,7 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsByFilters(const AlertFilter
         // 执行查询
         QueryResult result = dbInterface_->executeQuery(sql, params);
         
-        std::vector<Alert> alerts;
+        std::vector<AlertEvent> alerts;
         for (const auto& row : result.rows) {
             alerts.push_back(parseAlertFromQueryResult(row));
         }
@@ -322,7 +322,7 @@ std::vector<Alert> DatabaseAlertRepository::getAlertsByFilters(const AlertFilter
     }
 }
 
-bool DatabaseAlertRepository::deleteAlert(const std::string& id) {
+bool DatabaseAlertEventRepository::deleteAlert(const std::string& id) {
     try {
         std::string sql = buildDeleteSql();
         std::vector<std::string> params = {id};
@@ -334,7 +334,7 @@ bool DatabaseAlertRepository::deleteAlert(const std::string& id) {
     }
 }
 
-int DatabaseAlertRepository::deleteAlertsByFingerprintAndStatus(const std::string& fingerprint, const std::string& status) {
+int DatabaseAlertEventRepository::deleteAlertsByFingerprintAndStatus(const std::string& fingerprint, const std::string& status) {
     try {
         // 先查询要删除的数量
         std::string countSql = "SELECT COUNT(*) as count FROM alert_event WHERE fingerprint = $1 AND status = $2";
@@ -359,7 +359,7 @@ int DatabaseAlertRepository::deleteAlertsByFingerprintAndStatus(const std::strin
     }
 }
 
-int DatabaseAlertRepository::resolveFiringAlertsByFingerprint(const std::string& fingerprint) {
+int DatabaseAlertEventRepository::resolveFiringAlertsByFingerprint(const std::string& fingerprint) {
     try {
         // 先查询要更新的数量
         std::string countSql = "SELECT COUNT(*) as count FROM alert_event WHERE fingerprint = $1 AND status = $2";
@@ -390,7 +390,7 @@ int DatabaseAlertRepository::resolveFiringAlertsByFingerprint(const std::string&
     }
 }
 
-bool DatabaseAlertRepository::alertExists(const std::string& id) {
+bool DatabaseAlertEventRepository::alertExists(const std::string& id) {
     try {
         std::string sql = "SELECT COUNT(*) FROM alert_event WHERE id = $1";
         std::vector<std::string> params = {id};
@@ -406,7 +406,7 @@ bool DatabaseAlertRepository::alertExists(const std::string& id) {
     }
 }
 
-size_t DatabaseAlertRepository::getAlertCount() {
+size_t DatabaseAlertEventRepository::getAlertCount() {
     try {
         std::string sql = "SELECT COUNT(*) FROM alert_event";
         
@@ -421,7 +421,7 @@ size_t DatabaseAlertRepository::getAlertCount() {
     }
 }
 
-Alert DatabaseAlertRepository::parseAlertFromQueryResult(const QueryRow& row) {
+AlertEvent DatabaseAlertEventRepository::parseAlertFromQueryResult(const QueryRow& row) {
     try {
         // 解析labels
         std::string labelsStr = row.getValue("labels");
@@ -440,7 +440,7 @@ Alert DatabaseAlertRepository::parseAlertFromQueryResult(const QueryRow& row) {
         }
         
         // 创建告警对象
-        Alert alert(row.getValue("fingerprint"), labels, annotations);
+        AlertEvent alert(row.getValue("fingerprint"), labels, annotations);
         alert.setId(row.getValue("id"));
         alert.setCreatedAt(row.getValue("created_at"));
         alert.setStartsAt(row.getValue("starts_at"));
@@ -463,7 +463,7 @@ Alert DatabaseAlertRepository::parseAlertFromQueryResult(const QueryRow& row) {
     }
 }
 
-std::string DatabaseAlertRepository::buildInsertSql() {
+std::string DatabaseAlertEventRepository::buildInsertSql() {
     return R"(
         INSERT INTO alert_event (
             id, fingerprint, labels, annotations, created_at, starts_at, 
@@ -478,7 +478,7 @@ std::string DatabaseAlertRepository::buildInsertSql() {
     )";
 }
 
-std::string DatabaseAlertRepository::buildUpdateSql() {
+std::string DatabaseAlertEventRepository::buildUpdateSql() {
     return R"(
         UPDATE alert_event SET 
             fingerprint = $1,
@@ -493,7 +493,7 @@ std::string DatabaseAlertRepository::buildUpdateSql() {
     )";
 }
 
-std::string DatabaseAlertRepository::buildSelectSql() {
+std::string DatabaseAlertEventRepository::buildSelectSql() {
     return R"(
         SELECT 
             id, fingerprint, labels, annotations, created_at, starts_at, 
@@ -502,11 +502,11 @@ std::string DatabaseAlertRepository::buildSelectSql() {
     )";
 }
 
-std::string DatabaseAlertRepository::buildDeleteSql() {
+std::string DatabaseAlertEventRepository::buildDeleteSql() {
     return "DELETE FROM alert_event WHERE id = $1";
 }
 
-std::pair<std::string, std::vector<std::string>> DatabaseAlertRepository::buildWhereClause(const AlertFilters& filters) {
+std::pair<std::string, std::vector<std::string>> DatabaseAlertEventRepository::buildWhereClause(const AlertFilters& filters) {
     std::vector<std::string> conditions;
     std::vector<std::string> params;
     int paramIndex = 1;

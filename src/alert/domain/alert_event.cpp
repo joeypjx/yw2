@@ -1,5 +1,5 @@
-#include "Alert.h"
-#include "../infrastructure/alert_repository.h"
+#include "alert_event.h"
+#include "../infrastructure/alert_event_repository.h"
 #include <sstream>
 #include <stdexcept>
 #include <chrono>
@@ -10,7 +10,7 @@
 namespace yw {
 namespace alert {
 
-Alert::Alert(const std::string& fingerprint, const std::unordered_map<std::string, std::string>& labels,
+AlertEvent::AlertEvent(const std::string& fingerprint, const std::unordered_map<std::string, std::string>& labels,
              const std::unordered_map<std::string, std::string>& annotations)
     : fingerprint_(fingerprint), labels_(labels), annotations_(annotations) {
     // 自动生成系统字段
@@ -21,7 +21,7 @@ Alert::Alert(const std::string& fingerprint, const std::unordered_map<std::strin
     status_ = AlertStatus::Pending;
 }
 
-void Alert::generateId() {
+void AlertEvent::generateId() {
     // 使用时间戳和随机数生成唯一ID
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
@@ -39,7 +39,7 @@ void Alert::generateId() {
     id_ = oss.str();
 }
 
-void Alert::setCreatedNow() {
+void AlertEvent::setCreatedNow() {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -52,7 +52,7 @@ void Alert::setCreatedNow() {
     created_at_ = oss.str();
 }
 
-void Alert::setUpdatedNow() {
+void AlertEvent::setUpdatedNow() {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -65,7 +65,7 @@ void Alert::setUpdatedNow() {
     updated_at_ = oss.str();
 }
 
-void Alert::setStartsNow() {
+void AlertEvent::setStartsNow() {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -78,7 +78,7 @@ void Alert::setStartsNow() {
     starts_at_ = oss.str();
 }
 
-void Alert::setEndsNow() {
+void AlertEvent::setEndsNow() {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -91,7 +91,7 @@ void Alert::setEndsNow() {
     ends_at_ = oss.str();
 }
 
-void Alert::transitionToPending() {
+void AlertEvent::transitionToPending() {
     status_ = AlertStatus::Pending;
     setUpdatedNow();
     // 清空starts_at和ends_at
@@ -99,7 +99,7 @@ void Alert::transitionToPending() {
     ends_at_.clear();
 }
 
-void Alert::transitionToFiring() {
+void AlertEvent::transitionToFiring() {
     if (status_ == AlertStatus::Pending) {
         status_ = AlertStatus::Firing;
         setStartsNow();
@@ -109,7 +109,7 @@ void Alert::transitionToFiring() {
     }
 }
 
-void Alert::transitionToResolved() {
+void AlertEvent::transitionToResolved() {
     if (status_ == AlertStatus::Firing) {
         status_ = AlertStatus::Resolved;
         setEndsNow();
@@ -117,32 +117,32 @@ void Alert::transitionToResolved() {
     }
 }
 
-void Alert::addLabel(const std::string& key, const std::string& value) {
+void AlertEvent::addLabel(const std::string& key, const std::string& value) {
     labels_[key] = value;
 }
 
-void Alert::addAnnotation(const std::string& key, const std::string& value) {
+void AlertEvent::addAnnotation(const std::string& key, const std::string& value) {
     annotations_[key] = value;
 }
 
-std::string Alert::getLabel(const std::string& key) const {
+std::string AlertEvent::getLabel(const std::string& key) const {
     auto it = labels_.find(key);
     return (it != labels_.end()) ? it->second : "";
 }
 
-std::string Alert::getAnnotation(const std::string& key) const {
+std::string AlertEvent::getAnnotation(const std::string& key) const {
     auto it = annotations_.find(key);
     return (it != annotations_.end()) ? it->second : "";
 }
 
-nlohmann::json Alert::toJson() const {
+nlohmann::json AlertEvent::toJson() const {
     nlohmann::json j;
     to_json(j, *this);
     return j;
 }
 
-Alert Alert::fromJson(const nlohmann::json& j) {
-    Alert alert;
+AlertEvent AlertEvent::fromJson(const nlohmann::json& j) {
+    AlertEvent alert;
     
     // 解析id
     if (j.contains("id")) {
@@ -200,7 +200,7 @@ Alert Alert::fromJson(const nlohmann::json& j) {
     return alert;
 }
 
-std::string Alert::generateFingerprint(const std::string& alertName, 
+std::string AlertEvent::generateFingerprint(const std::string& alertName, 
                                       const std::unordered_map<std::string, std::string>& tags) {
     std::ostringstream oss;
     oss << alertName;
@@ -216,14 +216,14 @@ std::string Alert::generateFingerprint(const std::string& alertName,
     return oss.str();
 }
 
-void Alert::updateTimestamp() {
+void AlertEvent::updateTimestamp() {
     setUpdatedNow();
 }
 
-bool Alert::updateInDatabase(std::shared_ptr<AlertRepository> repository) {
+bool AlertEvent::updateInDatabase(std::shared_ptr<AlertEventRepository> repository) {
     try {
         if (!repository) {
-            throw std::invalid_argument("AlertRepository不能为空");
+            throw std::invalid_argument("AlertEventRepository不能为空");
         }
         
         // 1. 先从告警存储类获取当前数据库中告警指纹所对应的最新告警
@@ -253,7 +253,7 @@ bool Alert::updateInDatabase(std::shared_ptr<AlertRepository> repository) {
     }
 }
 
-bool Alert::updateExistingAlert(const Alert& existingAlert, std::shared_ptr<AlertRepository> repository) {
+bool AlertEvent::updateExistingAlert(const AlertEvent& existingAlert, std::shared_ptr<AlertEventRepository> repository) {
     AlertStatus newStatus = this->getStatus();
     AlertStatus currentStatus = existingAlert.getStatus();
     
@@ -264,7 +264,7 @@ bool Alert::updateExistingAlert(const Alert& existingAlert, std::shared_ptr<Aler
         // 1. Firing -> Pending (不能从触发状态退回到等待状态)
         if (currentStatus == AlertStatus::Firing && newStatus == AlertStatus::Pending) {
             // 保持原有状态，只更新时间戳
-            Alert updatedAlert = existingAlert;
+            AlertEvent updatedAlert = existingAlert;
             updatedAlert.updateTimestamp();
             return repository->saveAlert(updatedAlert);
         }
@@ -276,7 +276,7 @@ bool Alert::updateExistingAlert(const Alert& existingAlert, std::shared_ptr<Aler
         // - Pending -> Firing
         // - Firing -> Resolved
         
-        Alert updatedAlert = *this;
+        AlertEvent updatedAlert = *this;
         
         // 保持原有的ID和时间戳信息
         updatedAlert.setId(existingAlert.getId());
@@ -308,12 +308,12 @@ bool Alert::updateExistingAlert(const Alert& existingAlert, std::shared_ptr<Aler
             // 检查是否满足持续时间条件（这里需要传入AlertRule的for字段）
             // 由于当前Alert对象没有for字段信息，我们需要通过其他方式获取
             // 暂时只更新updated_at，持续时间检查在AlertEngine中处理
-            Alert updatedAlert = existingAlert;
+            AlertEvent updatedAlert = existingAlert;
             updatedAlert.updateTimestamp();
             return repository->saveAlert(updatedAlert);
         } else {
             // 状态没有变化，只更新updated_at时间戳
-            Alert updatedAlert = existingAlert;
+            AlertEvent updatedAlert = existingAlert;
             updatedAlert.updateTimestamp();
             return repository->saveAlert(updatedAlert);
         }

@@ -12,10 +12,10 @@ AlertRuleEvaluator::AlertRuleEvaluator(std::shared_ptr<DatabaseQueryInterface> d
                                       node::INodeModule* nodeModule)
     : dbInterface_(dbInterface), nodeModule_(nodeModule) {}
 
-std::vector<Alert> AlertRuleEvaluator::evaluateRule(const AlertRule& rule) {
+std::vector<AlertEvent> AlertRuleEvaluator::evaluateRule(const AlertRule& rule) {
 
     if (rule.isEnabled() == false) {
-        return std::vector<Alert>();
+        return std::vector<AlertEvent>();
     }
 
     // 1. 将告警规则转换为SQL查询
@@ -57,9 +57,9 @@ std::string AlertRuleEvaluator::convertRuleToSQL(const AlertRule& rule) {
     return sql.str();
 }
 
-std::vector<Alert> AlertRuleEvaluator::convertQueryResultToAlerts(const QueryResult& result, 
+std::vector<AlertEvent> AlertRuleEvaluator::convertQueryResultToAlerts(const QueryResult& result, 
                                                                  const AlertRule& rule) {
-    std::vector<Alert> alerts;
+    std::vector<AlertEvent> alerts;
     
     for (const auto& row : result.rows) {
         // 检查是否满足告警条件
@@ -112,10 +112,10 @@ std::vector<Alert> AlertRuleEvaluator::convertQueryResultToAlerts(const QueryRes
                 fingerprintTags[tagPair.first] = tagPair.second;
             }
         }
-        std::string fingerprint = Alert::generateFingerprint(rule.getAlertName(), fingerprintTags);
+        std::string fingerprint = AlertEvent::generateFingerprint(rule.getAlertName(), fingerprintTags);
         
         // 创建告警对象，根据for字段决定初始状态
-        Alert alert(fingerprint, labels, annotations);
+        AlertEvent alert(fingerprint, labels, annotations);
         
         // 检查告警规则的for字段
         std::string forDuration = rule.getFor();

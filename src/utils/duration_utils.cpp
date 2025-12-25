@@ -94,5 +94,21 @@ std::string DurationUtils::parseToPgStandard(const std::string& duration, const 
     return std::to_string(value) + " " + unit_str;
 }
 
+int DurationUtils::parseToSeconds(const std::string& duration, int default_seconds) {
+    std::int64_t value;
+    char unit;
+    
+    if (!parseDuration(duration, value, unit)) {
+        return default_seconds;
+    }
+
+    switch (unit) {
+        case 's': return static_cast<int>(value);
+        case 'm': return static_cast<int>(value * 60);
+        case 'h': return static_cast<int>(value * 3600);
+        default:  return default_seconds;
+    }
+}
+
 } // namespace utils
 } // namespace yw

@@ -1,8 +1,11 @@
 #include "alert/alert.h"
 #include "application/alert_engine.h"
+#include "application/alert_rule_service.h"
+#include "application/alert_query_service.h"
+#include "application/alert_creation_factory.h"
 #include "infrastructure/database_query_interface.h"
 #include "infrastructure/alert_rule_repository.h"
-#include "infrastructure/alert_repository.h"
+#include "infrastructure/alert_event_repository.h"
 #include <spdlog/spdlog.h>
 
 namespace yw {
@@ -13,8 +16,14 @@ namespace alert {
  */
 class AlertModuleAdapter : public IAlertModule {
 public:
-    AlertModuleAdapter(std::shared_ptr<AlertEngine> engine)
-        : engine_(std::move(engine)) {}
+    AlertModuleAdapter(std::shared_ptr<AlertEngine> engine,
+                      std::shared_ptr<AlertRuleService> ruleService,
+                      std::shared_ptr<AlertQueryService> queryService,
+                      std::shared_ptr<AlertCreationFactory> creationFactory)
+        : engine_(std::move(engine)),
+          ruleService_(std::move(ruleService)),
+          queryService_(std::move(queryService)),
+          creationFactory_(std::move(creationFactory)) {}
     
     ~AlertModuleAdapter() override {
         stop();
@@ -47,10 +56,10 @@ public:
     //-------------------------------------------------------------------------
     
     bool addAlertRule(const nlohmann::json& ruleJson) override {
-        if (!engine_) return false;
+        if (!ruleService_) return false;
         try {
             AlertRule rule = AlertRule::fromJson(ruleJson);
-            return engine_->addAlertRule(rule);
+            return ruleService_->addAlertRule(rule);
         } catch (const std::exception& e) {
             spdlog::error("Failed to add alert rule: {}", e.what());
             return false;
@@ -58,10 +67,10 @@ public:
     }
     
     bool updateAlertRule(const nlohmann::json& ruleJson) override {
-        if (!engine_) return false;
+        if (!ruleService_) return false;
         try {
             AlertRule rule = AlertRule::fromJson(ruleJson);
-            return engine_->updateAlertRule(rule);
+            return ruleService_->updateAlertRule(rule);
         } catch (const std::exception& e) {
             spdlog::error("Failed to update alert rule: {}", e.what());
             return false;
@@ -69,20 +78,20 @@ public:
     }
     
     bool deleteAlertRule(const std::string& ruleId) override {
-        if (!engine_) return false;
-        return engine_->deleteAlertRule(ruleId);
+        if (!ruleService_) return false;
+        return ruleService_->deleteAlertRule(ruleId);
     }
     
     nlohmann::json getAlertRuleById(const std::string& ruleId) override {
-        if (!engine_) return nlohmann::json();
-        auto rule = engine_->getAlertRuleById(ruleId);
+        if (!ruleService_) return nlohmann::json();
+        auto rule = ruleService_->getAlertRuleById(ruleId);
         if (!rule) return nlohmann::json();
         return rule->toJson();
     }
     
     nlohmann::json getAllAlertRules() const override {
-        if (!engine_) return nlohmann::json::array();
-        auto rules = engine_->getAllAlertRules();
+        if (!ruleService_) return nlohmann::json::array();
+        auto rules = ruleService_->getAllAlertRules();
         nlohmann::json result = nlohmann::json::array();
         for (const auto& rule : rules) {
             result.push_back(rule.toJson());
@@ -95,27 +104,27 @@ public:
     //-------------------------------------------------------------------------
     
     nlohmann::json getAlertsByStatus(const std::string& status) override {
-        if (!engine_) return nlohmann::json::array();
-        auto alerts = engine_->getAlertsByStatus(status);
+        if (!queryService_) return nlohmann::json::array();
+        auto alerts = queryService_->getAlertsByStatus(status);
         return alertsToJson(alerts);
     }
     
     nlohmann::json getAlertsByFilters(const AlertFilters& filters) override {
-        if (!engine_) return nlohmann::json::array();
-        auto alerts = engine_->getAlertsByFilters(filters);
+        if (!queryService_) return nlohmann::json::array();
+        auto alerts = queryService_->getAlertsByFilters(filters);
         return alertsToJson(alerts);
     }
     
     nlohmann::json getAlertById(const std::string& alertId) override {
-        if (!engine_) return nlohmann::json();
-        auto alert = engine_->getAlertById(alertId);
+        if (!queryService_) return nlohmann::json();
+        auto alert = queryService_->getAlertById(alertId);
         if (!alert) return nlohmann::json();
         return alert->toJson();
     }
     
     nlohmann::json getAlertsExceptPending() override {
-        if (!engine_) return nlohmann::json::array();
-        auto alerts = engine_->getAlertsExceptPending();
+        if (!queryService_) return nlohmann::json::array();
+        auto alerts = queryService_->getAlertsExceptPending();
         return alertsToJson(alerts);
     }
 
@@ -124,8 +133,8 @@ public:
     //-------------------------------------------------------------------------
     
     size_t getAlertCount() override {
-        if (!engine_) return 0;
-        return engine_->getAlertCount();
+        if (!queryService_) return 0;
+        return queryService_->getAlertCount();
     }
 
     //-------------------------------------------------------------------------
@@ -133,13 +142,16 @@ public:
     //-------------------------------------------------------------------------
     
     void setPushCallback(std::function<void(const nlohmann::json&)> callback) override {
-        if (!engine_) return;
-        // 包装回调，将 Alert 转换为 JSON
-        engine_->setPushCallback([callback](const Alert& alert) {
+        if (!engine_ || !creationFactory_) return;
+        // 包装回调，将 AlertEvent 转换为 JSON
+        auto wrappedCallback = [callback](const AlertEvent& alert) {
             if (callback) {
                 callback(alert.toJson());
             }
-        });
+        };
+        // 同时设置到 AlertEngine 和 AlertCreationFactory
+        engine_->setPushCallback(wrappedCallback);
+        creationFactory_->setPushCallback(wrappedCallback);
     }
     
     //-------------------------------------------------------------------------
@@ -151,20 +163,23 @@ public:
         const std::string& cached_board_type,
         const std::string& new_board_type) override {
         
-        if (!engine_) return nlohmann::json();
-        auto alert = engine_->createBoardTypeChangeAlert(
+        if (!creationFactory_) return nlohmann::json();
+        auto alert = creationFactory_->createBoardTypeChangeAlert(
             box_id, slot_id, cached_board_type, new_board_type);
         if (!alert) return nlohmann::json();
         return alert->toJson();
     }
 
 private:
-    std::shared_ptr<AlertEngine> engine_;
+    std::shared_ptr<AlertEngine> engine_;  // 仅用于生命周期管理和评估引擎
+    std::shared_ptr<AlertRuleService> ruleService_;
+    std::shared_ptr<AlertQueryService> queryService_;
+    std::shared_ptr<AlertCreationFactory> creationFactory_;
     
     /**
      * @brief 将告警列表转换为 JSON 数组
      */
-    static nlohmann::json alertsToJson(const std::vector<Alert>& alerts) {
+    static nlohmann::json alertsToJson(const std::vector<AlertEvent>& alerts) {
         nlohmann::json result = nlohmann::json::array();
         for (const auto& alert : alerts) {
             result.push_back(alert.toJson());
@@ -187,14 +202,20 @@ std::shared_ptr<IAlertModule> AlertFactory::createAlertModule(
         
         // 创建 Repository
         auto alertRuleRepo = std::make_shared<DatabaseAlertRuleRepository>(dbInterface);
-        auto alertRepo = std::make_shared<DatabaseAlertRepository>(dbInterface);
+        auto alertRepo = std::make_shared<DatabaseAlertEventRepository>(dbInterface);
         
-        // 创建 AlertEngine
+        // 创建服务类
+        auto ruleService = std::make_shared<AlertRuleService>(alertRuleRepo);
+        auto queryService = std::make_shared<AlertQueryService>(alertRepo);
+        auto creationFactory = std::make_shared<AlertCreationFactory>(alertRepo, dbInterface);
+        
+        // 创建 AlertEngine（仅用于评估引擎功能）
         auto engine = std::make_shared<AlertEngine>(
             dbInterface, alertRuleRepo, alertRepo, nodeModule);
         
-        // 返回适配器
-        return std::make_shared<AlertModuleAdapter>(engine);
+        // 返回适配器，直接使用服务类
+        return std::make_shared<AlertModuleAdapter>(
+            engine, ruleService, queryService, creationFactory);
         
     } catch (const std::exception& e) {
         spdlog::error("Failed to create AlertModule: {}", e.what());
