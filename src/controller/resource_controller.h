@@ -34,15 +34,7 @@ public:
         const std::vector<int>& slot_numbers,
         uint32_t req_id = 0) override;
 
-    // 工具方法（原先来自 TcpClient）
-    static std::string binaryToString(const BinaryData& data) {
-        return std::string(data.begin(), data.end());
-    }
-
-    static BinaryData stringToBinary(const std::string& str) {
-        return BinaryData(str.begin(), str.end());
-    }
-
+    // 工具方法
     static std::string binaryToHex(const BinaryData& data) {
         std::string hex_string;
         hex_string.reserve(data.size() * 2);
