@@ -2,7 +2,11 @@
 -- Monitor 模块数据库表创建脚本
 -- 
 -- 根据 docs/monitor/database_schema.md 文档生成
--- 仅包含表结构创建，不包含索引、压缩策略等配置
+-- 包含表结构创建、索引配置、TimescaleDB hypertable 创建、压缩和保留策略
+-- 
+-- 前置条件：
+-- 1. 需要先安装 TimescaleDB 扩展：CREATE EXTENSION IF NOT EXISTS timescaledb;
+-- 2. 确保数据库已启用 TimescaleDB
 -- 
 -- 使用方法：
 -- psql "postgres://user:password@host:5432/dbname" -f docs/monitor/create_tables.sql
@@ -123,4 +127,162 @@ CREATE TABLE IF NOT EXISTS resource_raw (
   host_ip  INET        NOT NULL,
   payload  JSONB       NOT NULL
 );
+
+-- ============================================================================
+-- 索引创建
+-- ============================================================================
+
+-- resource_alive 表索引
+-- 用于时间范围查询和按节点过滤（TimescaleDB 时序表常用查询模式）
+CREATE INDEX IF NOT EXISTS idx_resource_alive_time_host_ip ON resource_alive(time DESC, host_ip);
+
+-- resource_cpu 表索引
+-- 用于时间范围查询和按节点过滤
+CREATE INDEX IF NOT EXISTS idx_resource_cpu_time_host_ip ON resource_cpu(time DESC, host_ip);
+
+-- resource_memory 表索引
+-- 用于时间范围查询和按节点过滤
+CREATE INDEX IF NOT EXISTS idx_resource_memory_time_host_ip ON resource_memory(time DESC, host_ip);
+
+-- resource_network 表索引
+-- 用于时间范围查询和按节点过滤
+CREATE INDEX IF NOT EXISTS idx_resource_network_time_host_ip ON resource_network(time DESC, host_ip);
+
+-- 用于按节点和接口查询（告警规则常用查询模式）
+CREATE INDEX IF NOT EXISTS idx_resource_network_time_host_ip_interface ON resource_network(time DESC, host_ip, interface);
+
+-- resource_disk 表索引
+-- 用于时间范围查询和按节点过滤
+CREATE INDEX IF NOT EXISTS idx_resource_disk_time_host_ip ON resource_disk(time DESC, host_ip);
+
+-- 用于按节点、设备和挂载点查询（告警规则常用查询模式）
+CREATE INDEX IF NOT EXISTS idx_resource_disk_time_host_ip_device_mount ON resource_disk(time DESC, host_ip, device, mount_point);
+
+-- resource_gpu 表索引
+-- 用于时间范围查询和按节点过滤
+CREATE INDEX IF NOT EXISTS idx_resource_gpu_time_host_ip ON resource_gpu(time DESC, host_ip);
+
+-- 用于按节点和GPU索引查询（告警规则常用查询模式）
+CREATE INDEX IF NOT EXISTS idx_resource_gpu_time_host_ip_gpu_index ON resource_gpu(time DESC, host_ip, gpu_index);
+
+-- resource_component 表索引
+-- 用于时间范围查询和按节点过滤
+CREATE INDEX IF NOT EXISTS idx_resource_component_time_host_ip ON resource_component(time DESC, host_ip);
+
+-- 用于按节点和实例ID查询
+CREATE INDEX IF NOT EXISTS idx_resource_component_time_host_ip_instance_id ON resource_component(time DESC, host_ip, instance_id);
+
+-- resource_raw 表索引
+-- 用于时间范围查询和按节点过滤
+CREATE INDEX IF NOT EXISTS idx_resource_raw_time_host_ip ON resource_raw(time DESC, host_ip);
+
+-- 用于 JSONB 查询（如果需要查询 payload 内容）
+CREATE INDEX IF NOT EXISTS idx_resource_raw_payload_gin ON resource_raw USING GIN (payload);
+
+-- ============================================================================
+-- TimescaleDB Hypertable 创建
+-- ============================================================================
+
+-- 将表转换为 TimescaleDB hypertable（时序表）
+-- 使用 time 作为分区键，host_ip 作为分段键（用于分布式场景）
+SELECT create_hypertable('resource_alive', 'time', 'host_ip', 4, if_not_exists => TRUE);
+SELECT create_hypertable('resource_cpu', 'time', 'host_ip', 4, if_not_exists => TRUE);
+SELECT create_hypertable('resource_memory', 'time', 'host_ip', 4, if_not_exists => TRUE);
+SELECT create_hypertable('resource_network', 'time', 'host_ip', 4, if_not_exists => TRUE);
+SELECT create_hypertable('resource_disk', 'time', 'host_ip', 4, if_not_exists => TRUE);
+SELECT create_hypertable('resource_gpu', 'time', 'host_ip', 4, if_not_exists => TRUE);
+SELECT create_hypertable('resource_component', 'time', 'host_ip', 4, if_not_exists => TRUE);
+SELECT create_hypertable('resource_raw', 'time', 'host_ip', 4, if_not_exists => TRUE);
+
+-- ============================================================================
+-- 压缩配置
+-- ============================================================================
+
+-- 启用压缩并设置压缩参数
+-- compress_orderby: 指定压缩时的排序顺序，通常与查询的 ORDER BY 一致
+-- compress_segmentby: 指定分段键，相同值的行会被分组在一起（提高压缩比）
+
+-- resource_alive 表压缩配置
+ALTER TABLE resource_alive SET (
+  timescaledb.compress = true,
+  timescaledb.compress_orderby = 'time DESC, host_ip'
+);
+
+-- resource_cpu 表压缩配置
+ALTER TABLE resource_cpu SET (
+  timescaledb.compress = true,
+  timescaledb.compress_orderby = 'time DESC, host_ip'
+);
+
+-- resource_memory 表压缩配置
+ALTER TABLE resource_memory SET (
+  timescaledb.compress = true,
+  timescaledb.compress_orderby = 'time DESC, host_ip'
+);
+
+-- resource_network 表压缩配置（有标签列 interface）
+ALTER TABLE resource_network SET (
+  timescaledb.compress = true,
+  timescaledb.compress_orderby = 'time DESC, host_ip',
+  timescaledb.compress_segmentby = 'interface'
+);
+
+-- resource_disk 表压缩配置（有标签列 device 和 mount_point）
+ALTER TABLE resource_disk SET (
+  timescaledb.compress = true,
+  timescaledb.compress_orderby = 'time DESC, host_ip',
+  timescaledb.compress_segmentby = 'device'
+);
+
+-- resource_gpu 表压缩配置（有标签列 gpu_index）
+ALTER TABLE resource_gpu SET (
+  timescaledb.compress = true,
+  timescaledb.compress_orderby = 'time DESC, host_ip',
+  timescaledb.compress_segmentby = 'gpu_index'
+);
+
+-- resource_component 表压缩配置（有标签列 instance_id）
+ALTER TABLE resource_component SET (
+  timescaledb.compress = true,
+  timescaledb.compress_orderby = 'time DESC, host_ip',
+  timescaledb.compress_segmentby = 'instance_id'
+);
+
+-- resource_raw 表压缩配置
+ALTER TABLE resource_raw SET (
+  timescaledb.compress = true,
+  timescaledb.compress_orderby = 'time DESC, host_ip'
+);
+
+-- ============================================================================
+-- 压缩策略
+-- ============================================================================
+
+-- 添加压缩策略：数据超过 7 天后自动压缩
+-- 7 天内的数据保持未压缩状态，便于快速查询和写入
+-- 7 天后的数据自动压缩，节省存储空间（压缩比通常可达 90% 以上）
+SELECT add_compression_policy('resource_alive', INTERVAL '7 days', if_not_exists => TRUE);
+SELECT add_compression_policy('resource_cpu', INTERVAL '7 days', if_not_exists => TRUE);
+SELECT add_compression_policy('resource_memory', INTERVAL '7 days', if_not_exists => TRUE);
+SELECT add_compression_policy('resource_network', INTERVAL '7 days', if_not_exists => TRUE);
+SELECT add_compression_policy('resource_disk', INTERVAL '7 days', if_not_exists => TRUE);
+SELECT add_compression_policy('resource_gpu', INTERVAL '7 days', if_not_exists => TRUE);
+SELECT add_compression_policy('resource_component', INTERVAL '7 days', if_not_exists => TRUE);
+SELECT add_compression_policy('resource_raw', INTERVAL '7 days', if_not_exists => TRUE);
+
+-- ============================================================================
+-- 保留策略
+-- ============================================================================
+
+-- 添加保留策略：数据超过 90 天后自动删除
+-- 保留 90 天的历史数据，用于分析和趋势预测
+-- 超过 90 天的数据自动删除，释放存储空间
+SELECT add_retention_policy('resource_alive', INTERVAL '90 days', if_not_exists => TRUE);
+SELECT add_retention_policy('resource_cpu', INTERVAL '90 days', if_not_exists => TRUE);
+SELECT add_retention_policy('resource_memory', INTERVAL '90 days', if_not_exists => TRUE);
+SELECT add_retention_policy('resource_network', INTERVAL '90 days', if_not_exists => TRUE);
+SELECT add_retention_policy('resource_disk', INTERVAL '90 days', if_not_exists => TRUE);
+SELECT add_retention_policy('resource_gpu', INTERVAL '90 days', if_not_exists => TRUE);
+SELECT add_retention_policy('resource_component', INTERVAL '90 days', if_not_exists => TRUE);
+SELECT add_retention_policy('resource_raw', INTERVAL '90 days', if_not_exists => TRUE);
 
