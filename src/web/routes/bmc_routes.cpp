@@ -99,8 +99,9 @@ void registerBMCRoutes(hv::HttpService* service,
             const auto& info = info_opt.value();
             json j;
             j["box_id"] = info.boxid;
-            j["fan_0_speed"] = info.fan[0].fanspeed;
-            j["fan_1_speed"] = info.fan[1].fanspeed;
+            // 检查风扇是否存在（fanseq == 0xFF 表示风扇不存在）
+            j["fan_0_speed"] = (info.fan[0].fanseq != 0xFF) ? info.fan[0].fanspeed : 0;
+            j["fan_1_speed"] = (info.fan[1].fanseq != 0xFF) ? info.fan[1].fanspeed : 0;
             
             // 查询 BMC 传感器数据
             auto grouped = bmc_module->queryBMCSensor(calculateBoxIP(info.boxid), duration);

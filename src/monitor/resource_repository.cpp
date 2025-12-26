@@ -293,8 +293,14 @@ ORDER BY
         }
 
         for (auto& [iface, points] : out.network) {
-            points.erase(points.begin());
-            points.erase(points.end() - 1);
+            // 删除首尾元素前检查向量大小
+            if (points.size() >= 2) {
+                points.erase(points.begin());
+                points.erase(points.end() - 1);
+            } else if (points.size() == 1) {
+                points.clear();
+            }
+            // 如果 points.size() == 0，什么都不做
         }
     }
 
@@ -353,8 +359,14 @@ ORDER BY
         }
 
         for (auto& [device, points] : out.disk) {
-            points.erase(points.begin());
-            points.erase(points.end() - 1);
+            // 删除首尾元素前检查向量大小
+            if (points.size() >= 2) {
+                points.erase(points.begin());
+                points.erase(points.end() - 1);
+            } else if (points.size() == 1) {
+                points.clear();
+            }
+            // 如果 points.size() == 0，什么都不做
         }
     }
 
@@ -420,8 +432,14 @@ ORDER BY
         }
 
         for (auto& [key, points] : out.gpu) {
-            points.erase(points.begin());
-            points.erase(points.end() - 1);
+            // 删除首尾元素前检查向量大小
+            if (points.size() >= 2) {
+                points.erase(points.begin());
+                points.erase(points.end() - 1);
+            } else if (points.size() == 1) {
+                points.clear();
+            }
+            // 如果 points.size() == 0，什么都不做
         }
     }
 
@@ -445,18 +463,37 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
     
     pqxx::read_transaction tx{*conn};
 
-    // 根据时间范围动态调整 bucket 大小，避免生成过多bucket
-    // 1小时以内：10秒，1-6小时：1分钟，6-24小时：5分钟，超过24小时：15分钟
+    // 根据时间范围动态调整 bucket 大小，基于目标数据点数量计算
+    // 目标：保持数据点数量在 300-1000 之间，以平衡查询性能和可视化精度
+    // 策略：根据时间范围计算合适的 bucket 大小，确保数据点数量在合理范围内
     const std::int64_t duration_seconds = end_time - start_time;
+    constexpr std::int64_t TARGET_POINTS_MIN = 300;  // 最小目标点数
+    constexpr std::int64_t TARGET_POINTS_MAX = 1000; // 最大目标点数
+    constexpr std::int64_t TARGET_POINTS_OPTIMAL = 500; // 最优目标点数
+    
+    // 计算最优 bucket 大小（秒）
+    std::int64_t bucket_seconds = duration_seconds / TARGET_POINTS_OPTIMAL;
+    
+    // 将 bucket 大小调整为合理的值（TimescaleDB 推荐使用标准时间单位）
     std::string bucket_interval;
-    if (duration_seconds <= 3600) {
+    if (bucket_seconds <= 10) {
         bucket_interval = "'10 seconds'";
-    } else if (duration_seconds <= 21600) {
+    } else if (bucket_seconds <= 30) {
+        bucket_interval = "'30 seconds'";
+    } else if (bucket_seconds <= 60) {
         bucket_interval = "'1 minute'";
-    } else if (duration_seconds <= 86400) {
+    } else if (bucket_seconds <= 300) {
         bucket_interval = "'5 minutes'";
+    } else if (bucket_seconds <= 600) {
+        bucket_interval = "'10 minutes'";
+    } else if (bucket_seconds <= 1800) {
+        bucket_interval = "'30 minutes'";
+    } else if (bucket_seconds <= 3600) {
+        bucket_interval = "'1 hour'";
+    } else if (bucket_seconds <= 7200) {
+        bucket_interval = "'2 hours'";
     } else {
-        bucket_interval = "'15 minutes'";
+        bucket_interval = "'6 hours'";
     }
 
     // CPU - 每10秒聚合平均值
