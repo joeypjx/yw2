@@ -212,13 +212,17 @@ void AlertCreationFactory::aliveCheckWorkerLoop() {
             // 执行节点存活检查
             performEvaluationForAlive();
             
-            // 等待下次检查
-            std::this_thread::sleep_for(std::chrono::seconds(aliveCheckIntervalSeconds_));
+            // 可中断的等待：分段 sleep，每次检查停止标志
+            for (int i = 0; i < aliveCheckIntervalSeconds_ * 10 && !aliveCheckShouldStop_; ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
             
         } catch (const std::exception& e) {
             spdlog::error("节点存活检查过程中发生错误: {}", e.what());
-            // 发生错误时等待一段时间再继续
-            std::this_thread::sleep_for(std::chrono::seconds(aliveCheckIntervalSeconds_));
+            // 发生错误时等待一段时间再继续（可中断）
+            for (int i = 0; i < aliveCheckIntervalSeconds_ * 10 && !aliveCheckShouldStop_; ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
         }
     }
     

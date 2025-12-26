@@ -2,7 +2,6 @@
 
 #include "../domain/alert_rule.h"
 #include "../domain/alert_event.h"
-#include "../infrastructure/alert_rule_repository.h"
 #include "../infrastructure/alert_event_repository.h"
 #include "../infrastructure/database_query_interface.h"
 #include "alert_creation_factory.h"
@@ -27,8 +26,8 @@ namespace alert {
 class AlertEngine {
 public:
     AlertEngine(std::shared_ptr<DatabaseQueryInterface> dbInterface,
-                std::shared_ptr<AlertRuleRepository> alertRuleRepo,
-                std::shared_ptr<AlertEventRepository> alertRepo);
+                std::shared_ptr<AlertEventRepository> alertRepo,
+                std::shared_ptr<AlertRuleService> alertRuleService);
     ~AlertEngine();
     void start(int intervalSeconds = 5);
     void stop();
@@ -36,7 +35,6 @@ public:
 
 private:
     std::shared_ptr<DatabaseQueryInterface> dbInterface_;
-    std::shared_ptr<AlertRuleRepository> alertRuleRepo_;
     std::shared_ptr<AlertEventRepository> alertRepo_;
     
     // 服务类实例

@@ -209,8 +209,9 @@ std::shared_ptr<IAlertModule> AlertFactory::createAlertModule(
         auto creationFactory = std::make_shared<AlertCreationFactory>(alertRepo, dbInterface);
         
         // 创建 AlertEngine（仅用于评估引擎功能）
+        // 传入共享的 ruleService，确保 AlertEngine 和 AlertModuleAdapter 使用同一个实例
         auto engine = std::make_shared<AlertEngine>(
-            dbInterface, alertRuleRepo, alertRepo);
+            dbInterface, alertRepo, ruleService);
         
         // 返回适配器，直接使用服务类
         return std::make_shared<AlertModuleAdapter>(

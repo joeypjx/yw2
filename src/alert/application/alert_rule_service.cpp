@@ -23,10 +23,34 @@ bool AlertRuleService::addAlertRule(const AlertRule& rule) {
             return false;
         }
         
-        // 2. 添加到内存
-        rules_.push_back(rule);
+        // 2. 更新内存中的规则
+        // 检查是否已存在
+        auto it = std::find_if(rules_.begin(), rules_.end(),
+                               [&rule](const AlertRule& r) {
+                                   return r.getId() == rule.getId();
+                               });
         
-        spdlog::debug("成功添加告警规则: {} ({})", rule.getId(), rule.getAlertName());
+        if (it != rules_.end()) {
+            // 如果已存在，更新它
+            *it = rule;
+            spdlog::debug("更新内存中的告警规则: {} ({})", rule.getId(), rule.getAlertName());
+        } else {
+            // 如果不存在，添加到内存
+            rules_.push_back(rule);
+            spdlog::debug("添加告警规则到内存: {} ({})", rule.getId(), rule.getAlertName());
+        }
+        
+        // 3. 如果规则未启用，从内存中移除（只保留启用的规则，与reloadRules保持一致）
+        if (!rule.isEnabled()) {
+            rules_.erase(std::remove_if(rules_.begin(), rules_.end(),
+                                       [&rule](const AlertRule& r) {
+                                           return r.getId() == rule.getId();
+                                       }),
+                        rules_.end());
+            spdlog::debug("告警规则未启用，已从内存中移除: {} ({})", rule.getId(), rule.getAlertName());
+        }
+        
+        spdlog::debug("成功添加告警规则到数据库: {} ({})", rule.getId(), rule.getAlertName());
         return true;
         
     } catch (const std::exception& e) {

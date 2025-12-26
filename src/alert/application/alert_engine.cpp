@@ -15,9 +15,10 @@ namespace yw {
 namespace alert {
 
 AlertEngine::AlertEngine(std::shared_ptr<DatabaseQueryInterface> dbInterface,
-                         std::shared_ptr<AlertRuleRepository> alertRuleRepo,
-                         std::shared_ptr<AlertEventRepository> alertRepo)
-    : dbInterface_(dbInterface), alertRuleRepo_(alertRuleRepo), alertRepo_(alertRepo),
+                         std::shared_ptr<AlertEventRepository> alertRepo,
+                         std::shared_ptr<AlertRuleService> alertRuleService)
+    : dbInterface_(dbInterface), alertRepo_(alertRepo),
+      alertRuleService_(alertRuleService),
       running_(false), shouldStop_(false), intervalSeconds_(5),
       totalEvaluations_(0), totalAlertsGenerated_(0),
       lastEvaluationTime_(std::chrono::system_clock::now()),
@@ -26,16 +27,15 @@ AlertEngine::AlertEngine(std::shared_ptr<DatabaseQueryInterface> dbInterface,
     if (!dbInterface_) {
         throw std::invalid_argument("DatabaseQueryInterface不能为空");
     }
-    if (!alertRuleRepo_) {
-        throw std::invalid_argument("AlertRuleRepository不能为空");
-    }
     if (!alertRepo_) {
         throw std::invalid_argument("AlertEventRepository不能为空");
+    }
+    if (!alertRuleService_) {
+        throw std::invalid_argument("AlertRuleService不能为空");
     }
     
     // 初始化服务类
     alertFactory_ = std::make_shared<AlertCreationFactory>(alertRepo_, dbInterface_);
-    alertRuleService_ = std::make_shared<AlertRuleService>(alertRuleRepo_);
     alertQueryService_ = std::make_shared<AlertQueryService>(alertRepo_);
 }
 
@@ -96,13 +96,17 @@ void AlertEngine::workerLoop() {
             // 执行评估
             performEvaluation();
             
-            // 等待下次评估
-            std::this_thread::sleep_for(std::chrono::seconds(intervalSeconds_));
+            // 可中断的等待：分段 sleep，每次检查停止标志
+            for (int i = 0; i < intervalSeconds_ * 10 && !shouldStop_; ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
             
         } catch (const std::exception& e) {
             spdlog::error("告警引擎评估过程中发生错误: {}", e.what());
-            // 发生错误时等待一段时间再继续
-            std::this_thread::sleep_for(std::chrono::seconds(intervalSeconds_));
+            // 发生错误时等待一段时间再继续（可中断）
+            for (int i = 0; i < intervalSeconds_ * 10 && !shouldStop_; ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
         }
     }
     
