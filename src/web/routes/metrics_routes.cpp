@@ -18,6 +18,39 @@ namespace routes {
 using json = nlohmann::json;
 using ResponseBuilder = yw::utils::ResponseBuilder;
 
+namespace {
+    // 辅助函数：获取节点的监控资源
+    const monitor::Resource* getNodeResource(const std::string& host_ip,
+                                            monitor::IMonitorModule* monitor_module) {
+        if (!monitor_module) {
+            return nullptr;
+        }
+        try {
+            auto resPtr = monitor_module->getNodeResource(host_ip);
+            if (resPtr) {
+                return resPtr.get();
+            }
+        } catch (const std::exception& e) {
+            spdlog::warn("Failed to get monitor resource for {}: {}", host_ip, e.what());
+        }
+        return nullptr;
+    }
+
+    // 辅助函数：获取节点的BMC传感器数据
+    std::unordered_map<std::string, bmc::BMCSensorRow> getBMCSensors(const std::string& host_ip,
+                                                                      bmc::IBMCModule* bmc_module) {
+        if (!bmc_module) {
+            return {};
+        }
+        try {
+            return bmc_module->getLatestBMCSensor(host_ip);
+        } catch (const std::exception& e) {
+            spdlog::warn("Failed to get BMC sensors for {}: {}", host_ip, e.what());
+            return {};
+        }
+    }
+}
+
 void registerMetricsRoutes(hv::HttpService* service,
                            node::INodeModule* node_module,
                            monitor::IMonitorModule* monitor_module,
@@ -41,44 +74,26 @@ void registerMetricsRoutes(hv::HttpService* service,
             auto nodes = node_module->getAllNodes();
             result.reserve(nodes.size());
             
-            for (const auto& nx : nodes) {
+            for (const auto& node : nodes) {
                 try {
                     // 获取监控资源（可选）
-                    const monitor::Resource* res = nullptr;
-                    std::optional<monitor::Resource> resHolder;
-                    if (monitor_module) {
-                        try {
-                            auto resPtr = monitor_module->getNodeResource(nx.host_ip);
-                            if (resPtr) { 
-                                resHolder = *resPtr; 
-                                res = &(*resHolder); 
-                            }
-                        } catch (const std::exception& e) {
-                            spdlog::warn("Failed to get monitor resource for {}: {}", nx.host_ip, e.what());
-                            // 继续处理，使用空的资源数据
-                        }
-                    }
+                    const monitor::Resource* res = getNodeResource(node.host_ip, monitor_module);
                     
                     // 获取BMC传感器数据（可选）
-                    std::unordered_map<std::string, bmc::BMCSensorRow> bmc_sensors;
+                    std::unordered_map<std::string, bmc::BMCSensorRow> bmc_sensors = getBMCSensors(node.host_ip, bmc_module);
+                    
+                    // 获取BMC prst（如果 bmc_module 可用）
+                    std::optional<std::uint8_t> prst;
                     if (bmc_module) {
-                        try {
-                            bmc_sensors = bmc_module->getLatestBMCSensor(nx.host_ip);
-                        } catch (const std::exception& e) {
-                            spdlog::warn("Failed to get BMC sensors for {}: {}", nx.host_ip, e.what());
-                            // 继续处理，使用空的传感器数据
-                        }
+                        prst = bmc_module->getBoardPrst(node.box_id, node.slot_id);
                     }
                     
-                    auto prst = bmc_module->getBoardPrst(nx.box_id, nx.slot_id);
-                    result.push_back(yw::web::mapper::toNodeMetrics(nx, res, now_seconds, &bmc_sensors, prst));
+                    result.push_back(yw::web::mapper::toNodeMetrics(node, res, now_seconds, &bmc_sensors, prst));
                     
                 } catch (const std::exception& e) {
                     // 单个节点处理失败，记录日志但继续处理其他节点
                     error_count++;
-                    spdlog::warn("Failed to process node {}: {}", nx.host_ip, e.what());
-                    // 可选：添加一个带有错误标记的节点到结果中
-                    // 或者跳过该节点（当前实现）
+                    spdlog::warn("Failed to process node {}: {}", node.host_ip, e.what());
                 }
             }
             
@@ -123,9 +138,6 @@ void registerMetricsRoutes(hv::HttpService* service,
         
         // 2b. 解析 time_range（可选，默认 "1m"）
         std::string time_range = ResponseBuilder::getParam(params, "time_range", "1m");
-        if (time_range.empty()) {
-            time_range = "1m";  // 如果去除空格后为空，恢复默认值
-        }
         
         // 2c. 解析 metrics（可选，逗号分隔的指标类型列表）
         std::vector<std::string> metrics_kinds;

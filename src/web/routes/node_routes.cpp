@@ -1,8 +1,8 @@
 #include "node_routes.h"
 
 #include <nlohmann/json.hpp>
-#include <sstream>
-#include <chrono>
+#include <algorithm>
+#include <optional>
 #include <spdlog/spdlog.h>
 #include "node/node.h"
 #include "monitor/monitor.h"
@@ -17,6 +17,73 @@ namespace routes {
 
 using json = nlohmann::json;
 using ResponseBuilder = yw::utils::ResponseBuilder;
+
+namespace {
+    // 辅助函数：将节点转换为 NodeView JSON
+    json convertNodeToView(const node::NodeExt& node,
+                          monitor::IMonitorModule* monitor_module,
+                          bmc::IBMCModule* bmc_module) {
+        // 获取监控资源
+        const monitor::Resource* res = nullptr;
+        std::optional<monitor::Resource> resHolder;
+        if (monitor_module) {
+            auto resPtr = monitor_module->getNodeResource(node.host_ip);
+            if (resPtr) {
+                resHolder = *resPtr;
+                res = &(*resHolder);
+            }
+        }
+
+        // 获取 BMC prst（如果 bmc_module 可用）
+        std::optional<std::uint8_t> prst;
+        if (bmc_module) {
+            prst = bmc_module->getBoardPrst(node.box_id, node.slot_id);
+        }
+
+        return yw::web::mapper::toNodeView(node, res, prst);
+    }
+
+    // 辅助函数：处理类型参数，将 "system" 展开为所有类型
+    std::vector<std::string> normalizeExportTypes(const std::vector<std::string>& types) {
+        if (types.empty()) {
+            return {"cpu", "memory", "network", "disk", "gpu"};
+        }
+        bool has_system = std::find(types.begin(), types.end(), "system") != types.end();
+        return has_system ? std::vector<std::string>{"cpu", "memory", "network", "disk", "gpu"} : types;
+    }
+
+    // 辅助函数：将 ExportDataPoint 转换为 JSON
+    json convertDataPointToJson(const monitor::ExportDataPoint& dataPoint) {
+        json point = {
+            {"timestamp", dataPoint.timestamp},
+            {"cpu_usage_percent", dataPoint.cpu_usage_percent},
+            {"memory_usage_percent", dataPoint.memory_usage_percent}
+        };
+
+        // 添加磁盘使用率
+        for (const auto& [mount_point, usage] : dataPoint.disk_usage_percent) {
+            point["disk_" + mount_point + "_usage_percent"] = usage;
+        }
+
+        // 添加网络速率
+        for (const auto& [interface, rate] : dataPoint.network_rx_rate) {
+            point["network_" + interface + "_rx_rate"] = static_cast<std::int64_t>(rate);
+        }
+        for (const auto& [interface, rate] : dataPoint.network_tx_rate) {
+            point["network_" + interface + "_tx_rate"] = static_cast<std::int64_t>(rate);
+        }
+
+        // 添加GPU使用率
+        for (const auto& [gpu_index, usage] : dataPoint.gpu_compute_usage) {
+            point["gpu_" + gpu_index + "_compute_usage"] = usage;
+        }
+        for (const auto& [gpu_index, usage] : dataPoint.gpu_mem_usage) {
+            point["gpu_" + gpu_index + "_mem_usage"] = usage;
+        }
+
+        return point;
+    }
+}
 
 void registerNodeRoutes(hv::HttpService* service,
                         node::INodeModule* node_module,
@@ -41,20 +108,7 @@ void registerNodeRoutes(hv::HttpService* service,
 
             json data;
             if (nodeOpt.has_value()) {
-                // 获取监控资源
-                const monitor::Resource* res = nullptr;
-                std::optional<monitor::Resource> resHolder;
-                if (monitor_module) {
-                    auto resPtr = monitor_module->getNodeResource(nodeOpt->host_ip);
-                    if (resPtr) {
-                        resHolder = *resPtr;
-                        res = &(*resHolder);
-                    }
-                }
-
-                auto prst = bmc_module->getBoardPrst(nodeOpt->box_id, nodeOpt->slot_id);
-                auto nodeView = yw::web::mapper::toNodeView(*nodeOpt, res, prst);
-                data = nodeView;
+                data = convertNodeToView(*nodeOpt, monitor_module, bmc_module);
             } else {
                 data = json::object();
             }
@@ -71,22 +125,10 @@ void registerNodeRoutes(hv::HttpService* service,
 
             const auto nodes = node_module->getNodesByBoxId(filter_box_id);
             json resp_nodes = json::array();
+            resp_nodes.get_ref<json::array_t&>().reserve(nodes.size());
             
             for (const auto& node : nodes) {
-                // 获取监控资源
-                const monitor::Resource* res = nullptr;
-                std::optional<monitor::Resource> resHolder;
-                if (monitor_module) {
-                    auto resPtr = monitor_module->getNodeResource(node.host_ip);
-                    if (resPtr) {
-                        resHolder = *resPtr;
-                        res = &(*resHolder);
-                    }
-                }
-
-                auto prst = bmc_module->getBoardPrst(node.box_id, node.slot_id);
-                auto nodeView = yw::web::mapper::toNodeView(node, res, prst);
-                resp_nodes.push_back(std::move(nodeView));
+                resp_nodes.push_back(convertNodeToView(node, monitor_module, bmc_module));
             }
 
             json data = {{"nodes", resp_nodes}};
@@ -99,20 +141,7 @@ void registerNodeRoutes(hv::HttpService* service,
         resp_nodes.get_ref<json::array_t&>().reserve(nodes.size());
         
         for (const auto& node : nodes) {
-            // 获取监控资源
-            const monitor::Resource* res = nullptr;
-            std::optional<monitor::Resource> resHolder;
-            if (monitor_module) {
-                auto resPtr = monitor_module->getNodeResource(node.host_ip);
-                if (resPtr) {
-                    resHolder = *resPtr;
-                    res = &(*resHolder);
-                }
-            }
-            
-            auto prst = bmc_module->getBoardPrst(node.box_id, node.slot_id);
-            auto nodeView = yw::web::mapper::toNodeView(node, res, prst);
-            resp_nodes.push_back(std::move(nodeView));
+            resp_nodes.push_back(convertNodeToView(node, monitor_module, bmc_module));
         }
 
         json data = {{"nodes", resp_nodes}};
@@ -121,14 +150,10 @@ void registerNodeRoutes(hv::HttpService* service,
 
     // GET /node/export - 导出节点历史数据
     service->GET("/node/export", [monitor_module](const HttpContextPtr& ctx) {
-        auto t_start = std::chrono::high_resolution_clock::now();
-        spdlog::info("[export] 接口开始处理请求");
-        
         if (!monitor_module) {
             return ResponseBuilder::sendErrorLegacyWithReturn(ctx, HTTP_STATUS_INTERNAL_SERVER_ERROR, "monitor module unavailable");
         }
 
-        auto t_params_start = std::chrono::high_resolution_clock::now();
         auto params = ctx->params();
         
         // 解析必需参数
@@ -157,31 +182,12 @@ void registerNodeRoutes(hv::HttpService* service,
         // 解析可选的类型参数
         std::string type_param = ResponseBuilder::getParam(params, "type");
         std::vector<std::string> types = type_param.empty() ? std::vector<std::string>{} : ResponseBuilder::parseCommaSeparated(type_param);
-
-        // 处理特殊类型值
-        std::vector<std::string> actual_types;
-        if (types.empty()) {
-            // 如果未指定类型，默认包含所有指标
-            actual_types = {"cpu", "memory", "network", "disk", "gpu"};
-        } else {
-            // 检查是否有特殊类型值
-            bool has_system = std::find(types.begin(), types.end(), "system") != types.end();
-            actual_types = has_system ? std::vector<std::string>{"cpu", "memory", "network", "disk", "gpu"} : types;
-        }
-
-        auto t_params_end = std::chrono::high_resolution_clock::now();
-        auto params_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_params_end - t_params_start).count();
-        spdlog::info("[export] 参数解析完成，耗时: {} ms", params_duration);
+        std::vector<std::string> actual_types = normalizeExportTypes(types);
 
         try {
-            auto t_export_start = std::chrono::high_resolution_clock::now();
             // 调用监控模块导出数据
             monitor::ExportData exportData = monitor_module->exportNodeData(ip_param, start_time, end_time, actual_types);
-            auto t_export_end = std::chrono::high_resolution_clock::now();
-            auto export_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_export_end - t_export_start).count();
-            spdlog::info("[export] exportNodeData 调用完成，耗时: {} ms，数据点数量: {}", export_duration, exportData.data.size());
 
-            auto t_json_start = std::chrono::high_resolution_clock::now();
             // 转换为 export.md 格式
             json data_array = json::array();
             
@@ -195,58 +201,17 @@ void registerNodeRoutes(hv::HttpService* service,
 
             // 转换数据点
             for (const auto& dataPoint : exportData.data) {
-                json point = {
-                    {"timestamp", dataPoint.timestamp},
-                    {"cpu_usage_percent", dataPoint.cpu_usage_percent},
-                    {"memory_usage_percent", dataPoint.memory_usage_percent}
-                };
-
-                // 添加磁盘使用率
-                for (const auto& [mount_point, usage] : dataPoint.disk_usage_percent) {
-                    point["disk_" + mount_point + "_usage_percent"] = usage;
-                }
-
-                // 添加网络速率
-                for (const auto& [interface, rate] : dataPoint.network_rx_rate) {
-                    point["network_" + interface + "_rx_rate"] = static_cast<std::int64_t>(rate);
-                }
-                for (const auto& [interface, rate] : dataPoint.network_tx_rate) {
-                    point["network_" + interface + "_tx_rate"] = static_cast<std::int64_t>(rate);
-                }
-
-                // 添加GPU使用率
-                for (const auto& [gpu_index, usage] : dataPoint.gpu_compute_usage) {
-                    point["gpu_" + gpu_index + "_compute_usage"] = usage;
-                }
-                for (const auto& [gpu_index, usage] : dataPoint.gpu_mem_usage) {
-                    point["gpu_" + gpu_index + "_mem_usage"] = usage;
-                }
-
-                node_data["data"].push_back(point);
+                node_data["data"].push_back(convertDataPointToJson(dataPoint));
             }
 
             data_array.push_back(node_data);
 
-            auto t_json_end = std::chrono::high_resolution_clock::now();
-            auto json_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_json_end - t_json_start).count();
-            spdlog::info("[export] JSON 转换完成，耗时: {} ms", json_duration);
-
-            auto t_serialize_start = std::chrono::high_resolution_clock::now();
             json resp = {
                 {"code", 200},
                 {"data", data_array}
             };
 
-            auto result = ResponseBuilder::sendJson(ctx, resp);
-            auto t_serialize_end = std::chrono::high_resolution_clock::now();
-            auto serialize_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_serialize_end - t_serialize_start).count();
-            spdlog::info("[export] JSON 序列化完成，耗时: {} ms", serialize_duration);
-
-            auto t_end = std::chrono::high_resolution_clock::now();
-            auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
-            spdlog::info("[export] 接口处理完成，总耗时: {} ms", total_duration);
-            
-            return result;
+            return ResponseBuilder::sendJson(ctx, resp);
 
         } catch (const std::exception& e) {
             return ResponseBuilder::sendErrorLegacyWithReturn(ctx, HTTP_STATUS_INTERNAL_SERVER_ERROR, "internal server error: " + std::string(e.what()));

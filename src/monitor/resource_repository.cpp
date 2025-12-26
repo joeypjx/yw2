@@ -11,7 +11,7 @@ ResourceRepository::ResourceRepository(const std::string& conninfo,
                                        size_t maxConnections)
     : connectionPool_(std::make_unique<yw::utils::PostgreSQLConnectionPool>(conninfo, minConnections, maxConnections)) {
 }
-
+ 
 ResourceRepository::~ResourceRepository() = default;
 
 void ResourceRepository::save(const Resource& data) {

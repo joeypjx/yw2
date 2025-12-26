@@ -66,17 +66,17 @@ QueryResult PostgreSQLQueryInterface::executeQueryWithConnection(
             // 但使用 pqxx 的转义功能来防止 SQL 注入
             
             // 构建参数化查询字符串
-            std::string paramSql = sql;
-            for (size_t i = 0; i < params.size(); ++i) {
-                std::string placeholder = "$" + std::to_string(i + 1);
-                size_t pos = paramSql.find(placeholder);
-                if (pos != std::string::npos) {
+        std::string paramSql = sql;
+        for (size_t i = 0; i < params.size(); ++i) {
+            std::string placeholder = "$" + std::to_string(i + 1);
+            size_t pos = paramSql.find(placeholder);
+            if (pos != std::string::npos) {
                     // 使用 pqxx 的转义功能
                     std::string escaped = tx.esc(params[i]);
                     paramSql.replace(pos, placeholder.length(), "'" + escaped + "'");
-                }
             }
-            
+        }
+        
             result = tx.exec(paramSql);
         }
         

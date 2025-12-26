@@ -67,9 +67,6 @@ ExportData MonitorManager::exportNodeData(const std::string& host_ip,
                                            std::int64_t start_time,
                                            std::int64_t end_time,
                                            const std::vector<std::string>& types) const {
-    auto t_func_start = std::chrono::high_resolution_clock::now();
-    spdlog::info("[exportNodeData] 函数开始，host_ip: {}, start_time: {}, end_time: {}", host_ip, start_time, end_time);
-    
     ExportData result;
     result.ip = host_ip;
     
@@ -90,15 +87,8 @@ ExportData MonitorManager::exportNodeData(const std::string& host_ip,
         return result;
     }
     
-    auto t_query_start = std::chrono::high_resolution_clock::now();
     // 查询原始数据
     MetricsSeries metrics = repository_->queryMetricsSeries(host_ip, start_time, end_time, types);
-    auto t_query_end = std::chrono::high_resolution_clock::now();
-    auto query_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_query_end - t_query_start).count();
-    spdlog::info("[exportNodeData] 数据库查询完成，耗时: {} ms，CPU点数: {}, Memory点数: {}, Disk设备数: {}, Network接口数: {}, GPU数: {}", 
-                 query_duration, metrics.cpu.size(), metrics.memory.size(), metrics.disk.size(), metrics.network.size(), metrics.gpu.size());
-    
-    auto t_index_start = std::chrono::high_resolution_clock::now();
     
     // ========== 使用哈希表建立时间戳索引 ==========
     
@@ -144,58 +134,22 @@ ExportData MonitorManager::exportNodeData(const std::string& host_ip,
         allTimestamps.insert(ts);
     }
     
-    auto t_index_end = std::chrono::high_resolution_clock::now();
-    auto index_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_index_end - t_index_start).count();
-    spdlog::info("[exportNodeData] 索引构建完成，耗时: {} ms，唯一时间戳数量: {}", index_duration, allTimestamps.size());
-    
     // ========== 构建类型列表 ==========
-    auto t_type_start = std::chrono::high_resolution_clock::now();
-    std::set<std::string> typeSet;
     if (types.empty()) {
-        // 如果未指定类型，则包含所有可能的类型
-        typeSet.insert("cpu_usage_percent");
-        typeSet.insert("memory_usage_percent");
-        // 添加磁盘类型
-        for (const auto& [device, points] : metrics.disk) {
-            if (!points.empty()) {
-                typeSet.insert("disk_" + points[0].mount_point + "_usage_percent");
-            }
-        }
-        // 添加网络类型
-        for (const auto& [interface, points] : metrics.network) {
-            if (!points.empty()) {
-                typeSet.insert("network_" + interface + "_rx_rate");
-                typeSet.insert("network_" + interface + "_tx_rate");
-            }
-        }
-        // 添加GPU类型
-        for (const auto& [gpu_key, points] : metrics.gpu) {
-            if (!points.empty()) {
-                typeSet.insert("gpu_" + std::to_string(points[0].index) + "_compute_usage");
-                typeSet.insert("gpu_" + std::to_string(points[0].index) + "_mem_usage");
-            }
-        }
+        // 如果未指定类型，默认包含所有基础类型
+        result.type = {"cpu", "memory", "network", "disk", "gpu"};
     } else {
-        // 使用指定的类型
-        typeSet.insert(types.begin(), types.end());
+        // 直接使用请求中的类型
+        result.type = types;
     }
-    result.type.assign(typeSet.begin(), typeSet.end());
-    auto t_type_end = std::chrono::high_resolution_clock::now();
-    auto type_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_type_end - t_type_start).count();
-    spdlog::info("[exportNodeData] 类型列表构建完成，耗时: {} ms", type_duration);
     
     // ========== 缓存时间戳格式化结果 ==========
-    auto t_format_start = std::chrono::high_resolution_clock::now();
     std::unordered_map<std::int64_t, std::string> timestampCache;
     for (std::int64_t ts : allTimestamps) {
         timestampCache[ts] = formatTimestamp(ts);
     }
-    auto t_format_end = std::chrono::high_resolution_clock::now();
-    auto format_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_format_end - t_format_start).count();
-    spdlog::info("[exportNodeData] 时间戳格式化缓存完成，耗时: {} ms", format_duration);
     
     // ========== 使用索引快速构建数据点 ==========
-    auto t_datapoint_start = std::chrono::high_resolution_clock::now();
     result.data.reserve(allTimestamps.size());  // 预分配空间
     
     for (std::int64_t timestamp : allTimestamps) {
@@ -238,14 +192,6 @@ ExportData MonitorManager::exportNodeData(const std::string& host_ip,
         
         result.data.push_back(std::move(dataPoint));
     }
-    
-    auto t_datapoint_end = std::chrono::high_resolution_clock::now();
-    auto datapoint_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_datapoint_end - t_datapoint_start).count();
-    spdlog::info("[exportNodeData] 数据点构建完成，耗时: {} ms，数据点数量: {}", datapoint_duration, result.data.size());
-    
-    auto t_func_end = std::chrono::high_resolution_clock::now();
-    auto func_duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_func_end - t_func_start).count();
-    spdlog::info("[exportNodeData] 函数完成，总耗时: {} ms", func_duration);
     
     return result;
 }

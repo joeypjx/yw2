@@ -1,5 +1,6 @@
 // 先包含third_party/json，确保使用正确的版本
 #include <nlohmann/json.hpp>
+#include <algorithm>
 
 // 然后包含其他头文件
 #include "alert_routes.h"
@@ -13,6 +14,75 @@ namespace routes {
 using json = nlohmann::json;
 using ResponseBuilder = yw::utils::ResponseBuilder;
 
+namespace {
+    // 辅助函数：解析请求体为 JSON
+    json parseRequestBody(const HttpContextPtr& ctx) {
+        auto body = ctx->body();
+        if (body.empty()) {
+            throw std::runtime_error("empty request body");
+        }
+        return json::parse(body);
+    }
+
+    // 辅助函数：从参数构建 AlertFilters
+    template<typename MapType>
+    yw::alert::AlertFilters buildAlertFilters(const MapType& params) {
+        yw::alert::AlertFilters filters;
+        
+        if (ResponseBuilder::hasParam(params, "status")) {
+            filters.status = ResponseBuilder::getParam(params, "status");
+        }
+        if (ResponseBuilder::hasParam(params, "severity")) {
+            filters.severity = ResponseBuilder::getParam(params, "severity");
+        }
+        if (ResponseBuilder::hasParam(params, "alert_type")) {
+            filters.alert_type = ResponseBuilder::getParam(params, "alert_type");
+        }
+        if (ResponseBuilder::hasParam(params, "host_ip")) {
+            filters.host_ip = ResponseBuilder::getParam(params, "host_ip");
+        }
+        if (ResponseBuilder::hasParam(params, "box_id")) {
+            filters.box_id = ResponseBuilder::getIntParam(params, "box_id", -1);
+        }
+        if (ResponseBuilder::hasParam(params, "slot_id")) {
+            filters.slot_id = ResponseBuilder::getIntParam(params, "slot_id", -1);
+        }
+        if (ResponseBuilder::hasParam(params, "description")) {
+            filters.description = ResponseBuilder::getParam(params, "description");
+        }
+        if (ResponseBuilder::hasParam(params, "start_time")) {
+            filters.start_time = ResponseBuilder::getParam(params, "start_time");
+        }
+        if (ResponseBuilder::hasParam(params, "end_time")) {
+            filters.end_time = ResponseBuilder::getParam(params, "end_time");
+        }
+        if (ResponseBuilder::hasParam(params, "stack_name")) {
+            filters.stack_name = ResponseBuilder::getParam(params, "stack_name");
+        }
+        if (ResponseBuilder::hasParam(params, "component_name")) {
+            filters.component_name = ResponseBuilder::getParam(params, "component_name");
+        }
+        
+        // 验证并设置 limit（默认100，范围1-1000）
+        int limit = ResponseBuilder::getIntParam(params, "limit", 100);
+        filters.limit = std::max(1, std::min(1000, limit));
+        
+        return filters;
+    }
+
+    // 辅助函数：限制 JSON 数组大小
+    json limitArraySize(const json& array, size_t maxSize) {
+        if (!array.is_array() || array.size() <= maxSize) {
+            return array;
+        }
+        json limited = json::array();
+        for (size_t i = 0; i < maxSize; ++i) {
+            limited.push_back(array[i]);
+        }
+        return limited;
+    }
+}
+
 void registerAlertRoutes(hv::HttpService* service, 
                           std::shared_ptr<yw::alert::IAlertModule> alertModule) {
     if (!service || !alertModule) return;
@@ -20,12 +90,7 @@ void registerAlertRoutes(hv::HttpService* service,
     // POST /alarm/rules - 创建告警规则
     service->POST("/alarm/rules", [alertModule](const HttpContextPtr& ctx) {
         try {
-            auto body = ctx->body();
-            if (body.empty()) {
-                return ResponseBuilder::sendErrorWithReturn(ctx, "empty request body", HTTP_STATUS_BAD_REQUEST);
-            }
-
-            auto ruleJson = json::parse(body);
+            auto ruleJson = parseRequestBody(ctx);
             
             // 使用 IAlertModule 接口保存规则
             bool success = alertModule->addAlertRule(ruleJson);
@@ -81,15 +146,7 @@ void registerAlertRoutes(hv::HttpService* service,
     service->POST("/alarm/rules/{id}/update", [alertModule](const HttpContextPtr& ctx) {
         try {
             const std::string ruleId = ctx->param("id");
-            auto body = ctx->body();
-            
-            if (body.empty()) {
-                return ResponseBuilder::sendErrorWithReturn(ctx, 
-                                                           "empty request body", 
-                                                           HTTP_STATUS_BAD_REQUEST);
-            }
-
-            auto ruleJson = json::parse(body);
+            auto ruleJson = parseRequestBody(ctx);
             
             // 确保ID匹配
             ruleJson["id"] = ruleId;
@@ -135,65 +192,13 @@ void registerAlertRoutes(hv::HttpService* service,
     // GET /alarm/events - 获取告警事件
     service->GET("/alarm/events", [alertModule](const HttpContextPtr& ctx) {
         try {
-            // 获取查询参数
             auto params = ctx->params();
-            
-            // 构建过滤条件
-            yw::alert::AlertFilters filters;
-            
-            // 使用工具函数解析参数
-            if (ResponseBuilder::hasParam(params, "status")) {
-                filters.status = ResponseBuilder::getParam(params, "status");
-            }
-            if (ResponseBuilder::hasParam(params, "severity")) {
-                filters.severity = ResponseBuilder::getParam(params, "severity");
-            }
-            if (ResponseBuilder::hasParam(params, "alert_type")) {
-                filters.alert_type = ResponseBuilder::getParam(params, "alert_type");
-            }
-            if (ResponseBuilder::hasParam(params, "host_ip")) {
-                filters.host_ip = ResponseBuilder::getParam(params, "host_ip");
-            }
-            if (ResponseBuilder::hasParam(params, "box_id")) {
-                filters.box_id = ResponseBuilder::getIntParam(params, "box_id", -1);
-            }
-            if (ResponseBuilder::hasParam(params, "slot_id")) {
-                filters.slot_id = ResponseBuilder::getIntParam(params, "slot_id", -1);
-            }
-            if (ResponseBuilder::hasParam(params, "description")) {
-                filters.description = ResponseBuilder::getParam(params, "description");
-            }
-            if (ResponseBuilder::hasParam(params, "start_time")) {
-                filters.start_time = ResponseBuilder::getParam(params, "start_time");
-            }
-            if (ResponseBuilder::hasParam(params, "end_time")) {
-                filters.end_time = ResponseBuilder::getParam(params, "end_time");
-            }
-            if (ResponseBuilder::hasParam(params, "stack_name")) {
-                filters.stack_name = ResponseBuilder::getParam(params, "stack_name");
-            }
-            if (ResponseBuilder::hasParam(params, "component_name")) {
-                filters.component_name = ResponseBuilder::getParam(params, "component_name");
-            }
-            
-            // 获取限制数量参数（带验证）
-            int limit = ResponseBuilder::getIntParam(params, "limit", 100);
-            if (limit <= 0) limit = 100;
-            if (limit > 1000) limit = 1000; // 最大限制1000条
-            filters.limit = limit;
+            yw::alert::AlertFilters filters = buildAlertFilters(params);
             
             // 使用统一的过滤接口查询告警
             json alertsArray;
             if (!filters.hasAnyFilter()) {
-                alertsArray = alertModule->getAlertsExceptPending();
-                // 限制数量
-                if (alertsArray.is_array() && alertsArray.size() > static_cast<size_t>(filters.limit)) {
-                    json limitedArray = json::array();
-                    for (size_t i = 0; i < static_cast<size_t>(filters.limit); ++i) {
-                        limitedArray.push_back(alertsArray[i]);
-                    }
-                    alertsArray = limitedArray;
-                }
+                alertsArray = limitArraySize(alertModule->getAlertsExceptPending(), filters.limit);
             } else {
                 alertsArray = alertModule->getAlertsByFilters(filters);
             }

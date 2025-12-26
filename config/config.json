@@ -41,7 +41,7 @@
     },
 
     "logger": {
-        "level": "info",
+        "level": "debug",
         "pattern": "[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%t] %v",
         "console": true,
         "file": "logs/yw.log",
