@@ -254,9 +254,11 @@ void NodeManager::setupRoutes() {
             auto cached_node = node_cache_->getNode(node.host_ip);
             if (cached_node) {
                 // 比较板卡类型
-                if (cached_node->board_type != node.board_type) {
+                // 只有当缓存的板卡类型不为空，且新的板卡类型也不为空，且两者不同时，才创建告警
+                // 如果缓存的板卡类型为空，说明是第一次设置，不算变化
+                if (!cached_node->board_type.empty() && !node.board_type.empty() && cached_node->board_type != node.board_type) {
                     // 告警
-                    spdlog::warn("Board type mismatch for node {}: cached: {}, new: {}", node.host_ip, cached_node->board_type, node.board_type);
+                    spdlog::info("板卡类型变化: 节点 {} 的板卡类型从 {} 变为 {}", node.host_ip, cached_node->board_type, node.board_type);
                     // 调用告警回调函数
                     if (alert_callback_) {
                         alert_callback_(node.box_id, node.slot_id, cached_node->board_type, node.board_type);

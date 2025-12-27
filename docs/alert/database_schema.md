@@ -15,7 +15,7 @@
 | severity | VARCHAR(50) | NOT NULL | 告警等级，用户自定义（如 "严重", "一般", "警告"） |
 | summary | TEXT | NOT NULL | 告警摘要，一小段话，用户自定义 |
 | description | TEXT | NOT NULL DEFAULT '' | 告警详情，一大段话，用户自定义，支持占位符 {{}} |
-| alert_type | VARCHAR(100) | NOT NULL | 告警类型，用户自定义（如 "硬件资源", "系统告警"） |
+| alert_type | VARCHAR(100) | NOT NULL | 告警类型，用户自定义（如 "硬件状态", "业务链路", "系统告警"） |
 | enabled | BOOLEAN | NOT NULL DEFAULT TRUE | 是否启用，默认为 true |
 | created_at | TIMESTAMP | NOT NULL DEFAULT NOW() | 创建时间，系统自动生成 |
 | updated_at | TIMESTAMP | NOT NULL DEFAULT NOW() | 更新时间，系统自动生成，通过触发器自动更新 |

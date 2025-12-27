@@ -174,7 +174,10 @@ std::vector<AlertEvent> AlertEngine::evaluateAllRules() {
             AlertRuleEvaluator evaluator(dbInterface_);
             auto alerts = evaluator.evaluateRule(rule);
             
-            spdlog::debug("规则 '{}' 生成了 {} 个告警", rule.getAlertName(), alerts.size());
+            // 只有当生成了告警时才打印日志
+            if (alerts.size() > 0) {
+                spdlog::debug("规则 '{}' 生成了 {} 个告警", rule.getAlertName(), alerts.size());
+            }
             
             // 将生成的告警添加到总列表
             allAlerts.insert(allAlerts.end(), alerts.begin(), alerts.end());
@@ -189,11 +192,11 @@ std::vector<AlertEvent> AlertEngine::evaluateAllRules() {
 
 int AlertEngine::processAlertStatusUpdates(const std::vector<AlertEvent>& currentAlerts) {
     try {
-        // 获取当前数据库中firing和pending状态的告警指纹（只获取硬件资源类型）
+        // 获取当前数据库中firing和pending状态的告警指纹（只获取硬件状态类型）
         auto currentFiringFingerprints = getCurrentFiringFingerprints();
         auto currentPendingFingerprints = getCurrentPendingFingerprints();
-        spdlog::debug("数据库中当前firing告警数量（硬件资源）: {}", currentFiringFingerprints.size());
-        spdlog::debug("数据库中当前pending告警数量（硬件资源）: {}", currentPendingFingerprints.size());
+        spdlog::debug("数据库中当前firing告警数量（硬件状态）: {}", currentFiringFingerprints.size());
+        spdlog::debug("数据库中当前pending告警数量（硬件状态）: {}", currentPendingFingerprints.size());
         
         // 获取当前生成的告警指纹
         std::unordered_set<std::string> currentAlertFingerprints;
@@ -221,7 +224,7 @@ int AlertEngine::processAlertStatusUpdates(const std::vector<AlertEvent>& curren
                 
                 // 检查节点是否有新数据，如果没有新数据，保持告警状态不变
                 if (!hasNodeRecentData(*alert)) {
-                    spdlog::debug("Firing告警节点无新数据，保持状态: {}", fingerprint);
+                    // spdlog::debug("Firing告警节点无新数据，保持状态: {}", fingerprint);
                     continue;
                 }
                 
@@ -229,7 +232,7 @@ int AlertEngine::processAlertStatusUpdates(const std::vector<AlertEvent>& curren
                 int resolvedCount = alertRepo_->resolveFiringAlertsByFingerprint(fingerprint);
                 if (resolvedCount > 0) {
                     processedCount += resolvedCount;
-                    spdlog::debug("已解决 {} 个Firing告警: {}", resolvedCount, fingerprint);
+                    spdlog::info("已解决 {} 个Firing告警: {}", resolvedCount, fingerprint);
                 }
             } catch (const std::exception& e) {
                 spdlog::error("解决firing告警 {} 时出错: {}", fingerprint, e.what());
@@ -250,14 +253,14 @@ int AlertEngine::processAlertStatusUpdates(const std::vector<AlertEvent>& curren
                 if (alert) {
                     // 检查节点是否有新数据，如果没有新数据，保持告警状态不变
                     if (!hasNodeRecentData(*alert)) {
-                        spdlog::debug("Pending告警节点无新数据，保持状态: {}", fingerprint);
+                        //spdlog::debug("Pending告警节点无新数据，保持状态: {}", fingerprint);
                         continue;
                     }
                     // 节点有新数据但不满足条件，删除所有相同fingerprint的pending状态告警
                     int deletedCount = alertRepo_->deleteAlertsByFingerprintAndStatus(fingerprint, "pending");
                     if (deletedCount > 0) {
                         processedCount += deletedCount;
-                        spdlog::debug("已删除 {} 个Pending告警: {}", deletedCount, fingerprint);
+                        // spdlog::debug("已删除 {} 个Pending告警: {}", deletedCount, fingerprint);
                     }
                 }
             } catch (const std::exception& e) {
@@ -295,7 +298,7 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<AlertEvent>& alerts) {
                             bool success = existingAlert->updateInDatabase(alertRepo_);
                             if (success) {
                                 successCount++;
-                                spdlog::debug("Pending告警转为Firing: {}", alertCopy.getFingerprint());
+                                spdlog::info("Pending告警转为Firing: {}", alertCopy.getFingerprint());
                                 
                                 // 状态转换时调用推送回调
                                 if (pushCallback_) {
@@ -313,7 +316,7 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<AlertEvent>& alerts) {
                         bool success = existingAlert->updateInDatabase(alertRepo_);
                         if (success) {
                             successCount++;
-                            spdlog::debug("Pending告警转为Firing: {}", alertCopy.getFingerprint());
+                            spdlog::info("Pending告警转为Firing: {}", alertCopy.getFingerprint());
                             
                             // 状态转换时调用推送回调
                             if (pushCallback_) {
@@ -328,7 +331,6 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<AlertEvent>& alerts) {
                     bool success = existingAlert->updateInDatabase(alertRepo_);
                     if (success) {
                         successCount++;
-                        spdlog::debug("更新现有Firing告警: {}", alertCopy.getFingerprint());
                     }
                     continue; // 跳过创建新告警
                 }
@@ -339,9 +341,11 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<AlertEvent>& alerts) {
             bool success = alertCopy.updateInDatabase(alertRepo_);
             if (success) {
                 successCount++;
-                spdlog::debug("创建/更新告警: {} (状态: {})", 
+                std::string alertValue = alertCopy.getLabel("value");
+                spdlog::info("创建/更新告警: {} (状态: {}, 值: {})", 
                              alertCopy.getFingerprint(),
-                             alertCopy.getStatus() == AlertStatus::Pending ? "Pending" : "Firing");
+                             alertCopy.getStatus() == AlertStatus::Pending ? "Pending" : "Firing",
+                             alertValue.empty() ? "N/A" : alertValue);
                 
                 // 只有新创建的firing告警才调用推送回调
                 if (alertCopy.getStatus() == AlertStatus::Firing && pushCallback_) {
@@ -415,7 +419,6 @@ bool AlertEngine::shouldTransitionToFiring(const AlertEvent& pendingAlert) {
         
         // 解析for字段（持续时间）
         std::string forDuration = rule->getFor();
-        spdlog::debug("告警规则的for字段: '{}'", forDuration);
         
         if (forDuration.empty()) {
             // 如果没有设置for字段，默认立即转为firing
@@ -425,7 +428,6 @@ bool AlertEngine::shouldTransitionToFiring(const AlertEvent& pendingAlert) {
         
         // 解析持续时间（支持s/m/h单位）
         int durationSeconds = yw::utils::DurationUtils::parseToSeconds(forDuration);
-        spdlog::debug("解析的持续时间: {} 秒", durationSeconds);
         
         if (durationSeconds <= 0) {
             spdlog::debug("持续时间解析失败或为0，立即转为Firing");
@@ -434,7 +436,6 @@ bool AlertEngine::shouldTransitionToFiring(const AlertEvent& pendingAlert) {
         
         // 计算告警创建时间到现在的持续时间
         std::string createdAt = pendingAlert.getCreatedAt();
-        spdlog::debug("告警创建时间: {}", createdAt);
         
         if (createdAt.empty()) {
             spdlog::error("告警创建时间为空");

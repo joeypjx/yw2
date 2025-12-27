@@ -1,4 +1,5 @@
 #include "node_cache.h"
+#include "utils/ip_address_utils.h"
 #include <spdlog/spdlog.h>
 #include <algorithm>
 #include <chrono>
@@ -25,21 +26,31 @@ bool NodeCache::initialize() {
             }
 
             Node node;
+            // 只设置机箱号、槽位号和IP地址，其他字段初始化为空
             node.box_id = box_id;
             node.slot_id = board_id;
+            node.cpu_id = 0;
+            node.srio_id = 0;
+            node.hostname = "";
+            node.service_port = 0;
+            node.box_type = "";
+            node.board_type = "";
+            node.cpu_type = "";
+            node.os_type = "";
+            node.resource_type = "";
+            node.cpu_arch = "";
+            node.gpu.clear();
+            node.manufacturer = "";
+            node.serial_number = "";
+            node.production_date = "";
 
-            int thirdOctet;
-            int fourthOctet;
+            // 使用 IPAddressUtils 计算 IP 地址
+            node.host_ip = yw::utils::IPAddressUtils::calculateHostIP(box_id, board_id);
             
-            if (board_id <= 7) {
-                thirdOctet = box_id * 2;    
-                fourthOctet = (board_id - 1) * 32 + 5;
-            } else {
-                thirdOctet = box_id * 2 + 1;
-                fourthOctet = (board_id - 8) * 32 + 5;
-            }   
-            
-            node.host_ip = "192.168." + std::to_string(thirdOctet) + "." + std::to_string(fourthOctet);
+            // 如果计算出的 IP 为空，说明参数无效，跳过
+            if (node.host_ip.empty()) {
+                continue;
+            }
 
             NodeRecord record;
             record.node = node;

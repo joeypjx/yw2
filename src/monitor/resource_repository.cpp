@@ -295,8 +295,8 @@ ORDER BY
         for (auto& [iface, points] : out.network) {
             // 删除首尾元素前检查向量大小
             if (points.size() >= 2) {
-                points.erase(points.begin());
-                points.erase(points.end() - 1);
+            points.erase(points.begin());
+            points.erase(points.end() - 1);
             } else if (points.size() == 1) {
                 points.clear();
             }
@@ -361,8 +361,8 @@ ORDER BY
         for (auto& [device, points] : out.disk) {
             // 删除首尾元素前检查向量大小
             if (points.size() >= 2) {
-                points.erase(points.begin());
-                points.erase(points.end() - 1);
+            points.erase(points.begin());
+            points.erase(points.end() - 1);
             } else if (points.size() == 1) {
                 points.clear();
             }
@@ -434,8 +434,8 @@ ORDER BY
         for (auto& [key, points] : out.gpu) {
             // 删除首尾元素前检查向量大小
             if (points.size() >= 2) {
-                points.erase(points.begin());
-                points.erase(points.end() - 1);
+            points.erase(points.begin());
+            points.erase(points.end() - 1);
             } else if (points.size() == 1) {
                 points.clear();
             }

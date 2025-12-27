@@ -7,7 +7,7 @@ cmake .. -DCMAKE_CXX_COMPILER=/opt/homebrew/bin/g++-15
 {
   "id": "rule_20250101_120000_123_5678",
   "alert_name": "规则标识",
-  "alert_type": "硬件资源",
+  "alert_type": "硬件状态",
   "expression": {
     "stable": "disk",
     "metric": "total",

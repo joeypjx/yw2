@@ -99,7 +99,7 @@ std::shared_ptr<AlertEvent> AlertCreationFactory::createAlertFromComponent(const
         // 保存到数据库
         bool success = newAlert.updateInDatabase(alertRepo_);
         if (success) {
-            spdlog::debug("成功创建组件告警: {} (组件: {})", fingerprint, instanceId);
+            spdlog::info("成功创建组件告警: {} (组件: {})", fingerprint, instanceId);
             
             // 组件告警直接设为 Firing 状态，需要推送
             if (pushCallback_) {
@@ -131,7 +131,7 @@ std::shared_ptr<AlertEvent> AlertCreationFactory::createBoardTypeChangeAlert(int
         
         // 设置基本标签
         alertLabels["alert_name"] = "节点板卡类型变化";
-        alertLabels["alert_type"] = "硬件状态";
+        alertLabels["alert_type"] = "系统告警";
         alertLabels["severity"] = "警告";
         alertLabels["box_id"] = std::to_string(box_id);
         alertLabels["slot_id"] = std::to_string(slot_id);
@@ -153,7 +153,7 @@ std::shared_ptr<AlertEvent> AlertCreationFactory::createBoardTypeChangeAlert(int
         // 保存到数据库
         bool success = newAlert.updateInDatabase(alertRepo_);
         if (success) {
-            spdlog::debug("成功创建板卡类型变化告警: {} (机箱: {}, 槽位: {})", fingerprint, box_id, slot_id);
+            spdlog::info("成功创建板卡类型变化告警: {} (机箱: {}, 槽位: {})", fingerprint, box_id, slot_id);
             
             // 推送告警
             if (pushCallback_) {
@@ -239,7 +239,7 @@ int AlertCreationFactory::performEvaluationForAlive() {
         // 这样避免了时区转换的复杂性
         std::string sql = R"(
             SELECT 
-                host_ip::text as host_ip, 
+                host(host_ip) as host_ip, 
                 MAX(time) as latest_time,
                 EXTRACT(EPOCH FROM (NOW() - MAX(time)))::int as seconds_since_last_alive
             FROM resource_alive 
@@ -273,9 +273,6 @@ int AlertCreationFactory::performEvaluationForAlive() {
                 continue;
             }
             
-            // 输出节点信息
-            spdlog::debug("节点 {}: 最新心跳时间 {}, 距离现在 {} 秒", hostIp, latestTimeStr, secondsSinceLastAlive);
-            
             std::unordered_map<std::string, std::string> fingerprintTags;
             fingerprintTags["host_ip"] = hostIp;
             std::string fingerprint = AlertEvent::generateFingerprint("节点心跳超时", fingerprintTags);
@@ -295,7 +292,7 @@ int AlertCreationFactory::performEvaluationForAlive() {
                         
                         // 设置基本标签
                         alertLabels["alert_name"] = "节点心跳超时";
-                        alertLabels["alert_type"] = "availability";
+                        alertLabels["alert_type"] = "系统告警";
                         alertLabels["severity"] = "严重";
                         alertLabels["host_ip"] = hostIp;
                         
@@ -321,7 +318,7 @@ int AlertCreationFactory::performEvaluationForAlive() {
                         // 保存到数据库
                         bool success = newAlert.updateInDatabase(alertRepo_);
                         if (success) {
-                            spdlog::debug("成功创建节点心跳超时告警: {} (指纹: {})", hostIp, fingerprint);
+                            spdlog::info("成功创建节点心跳超时告警: {} (指纹: {})", hostIp, fingerprint);
                             alertCount++;
                             
                             // 节点心跳超时告警直接设为 Firing 状态，需要推送
@@ -340,7 +337,7 @@ int AlertCreationFactory::performEvaluationForAlive() {
                 try {
                     int resolvedCount = alertRepo_->resolveFiringAlertsByFingerprint(fingerprint);
                     if (resolvedCount > 0) {
-                        spdlog::debug("已解决 {} 个节点心跳超时告警: {}", resolvedCount, hostIp);
+                        spdlog::info("已解决 {} 个节点心跳超时告警: {}", resolvedCount, hostIp);
                     }
                 } catch (const std::exception& e) {
                     spdlog::error("处理节点恢复时发生错误: {} - {}", hostIp, e.what());

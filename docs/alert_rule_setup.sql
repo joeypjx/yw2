@@ -80,7 +80,7 @@ INSERT INTO alert_rules (
     '严重',
     '磁盘使用率过高',
     '磁盘{{mount_point}}使用率超过85%',
-    '硬件资源',
+    '硬件状态',
     TRUE,
     NOW(),
     NOW()
@@ -107,7 +107,7 @@ INSERT INTO alert_rules (
     '一般',
     'CPU使用率过高',
     'CPU使用率超过80%',
-    '硬件资源',
+    '硬件状态',
     TRUE,
     NOW(),
     NOW()

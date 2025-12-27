@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS alert_rule (
     severity            VARCHAR(50)     NOT NULL,                       -- 告警等级，用户自定义
     summary             TEXT            NOT NULL,                       -- 告警摘要，一小段话，用户自定义
     description         TEXT            NOT NULL DEFAULT '',            -- 告警详情，一大段话，用户自定义，支持占位符{{}}
-    alert_type          VARCHAR(100)    NOT NULL,                       -- 告警类型，用户自定义
+    alert_type          VARCHAR(100)    NOT NULL,                       -- 告警类型，用户自定义（如 "硬件状态", "业务链路", "系统告警"）
     enabled             BOOLEAN         NOT NULL DEFAULT TRUE,          -- 是否启用，默认为true
     
     -- 时间戳

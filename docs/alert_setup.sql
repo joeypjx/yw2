@@ -86,7 +86,7 @@ INSERT INTO alert (
     'CPU使用率告警|host_ip=192.168.1.100',
     '{
         "alert_name": "CPU使用率告警",
-        "alert_type": "硬件资源",
+        "alert_type": "硬件状态",
         "host_ip": "192.168.1.100",
         "metric": "usage_percent",
         "severity": "严重",
@@ -112,7 +112,7 @@ INSERT INTO alert (
     '磁盘使用率告警|host_ip=192.168.1.101|mount_point=/data',
     '{
         "alert_name": "磁盘使用率告警",
-        "alert_type": "硬件资源",
+        "alert_type": "硬件状态",
         "host_ip": "192.168.1.101",
         "metric": "usage_percent",
         "severity": "严重",

@@ -69,6 +69,14 @@ logs/
 node_modules/
 vendor/
 
+# Python virtual environments
+venv/
+env/
+ENV/
+.venv/
+tests/venv/
+tests/__pycache__/
+
 # Test coverage
 coverage/
 *.gcov

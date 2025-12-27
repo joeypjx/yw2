@@ -1,6 +1,6 @@
 创建告警规则
 http://192.168.10.58:18888/alarm/rules
-{"alert_name":"规则标识","expression":{"stable":"disk","metric":"total","conditions":[{"operator":">","threshold":85}],"tags":[{"mount_point":"/data"}]},"for":"5s","severity":"严重","summary":"告警摘要","description":"","alert_type":"硬件资源"}
+{"alert_name":"规则标识","expression":{"stable":"disk","metric":"total","conditions":[{"operator":">","threshold":85}],"tags":[{"mount_point":"/data"}]},"for":"5s","severity":"严重","summary":"告警摘要","description":"","alert_type":"硬件状态"}
 {
   "api_version": 1,
   "data": {
@@ -190,7 +190,7 @@ get http://192.168.10.58:18888/alarm/events?limit=20
       "fingerprint": "规则标识|device=/dev/sda5|mount_point=/data|host_ip=192.168.10.58/32",
       "id": "规则标识|device=/dev/sda5|mount_point=/data|host_ip=192.168.10.58/32",
       "labels": {
-        "alert_type": "硬件资源",
+        "alert_type": "硬件状态",
         "alertname": "规则标识",
         "host_ip": "192.168.10.58",
         "metrics": "total",

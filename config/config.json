@@ -4,7 +4,7 @@
     "thread_num": 4,
 
     "bmc": {
-        "listen_ip": "",
+        "listen_ip": "0.0.0.0",
         "multicast_group": "224.100.200.15",
         "multicast_port": 5715
     },
@@ -37,11 +37,11 @@
     },
 
     "alert": {
-        "heartbeat_timeout_seconds": 5
+        "heartbeat_timeout_seconds": 20
     },
 
     "logger": {
-        "level": "debug",
+        "level": "info",
         "pattern": "[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%t] %v",
         "console": true,
         "file": "logs/yw.log",

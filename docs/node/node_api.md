@@ -1,5 +1,7 @@
 {"api_version":1,"data":{"manager_ip":"192.168.10.58","manager_port":18888,"url":"/heartbeat"}}
 
+/heartbeat接口
+终端发来的请求格式
 {
     "api_version": 1,
     "data": {
