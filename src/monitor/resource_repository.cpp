@@ -155,10 +155,10 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
     
     pqxx::read_transaction tx{*conn};
 
-    // CPU - 每10秒聚合平均值
+    // CPU指标查询 - 每10秒聚合平均值
+    // 使用TimescaleDB的time_bucket_gapfill函数进行时间分桶和缺失值填充
     if (query_all || need.count("cpu")) {
         pqxx::result r = tx.exec_params(
-            // 2. 外层查询：负责格式化时间戳、处理NULL值和排序
             "SELECT "
             "    EXTRACT(EPOCH FROM bucket)::bigint AS ts, "
             "    COALESCE(usage_percent, 0) as usage_percent, "
@@ -172,7 +172,6 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
             "    COALESCE(current, 0) as current, "
             "    COALESCE(power, 0) as power "
             "FROM ( "
-            // 1. 内层查询：只调用一次 time_bucket_gapfill，并完成所有聚合计算
             "    SELECT "
             "        time_bucket_gapfill('10 seconds', time, now() - $2::interval, now()) AS bucket, "
             "        AVG(usage_percent) as usage_percent, "
@@ -187,33 +186,37 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
             "        AVG(power) as power "
             "    FROM resource_cpu "
             "    WHERE host_ip = $1::inet AND time >= now() - $2::interval AND time <= now() "
-            "    GROUP BY bucket " // 直接按内层定义的别名 bucket 分组
-            ") AS gapfilled_data " // 给子查询起一个别名
+            "    GROUP BY bucket "
+            ") AS gapfilled_data "
             "ORDER BY ts ASC",
             host_ip, duration
         );
+        // 预分配内存以提高性能
         out.cpu.reserve(r.size());
+        // 遍历查询结果，将每行数据转换为CpuPoint对象
         for (const auto& row : r) {
             CpuPoint p{};
-            p.timestamp      = row[0].as<long long>(0);
-            p.usage_percent  = row[1].as<double>(0);
-            p.load_avg_1m    = row[2].as<double>(0);
-            p.load_avg_5m    = row[3].as<double>(0);
-            p.load_avg_15m   = row[4].as<double>(0);
-            p.core_count     = row[5].as<int>(0);
-            p.core_allocated = row[6].as<int>(0);
-            p.temperature    = row[7].as<double>(0);
-            p.voltage        = row[8].as<double>(0);
-            p.current        = row[9].as<double>(0);
-            p.power          = row[10].as<double>(0);
+            p.timestamp      = row[0].as<long long>(0);  // Unix时间戳（秒）
+            p.usage_percent  = row[1].as<double>(0);  // CPU使用率
+            p.load_avg_1m    = row[2].as<double>(0);  // 1分钟平均负载
+            p.load_avg_5m    = row[3].as<double>(0);  // 5分钟平均负载
+            p.load_avg_15m   = row[4].as<double>(0);  // 15分钟平均负载
+            p.core_count     = row[5].as<int>(0);  // CPU核心数
+            p.core_allocated = row[6].as<int>(0);  // 已分配核心数
+            p.temperature    = row[7].as<double>(0);  // CPU温度
+            p.voltage        = row[8].as<double>(0);  // CPU电压
+            p.current        = row[9].as<double>(0);  // CPU电流
+            p.power          = row[10].as<double>(0);  // CPU功耗
             out.cpu.push_back(std::move(p));
         }
 
         // 删除首尾元素（gapfill可能产生的不完整数据点）
+        // 首尾时间桶可能只包含部分数据，为了数据准确性将其删除
         if (out.cpu.size() >= 2) {
-            out.cpu.erase(out.cpu.begin());
-            out.cpu.erase(out.cpu.end() - 1);
+            out.cpu.erase(out.cpu.begin());  // 删除第一个元素
+            out.cpu.erase(out.cpu.end() - 1);  // 删除最后一个元素
         } else if (out.cpu.size() == 1) {
+            // 如果只有1个数据点，很可能是gapfill产生的，直接清空
             out.cpu.clear();
         }
     }
@@ -262,8 +265,9 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
         }
     }
 
-    // Network - 每10秒聚合平均值，按 interface 分组
-    // 查询网络接口的收发字节数、包数、错误数、速率等
+    // Network指标查询 - 每10秒聚合平均值，按网络接口（interface）分组
+    // 查询每个网络接口的收发字节数、包数、错误数、速率等指标
+    // 使用CROSS JOIN确保所有接口和时间桶都有数据（缺失值用0填充）
     if (query_all || need.count("network")) {
         const char* network_query = R"SQL(
 WITH bucket_series AS (
@@ -306,36 +310,40 @@ ORDER BY
     dims.interface, ts ASC
 )SQL";
         pqxx::result r = tx.exec_params(network_query, host_ip, duration);
+        // 遍历查询结果，按接口分组存储到out.network中
         for (const auto& row : r) {
             NetworkPoint p{};
-            const std::string iface = row[0].as<std::string>("");
-            p.timestamp   = row[1].as<long long>(0);
+            const std::string iface = row[0].as<std::string>("");  // 网络接口名称
+            p.timestamp   = row[1].as<long long>(0);  // Unix时间戳
             p.interface   = iface;
-            p.rx_bytes    = row[2].as<long long>(0);
-            p.tx_bytes    = row[3].as<long long>(0);
-            p.rx_packets  = row[4].as<long long>(0);
-            p.tx_packets  = row[5].as<long long>(0);
-            p.rx_errors   = row[6].as<long long>(0);
-            p.tx_errors   = row[7].as<long long>(0);
-            p.rx_rate     = row[8].as<long long>(0);
-            p.tx_rate     = row[9].as<long long>(0);
-            out.network[iface].push_back(std::move(p));
+            p.rx_bytes    = row[2].as<long long>(0);  // 接收字节数
+            p.tx_bytes    = row[3].as<long long>(0);  // 发送字节数
+            p.rx_packets  = row[4].as<long long>(0);  // 接收包数
+            p.tx_packets  = row[5].as<long long>(0);  // 发送包数
+            p.rx_errors   = row[6].as<long long>(0);  // 接收错误数
+            p.tx_errors   = row[7].as<long long>(0);  // 发送错误数
+            p.rx_rate     = row[8].as<long long>(0);  // 接收速率
+            p.tx_rate     = row[9].as<long long>(0);  // 发送速率
+            out.network[iface].push_back(std::move(p));  // 按接口名称分组存储
         }
 
+        // 为每个网络接口删除首尾不完整的数据点
         for (auto& [iface, points] : out.network) {
             // 删除首尾元素前检查向量大小
             if (points.size() >= 2) {
-            points.erase(points.begin());
-            points.erase(points.end() - 1);
+                points.erase(points.begin());  // 删除第一个元素
+                points.erase(points.end() - 1);  // 删除最后一个元素
             } else if (points.size() == 1) {
+                // 如果只有1个数据点，很可能是gapfill产生的，直接清空
                 points.clear();
             }
             // 如果 points.size() == 0，什么都不做
         }
     }
 
-    // Disk - 每10秒聚合平均值，按 device 和 mount_point 分组
-    // 查询磁盘分区的使用情况（总量、已用、空闲、使用率）
+    // Disk指标查询 - 每10秒聚合平均值，按设备（device）和挂载点（mount_point）分组
+    // 查询每个磁盘分区的使用情况（总量、已用、空闲、使用率）
+    // 使用CROSS JOIN确保所有设备和时间桶都有数据（缺失值用0填充）
     if (query_all || need.count("disk")) {
         const char* disk_query = R"SQL(
 WITH bucket_series AS (
@@ -376,32 +384,37 @@ ORDER BY
    dims.device, ts ASC
 )SQL"; 
         pqxx::result r = tx.exec_params(disk_query, host_ip, duration);
+        // 遍历查询结果，按设备名称分组存储到out.disk中
         for (const auto& row : r) {
             DiskPoint p{};
-            const std::string device = row[0].as<std::string>("");
+            const std::string device = row[0].as<std::string>("");  // 磁盘设备名称
             p.device       = device;
-            p.mount_point  = row[1].as<std::string>("");
-            p.timestamp    = row[2].as<long long>(0);
-            p.total        = row[3].as<long long>(0);
-            p.used         = row[4].as<long long>(0);
-            p.free         = row[5].as<long long>(0);
-            p.usage_percent= row[6].as<double>(0);
-            out.disk[device].push_back(std::move(p));
+            p.mount_point  = row[1].as<std::string>("");  // 挂载点
+            p.timestamp    = row[2].as<long long>(0);  // Unix时间戳
+            p.total        = row[3].as<long long>(0);  // 总容量
+            p.used         = row[4].as<long long>(0);  // 已使用
+            p.free         = row[5].as<long long>(0);  // 空闲
+            p.usage_percent= row[6].as<double>(0);  // 使用率
+            out.disk[device].push_back(std::move(p));  // 按设备名称分组存储
         }
 
+        // 为每个磁盘设备删除首尾不完整的数据点
         for (auto& [device, points] : out.disk) {
             // 删除首尾元素前检查向量大小
             if (points.size() >= 2) {
-            points.erase(points.begin());
-            points.erase(points.end() - 1);
+                points.erase(points.begin());  // 删除第一个元素
+                points.erase(points.end() - 1);  // 删除最后一个元素
             } else if (points.size() == 1) {
+                // 如果只有1个数据点，很可能是gapfill产生的，直接清空
                 points.clear();
             }
             // 如果 points.size() == 0，什么都不做
         }
     }
 
-    // GPU - 每10秒聚合平均值，按 gpu_index 分组
+    // GPU指标查询 - 每10秒聚合平均值，按GPU索引（gpu_index）和名称（name）分组
+    // 查询每个GPU设备的计算使用率、显存使用率、温度、功耗等指标
+    // 使用CROSS JOIN确保所有GPU和时间桶都有数据（缺失值用0填充）
     if (query_all || need.count("gpu")) {
         const char* gpu_query = R"SQL(
 WITH bucket_series AS (
@@ -445,29 +458,32 @@ ORDER BY
     dims.gpu_index, ts ASC
 )SQL";
         pqxx::result r = tx.exec_params(gpu_query, host_ip, duration);
+        // 遍历查询结果，按GPU索引分组存储到out.gpu中（key格式为"gpu_0"、"gpu_1"等）
         for (const auto& row : r) {
             GpuPoint p{};
-            const int index = row[0].as<int>(0);
+            const int index = row[0].as<int>(0);  // GPU索引
             p.index         = index;
-            p.name          = row[1].as<std::string>("");
-            p.timestamp     = row[2].as<long long>(0);
-            p.compute_usage = row[3].as<double>(0);
-            p.mem_usage     = row[4].as<double>(0);
-            p.mem_used      = row[5].as<long long>(0);
-            p.mem_total     = row[6].as<long long>(0);
-            p.temperature   = row[7].as<double>(0);
-            p.power         = row[8].as<double>(0);
-            p.free          = row[9].as<int>(0);
-            std::string key = std::string("gpu_") + std::to_string(index);
-            out.gpu[key].push_back(std::move(p));
+            p.name          = row[1].as<std::string>("");  // GPU名称
+            p.timestamp     = row[2].as<long long>(0);  // Unix时间戳
+            p.compute_usage = row[3].as<double>(0);  // 计算使用率
+            p.mem_usage     = row[4].as<double>(0);  // 显存使用率
+            p.mem_used      = row[5].as<long long>(0);  // 已用显存
+            p.mem_total     = row[6].as<long long>(0);  // 总显存
+            p.temperature   = row[7].as<double>(0);  // GPU温度
+            p.power         = row[8].as<double>(0);  // GPU功耗
+            p.free          = row[9].as<int>(0);  // GPU是否空闲
+            std::string key = std::string("gpu_") + std::to_string(index);  // 生成key（如"gpu_0"）
+            out.gpu[key].push_back(std::move(p));  // 按key分组存储
         }
 
+        // 为每个GPU删除首尾不完整的数据点
         for (auto& [key, points] : out.gpu) {
             // 删除首尾元素前检查向量大小
             if (points.size() >= 2) {
-            points.erase(points.begin());
-            points.erase(points.end() - 1);
+                points.erase(points.begin());  // 删除第一个元素
+                points.erase(points.end() - 1);  // 删除最后一个元素
             } else if (points.size() == 1) {
+                // 如果只有1个数据点，很可能是gapfill产生的，直接清空
                 points.clear();
             }
             // 如果 points.size() == 0，什么都不做
@@ -534,7 +550,8 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
         bucket_interval = "'6 hours'";
     }
 
-    // CPU - 每10秒聚合平均值
+    // CPU指标查询 - 使用动态bucket大小进行时间分桶和聚合
+    // bucket大小根据时间范围自动调整，以保持合理的数据点数量
     if (query_all || need.count("cpu")) {
         pqxx::result r = tx.exec_params(
             "SELECT "
