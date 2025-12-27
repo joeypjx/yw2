@@ -1,3 +1,16 @@
+// ============================================================================
+// 文件功能描述：
+// 告警模块（AlertModule）的实现文件，是告警系统的核心适配器层。
+// 主要功能包括：
+// 1. 模块适配器实现：AlertModuleAdapter类实现了IAlertModule接口，统一封装告警系统的各个组件
+// 2. 告警引擎管理：管理AlertEngine的生命周期，负责启动和停止定期评估告警规则
+// 3. 告警规则管理：通过AlertRuleService提供规则的增删改查功能
+// 4. 告警查询服务：通过AlertQueryService提供按状态、过滤条件等查询告警事件的功能
+// 5. 告警创建工厂：通过AlertCreationFactory创建特定类型的告警（如板卡类型变化告警）
+// 6. 工厂模式实现：AlertFactory提供createAlertModule静态方法，负责创建和组装所有告警组件
+// 7. 数据持久化：集成数据库仓库层，实现告警规则和告警事件的持久化存储
+// ============================================================================
+
 #include "alert/alert.h"
 #include "application/alert_engine.h"
 #include "application/alert_rule_service.h"
