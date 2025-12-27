@@ -372,13 +372,10 @@ std::unordered_set<std::string> AlertEngine::getCurrentPendingFingerprints() {
     std::unordered_set<std::string> fingerprints;
     
     try {
-        auto pendingAlerts = alertRepo_->getAlertsByStatus("pending");
+        // 直接在 SQL 中过滤 alert_type，避免返回大量不需要的数据
+        auto pendingAlerts = alertRepo_->getAlertsByStatusAndType("pending", "硬件状态");
         for (const auto& alert : pendingAlerts) {
-            // 只获取 alert_type 为 "硬件状态" 的告警
-            std::string alertType = alert.getLabel("alert_type");
-            if (alertType == "硬件状态") {
-                fingerprints.insert(alert.getFingerprint());
-            }
+            fingerprints.insert(alert.getFingerprint());
         }
     } catch (const std::exception& e) {
         spdlog::error("获取pending告警指纹时出错: {}", e.what());
@@ -473,13 +470,10 @@ std::unordered_set<std::string> AlertEngine::getCurrentFiringFingerprints() {
     std::unordered_set<std::string> fingerprints;
     
     try {
-        auto firingAlerts = alertRepo_->getAlertsByStatus("firing");
+        // 直接在 SQL 中过滤 alert_type，避免返回大量不需要的数据
+        auto firingAlerts = alertRepo_->getAlertsByStatusAndType("firing", "硬件状态");
         for (const auto& alert : firingAlerts) {
-            // 只获取 alert_type 为 "硬件状态" 的告警
-            std::string alertType = alert.getLabel("alert_type");
-            if (alertType == "硬件状态") {
-                fingerprints.insert(alert.getFingerprint());
-            }
+            fingerprints.insert(alert.getFingerprint());
         }
     } catch (const std::exception& e) {
         spdlog::error("获取firing告警指纹时出错: {}", e.what());

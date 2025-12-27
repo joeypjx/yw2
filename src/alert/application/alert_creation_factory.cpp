@@ -237,12 +237,14 @@ int AlertCreationFactory::performEvaluationForAlive() {
         
         // 查询每个节点 IP 的最新时间，并在数据库层面直接计算时间差（秒）
         // 这样避免了时区转换的复杂性
+        // 添加时间范围限制，只查询最近5分钟的数据，避免扫描整个表
         std::string sql = R"(
             SELECT 
                 host(host_ip) as host_ip, 
                 MAX(time) as latest_time,
                 EXTRACT(EPOCH FROM (NOW() - MAX(time)))::int as seconds_since_last_alive
             FROM resource_alive 
+            WHERE time >= NOW() - INTERVAL '5 minutes'
             GROUP BY host_ip 
             ORDER BY host_ip
         )";

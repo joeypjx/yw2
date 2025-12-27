@@ -126,7 +126,7 @@ std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByFingerprintAndS
 
 std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByStatus(const std::string& status) {
     try {
-        std::string sql = buildSelectSql() + " WHERE status = $1 ORDER BY created_at DESC";
+        std::string sql = buildSelectSql() + " WHERE status = $1 ORDER BY created_at DESC LIMIT 5000";
         std::vector<std::string> params = {status};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
@@ -142,10 +142,28 @@ std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByStatus(const st
     }
 }
 
+std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByStatusAndType(const std::string& status, const std::string& alertType) {
+    try {
+        std::string sql = buildSelectSql() + " WHERE status = $1 AND labels->>'alert_type' = $2 ORDER BY created_at DESC LIMIT 5000";
+        std::vector<std::string> params = {status, alertType};
+        
+        QueryResult result = dbInterface_->executeQuery(sql, params);
+        
+        std::vector<AlertEvent> alerts;
+        for (const auto& row : result.rows) {
+            alerts.push_back(parseAlertFromQueryResult(row));
+        }
+        
+        return alerts;
+    } catch (const std::exception& e) {
+        throw std::runtime_error("根据状态和类型获取告警失败: " + std::string(e.what()));
+    }
+}
+
 std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByHostIp(const std::string& hostIp) {
     try {
         // 从 labels JSON 中查询 host_ip
-        std::string sql = buildSelectSql() + " WHERE labels->>'host_ip' = $1 ORDER BY created_at DESC";
+        std::string sql = buildSelectSql() + " WHERE labels->>'host_ip' = $1 ORDER BY created_at DESC LIMIT 5000";
         std::vector<std::string> params = {hostIp};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
@@ -164,7 +182,7 @@ std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByHostIp(const st
 std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByBoxId(int boxId) {
     try {
         // 从 labels JSON 中查询 box_id
-        std::string sql = buildSelectSql() + " WHERE labels->>'box_id' = $1 ORDER BY created_at DESC";
+        std::string sql = buildSelectSql() + " WHERE labels->>'box_id' = $1 ORDER BY created_at DESC LIMIT 5000";
         std::vector<std::string> params = {std::to_string(boxId)};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
@@ -183,7 +201,7 @@ std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByBoxId(int boxId
 std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsBySlotId(int slotId) {
     try {
         // 从 labels JSON 中查询 slot_id
-        std::string sql = buildSelectSql() + " WHERE labels->>'slot_id' = $1 ORDER BY created_at DESC";
+        std::string sql = buildSelectSql() + " WHERE labels->>'slot_id' = $1 ORDER BY created_at DESC LIMIT 5000";
         std::vector<std::string> params = {std::to_string(slotId)};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
@@ -202,7 +220,7 @@ std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsBySlotId(int slot
 std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByTimeRange(const std::string& startTime, const std::string& endTime) {
     try {
         // 根据 created_at 时间范围查询告警
-        std::string sql = buildSelectSql() + " WHERE created_at >= $1::timestamp AND created_at <= $2::timestamp ORDER BY created_at DESC";
+        std::string sql = buildSelectSql() + " WHERE created_at >= $1::timestamp AND created_at <= $2::timestamp ORDER BY created_at DESC LIMIT 5000";
         std::vector<std::string> params = {startTime, endTime};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
@@ -220,7 +238,7 @@ std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByTimeRange(const
 
 std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByAlertType(const std::string& alertType) {
     try {
-        std::string sql = buildSelectSql() + " WHERE labels->>'alert_type' = $1 ORDER BY created_at DESC";
+        std::string sql = buildSelectSql() + " WHERE labels->>'alert_type' = $1 ORDER BY created_at DESC LIMIT 5000";
         std::vector<std::string> params = {alertType};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
@@ -238,7 +256,7 @@ std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByAlertType(const
 
 std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsBySeverity(const std::string& severity) {
     try {
-        std::string sql = buildSelectSql() + " WHERE labels->>'severity' = $1 ORDER BY created_at DESC";
+        std::string sql = buildSelectSql() + " WHERE labels->>'severity' = $1 ORDER BY created_at DESC LIMIT 5000";
         std::vector<std::string> params = {severity};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
@@ -257,7 +275,7 @@ std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsBySeverity(const 
 std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByDescription(const std::string& description) {
     try {
         // 从 annotations JSON 中查询 description，支持模糊匹配
-        std::string sql = buildSelectSql() + " WHERE annotations->>'description' LIKE $1 ORDER BY created_at DESC";
+        std::string sql = buildSelectSql() + " WHERE annotations->>'description' LIKE $1 ORDER BY created_at DESC LIMIT 5000";
         std::vector<std::string> params = {"%" + description + "%"};
         
         QueryResult result = dbInterface_->executeQuery(sql, params);
@@ -275,7 +293,7 @@ std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByDescription(con
 
 std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsExceptPending() {
     try {
-        std::string sql = buildSelectSql() + " WHERE status != 'pending' ORDER BY created_at DESC";
+        std::string sql = buildSelectSql() + " WHERE status IN ('firing', 'resolved') ORDER BY created_at DESC LIMIT 5000";
         
         QueryResult result = dbInterface_->executeQuery(sql);
         

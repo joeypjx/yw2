@@ -24,6 +24,7 @@ public:
     virtual bool alertExists(const std::string& id) = 0;
     
     virtual std::vector<AlertEvent> getAlertsByStatus(const std::string& status) = 0;
+    virtual std::vector<AlertEvent> getAlertsByStatusAndType(const std::string& status, const std::string& alertType) = 0;
     virtual std::vector<AlertEvent> getAlertsByHostIp(const std::string& hostIp) = 0;
     virtual std::vector<AlertEvent> getAlertsByBoxId(int boxId) = 0;
     virtual std::vector<AlertEvent> getAlertsBySlotId(int slotId) = 0;
@@ -49,6 +50,7 @@ public:
     std::shared_ptr<AlertEvent> getAlertByFingerprint(const std::string& fingerprint) override;
     std::vector<AlertEvent> getAlertsByFingerprintAndStatus(const std::string& fingerprint, const std::string& status) override;
     std::vector<AlertEvent> getAlertsByStatus(const std::string& status) override;
+    std::vector<AlertEvent> getAlertsByStatusAndType(const std::string& status, const std::string& alertType) override;
     std::vector<AlertEvent> getAlertsByHostIp(const std::string& hostIp) override;
     std::vector<AlertEvent> getAlertsByBoxId(int boxId) override;
     std::vector<AlertEvent> getAlertsBySlotId(int slotId) override;
