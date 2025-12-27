@@ -10,6 +10,15 @@
 namespace yw {
 namespace alert {
 
+// 告警规则构造函数
+// name: 告警名称
+// expr: 告警表达式（包含条件、指标、表名和标签）
+// duration: 持续时间（如"5m"，表示持续5分钟后才触发）
+// severity: 严重程度（如"critical"、"warning"、"info"）
+// summary: 摘要
+// description: 描述
+// alertType: 告警类型（如"硬件状态"、"业务链路"、"系统告警"）
+// 自动生成ID和时间戳，默认启用
 AlertRule::AlertRule(const std::string& name, const AlertExpression& expr, 
                      const std::string& duration, const std::string& severity,
                      const std::string& summary, const std::string& description,
@@ -23,12 +32,17 @@ AlertRule::AlertRule(const std::string& name, const AlertExpression& expr,
     setUpdatedNow();
 }
 
+// 将告警规则转换为JSON对象
+// 返回: JSON对象
 nlohmann::json AlertRule::toJson() const {
     nlohmann::json j;
     to_json(j, *this);
     return j;
 }
 
+// 从JSON对象解析告警规则
+// j: JSON对象
+// 返回: 解析后的告警规则对象
 AlertRule AlertRule::fromJson(const nlohmann::json& j) {
     AlertRule rule;
     
@@ -102,6 +116,9 @@ AlertRule AlertRule::fromJson(const nlohmann::json& j) {
     return rule;
 }
 
+// 验证告警规则是否有效
+// 检查ID、名称、表达式、条件、操作符、持续时间格式、严重程度等字段
+// 返回: 有效返回true，无效返回false
 bool AlertRule::isValid() const {
     // 检查id是否为空
     if (id_.empty()) {
@@ -196,6 +213,8 @@ bool AlertRule::isValid() const {
     return true;
 }
 
+// 获取告警规则验证错误信息
+// 返回: 如果规则有效返回空字符串，否则返回具体的错误消息
 std::string AlertRule::getValidationError() const {
     if (id_.empty()) {
         return "id不能为空";
@@ -284,6 +303,7 @@ std::string AlertRule::getValidationError() const {
     return "";
 }
 
+// 生成唯一的告警规则ID（格式：rule_YYYYMMDD_HHMMSS_毫秒_随机数）
 void AlertRule::generateId() {
     // 使用时间戳和随机数生成唯一ID
     auto now = std::chrono::system_clock::now();
@@ -302,6 +322,7 @@ void AlertRule::generateId() {
     id_ = oss.str();
 }
 
+// 设置创建时间为当前时间（ISO 8601格式，包含毫秒）
 void AlertRule::setCreatedNow() {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
@@ -315,6 +336,7 @@ void AlertRule::setCreatedNow() {
     created_at_ = oss.str();
 }
 
+// 设置更新时间为当前时间（ISO 8601格式，包含毫秒）
 void AlertRule::setUpdatedNow() {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);

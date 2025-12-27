@@ -3,6 +3,9 @@
 namespace yw {
 namespace utils {
 
+// 发送成功响应（不返回值，用于void返回类型的路由处理函数）
+// ctx: HTTP上下文
+// data: 响应数据（JSON对象）
 void ResponseBuilder::sendSuccess(const HttpContextPtr& ctx, const json& data) {
     json resp = {
         {"api_version", ApiVersion::V2},
@@ -12,6 +15,11 @@ void ResponseBuilder::sendSuccess(const HttpContextPtr& ctx, const json& data) {
     sendJson(ctx, resp);
 }
 
+// 发送错误响应（不返回值，用于void返回类型的路由处理函数）
+// ctx: HTTP上下文
+// message: 错误消息
+// status_code: HTTP状态码（如400、500等）
+// data: 可选的错误数据（JSON对象）
 void ResponseBuilder::sendError(const HttpContextPtr& ctx, 
                                 const std::string& message,
                                 http_status status_code,
@@ -26,6 +34,11 @@ void ResponseBuilder::sendError(const HttpContextPtr& ctx,
     sendJson(ctx, resp);
 }
 
+// 发送旧版格式的错误响应（兼容旧API）
+// ctx: HTTP上下文
+// code: HTTP状态码
+// message: 错误消息
+// data: 可选的错误数据
 void ResponseBuilder::sendErrorLegacy(const HttpContextPtr& ctx,
                                       http_status code,
                                       const std::string& message,
@@ -39,6 +52,12 @@ void ResponseBuilder::sendErrorLegacy(const HttpContextPtr& ctx,
     sendJson(ctx, resp);
 }
 
+// 发送旧版格式的错误响应并返回状态码（用于需要返回值的路由处理函数）
+// ctx: HTTP上下文
+// code: HTTP状态码
+// message: 错误消息
+// data: 可选的错误数据
+// 返回: HTTP响应状态码
 int ResponseBuilder::sendErrorLegacyWithReturn(const HttpContextPtr& ctx,
                                                http_status code,
                                                const std::string& message,
@@ -52,11 +71,20 @@ int ResponseBuilder::sendErrorLegacyWithReturn(const HttpContextPtr& ctx,
     return sendJson(ctx, resp);
 }
 
+// 发送JSON响应
+// ctx: HTTP上下文
+// json_obj: JSON对象
+// indent: JSON格式化缩进空格数（默认-1表示紧凑格式）
+// 返回: HTTP响应状态码
 int ResponseBuilder::sendJson(const HttpContextPtr& ctx, const json& json_obj, int indent) {
     ctx->setContentType("application/json");
     return ctx->send(json_obj.dump(indent));
 }
 
+// 发送成功响应并返回状态码（用于需要返回值的路由处理函数）
+// ctx: HTTP上下文
+// data: 响应数据（JSON对象）
+// 返回: HTTP响应状态码
 int ResponseBuilder::sendSuccessWithReturn(const HttpContextPtr& ctx, const json& data) {
     json resp = {
         {"api_version", ApiVersion::V2},
@@ -66,6 +94,12 @@ int ResponseBuilder::sendSuccessWithReturn(const HttpContextPtr& ctx, const json
     return sendJson(ctx, resp);
 }
 
+// 发送错误响应并返回状态码（用于需要返回值的路由处理函数）
+// ctx: HTTP上下文
+// message: 错误消息
+// status_code: HTTP状态码
+// data: 可选的错误数据
+// 返回: HTTP响应状态码
 int ResponseBuilder::sendErrorWithReturn(const HttpContextPtr& ctx, 
                                         const std::string& message,
                                         http_status status_code,
@@ -80,6 +114,9 @@ int ResponseBuilder::sendErrorWithReturn(const HttpContextPtr& ctx,
     return sendJson(ctx, resp);
 }
 
+// 解析逗号分隔的参数字符串
+// param_value: 逗号分隔的字符串（如"cpu,memory,disk"）
+// 返回: 解析后的字符串数组，自动去除空白字符
 std::vector<std::string> ResponseBuilder::parseCommaSeparated(const std::string& param_value) {
     std::vector<std::string> result;
     if (param_value.empty()) {
@@ -101,6 +138,9 @@ std::vector<std::string> ResponseBuilder::parseCommaSeparated(const std::string&
     return result;
 }
 
+// 去除字符串首尾的空白字符（空格、制表符、换行符等）
+// str: 待处理的字符串
+// 返回: 去除空白后的字符串，如果全为空白则返回空字符串
 std::string ResponseBuilder::trim(const std::string& str) {
     if (str.empty()) {
         return str;

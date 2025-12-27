@@ -11,11 +11,15 @@
 namespace yw {
 namespace alert {
 
-/**
- * @brief AlertEngine 的适配器，实现 IAlertModule 接口
- */
+// AlertEngine的适配器，实现IAlertModule接口
+// 将AlertEngine、AlertRuleService、AlertQueryService和AlertCreationFactory的功能统一封装
 class AlertModuleAdapter : public IAlertModule {
 public:
+    // 构造函数，初始化各个服务组件
+    // engine: 告警引擎实例
+    // ruleService: 告警规则服务实例
+    // queryService: 告警查询服务实例
+    // creationFactory: 告警创建工厂实例
     AlertModuleAdapter(std::shared_ptr<AlertEngine> engine,
                       std::shared_ptr<AlertRuleService> ruleService,
                       std::shared_ptr<AlertQueryService> queryService,
@@ -25,6 +29,7 @@ public:
           queryService_(std::move(queryService)),
           creationFactory_(std::move(creationFactory)) {}
     
+    // 析构函数，自动停止告警引擎
     ~AlertModuleAdapter() override {
         stop();
     }
@@ -33,18 +38,23 @@ public:
     // 生命周期管理
     //-------------------------------------------------------------------------
     
+    // 启动告警引擎，开始定期评估告警规则
+    // intervalSeconds: 评估间隔（秒），默认5秒
     void start(int intervalSeconds = 5) override {
         if (engine_) {
             engine_->start(intervalSeconds);
         }
     }
     
+    // 停止告警引擎
     void stop() override {
         if (engine_) {
             engine_->stop();
         }
     }
     
+    // 检查告警引擎是否正在运行
+    // 返回: 如果引擎实例存在返回true，否则返回false
     bool isRunning() const override {
         // AlertEngine 没有暴露 isRunning，暂时返回 true
         // TODO: 添加 AlertEngine::isRunning() 方法
@@ -55,6 +65,9 @@ public:
     // 告警规则管理
     //-------------------------------------------------------------------------
     
+    // 添加告警规则
+    // ruleJson: 告警规则JSON对象
+    // 返回: 添加成功返回true，失败返回false
     bool addAlertRule(const nlohmann::json& ruleJson) override {
         if (!ruleService_) return false;
         try {
@@ -66,6 +79,9 @@ public:
         }
     }
     
+    // 更新告警规则
+    // ruleJson: 告警规则JSON对象（必须包含id字段）
+    // 返回: 更新成功返回true，失败返回false
     bool updateAlertRule(const nlohmann::json& ruleJson) override {
         if (!ruleService_) return false;
         try {
@@ -77,11 +93,17 @@ public:
         }
     }
     
+    // 删除告警规则
+    // ruleId: 告警规则ID
+    // 返回: 删除成功返回true，失败返回false
     bool deleteAlertRule(const std::string& ruleId) override {
         if (!ruleService_) return false;
         return ruleService_->deleteAlertRule(ruleId);
     }
     
+    // 根据ID获取告警规则
+    // ruleId: 告警规则ID
+    // 返回: 告警规则JSON对象，不存在时返回空JSON对象
     nlohmann::json getAlertRuleById(const std::string& ruleId) override {
         if (!ruleService_) return nlohmann::json();
         auto rule = ruleService_->getAlertRuleById(ruleId);
@@ -89,6 +111,8 @@ public:
         return rule->toJson();
     }
     
+    // 获取所有告警规则
+    // 返回: 告警规则JSON数组
     nlohmann::json getAllAlertRules() const override {
         if (!ruleService_) return nlohmann::json::array();
         auto rules = ruleService_->getAllAlertRules();
@@ -176,9 +200,9 @@ private:
     std::shared_ptr<AlertQueryService> queryService_;
     std::shared_ptr<AlertCreationFactory> creationFactory_;
     
-    /**
-     * @brief 将告警列表转换为 JSON 数组
-     */
+    // 将告警列表转换为JSON数组
+    // alerts: 告警事件列表
+    // 返回: 告警事件JSON数组
     static nlohmann::json alertsToJson(const std::vector<AlertEvent>& alerts) {
         nlohmann::json result = nlohmann::json::array();
         for (const auto& alert : alerts) {
@@ -192,6 +216,9 @@ private:
 // AlertFactory 实现
 //=============================================================================
 
+// 创建告警模块实例
+// dbConnInfo: PostgreSQL数据库连接字符串
+// 返回: 告警模块实例，失败返回nullptr
 std::shared_ptr<IAlertModule> AlertFactory::createAlertModule(
     const std::string& dbConnInfo) {
     

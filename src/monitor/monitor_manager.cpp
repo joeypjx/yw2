@@ -17,6 +17,9 @@ namespace monitor {
 
 using json = nlohmann::json;
 
+// 监控管理器构造函数
+// service: HTTP服务实例，用于注册监控相关的API路由
+// 初始化资源扫描器、数据库仓库和资源缓存，并设置路由
 MonitorManager::MonitorManager(std::shared_ptr<hv::HttpService> service)
     : service_(std::move(service)) {
     service_->AllowCORS();
@@ -43,8 +46,10 @@ MonitorManager::MonitorManager(std::shared_ptr<hv::HttpService> service)
     setupRoutes();
 }
 
+// 监控管理器析构函数
 MonitorManager::~MonitorManager() = default;
 
+// 获取指定节点的最新资源信息（从缓存中读取）
 std::shared_ptr<Resource> MonitorManager::getNodeResource(const std::string& host_ip) const {
     if (!monitor_cache_) return nullptr;
     auto opt = monitor_cache_->get(host_ip);
@@ -52,6 +57,9 @@ std::shared_ptr<Resource> MonitorManager::getNodeResource(const std::string& hos
     return std::make_shared<Resource>(*opt);
 }
 
+// 查询指定节点在指定时间范围内的时序指标数据
+// duration: 时间范围（如"5m", "1h"），会被转换为PostgreSQL interval格式
+// kinds: 指标类型列表（如"cpu", "memory", "disk"等）
 MetricsSeries MonitorManager::queryMetricsSeries(const std::string& host_ip,
                                                  const std::string& duration,
                                                  const std::vector<std::string>& kinds) const {
@@ -63,6 +71,8 @@ MetricsSeries MonitorManager::queryMetricsSeries(const std::string& host_ip,
     return repository_->queryMetricsSeries(host_ip, intervalStr, kinds);
 }
 
+// 导出节点历史数据，将不同指标类型的数据按时间戳对齐
+// 使用哈希表建立时间戳索引，实现O(1)查找，然后按时间戳合并数据
 ExportData MonitorManager::exportNodeData(const std::string& host_ip,
                                            std::int64_t start_time,
                                            std::int64_t end_time,

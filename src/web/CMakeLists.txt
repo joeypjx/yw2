@@ -26,6 +26,7 @@ target_link_libraries(yw_web PUBLIC
 # PRIVATE 链接 - 仅内部使用
 target_link_libraries(yw_web PRIVATE
     yw_utils
+    yw_ipmi
     # spdlog, hv_static, nlohmann_json 通过 yw_utils 的 PUBLIC 链接自动传递
 )
 

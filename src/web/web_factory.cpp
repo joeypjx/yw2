@@ -11,6 +11,15 @@
 namespace yw {
 namespace web {
 
+// 创建Web模块实例
+// server: HTTP服务器实例
+// service: HTTP服务实例
+// node_module: 节点模块
+// monitor_module: 监控模块
+// bmc_module: BMC模块
+// controller_module: 控制器模块
+// alert_module: 告警模块
+// 返回: Web模块共享指针
 std::shared_ptr<IWebModule> WebFactory::getWebModule(std::shared_ptr<hv::HttpServer> server,
                                                      std::shared_ptr<hv::HttpService> service,
                                                      std::shared_ptr<node::INodeModule> node_module,

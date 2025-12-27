@@ -12,6 +12,11 @@
 namespace yw {
 namespace bmc {
 
+// BMC监听器构造函数
+// listen_ip: 监听IP地址（空字符串表示监听所有接口）
+// mcast_group: 组播组地址
+// mcast_port: 组播端口
+// conninfo: 数据库连接信息（为空则不保存到数据库）
 BMCListener::BMCListener(const std::string& listen_ip,
                          const std::string& mcast_group,
                          std::uint16_t mcast_port,
@@ -23,14 +28,20 @@ BMCListener::BMCListener(const std::string& listen_ip,
     bmc_cache_ = std::make_unique<BMCCache>();
 }
 
+// 析构函数，自动停止监听器
 BMCListener::~BMCListener() { stop(); }
 
+// 设置数据包处理回调函数
+// handler: 当接收到UDP数据包时调用的回调函数
 void BMCListener::setHandler(PacketHandler handler) { handler_ = std::move(handler); }
 
+// 设置BMC仓库实例（用于保存数据到数据库）
+// repo: BMC仓库实例
 void BMCListener::setRepository(std::unique_ptr<BMCRepository> repo) {
     repository_ = std::move(repo);
 }
 
+// 启动BMC监听器，创建UDP套接字并开始接收组播数据包
 void BMCListener::start() {
     if (running_.exchange(true)) return;
     if (!openSocket()) {
@@ -40,6 +51,7 @@ void BMCListener::start() {
     th_ = std::thread(&BMCListener::runLoop, this);
 }
 
+// 停止BMC监听器，关闭套接字并等待工作线程结束
 void BMCListener::stop() {
     if (!running_.exchange(false)) return;
     // 先关闭套接字，唤醒可能阻塞在 recvfrom 的线程
@@ -47,6 +59,8 @@ void BMCListener::stop() {
     if (th_.joinable()) th_.join();
 }
 
+// 打开UDP套接字并加入组播组
+// 设置SO_REUSEADDR允许地址重用，设置接收超时避免阻塞
 bool BMCListener::openSocket() {
     sock_ = ::socket(AF_INET, SOCK_DGRAM, 0);
     if (sock_ < 0) {
@@ -85,6 +99,7 @@ bool BMCListener::openSocket() {
     return true;
 }
 
+// 关闭UDP套接字
 void BMCListener::closeSocket() {
     if (sock_ >= 0) {
         ::close(sock_);
@@ -94,6 +109,8 @@ void BMCListener::closeSocket() {
 
 // 移除静态缓存，改为成员 unique_ptr
 
+// 主循环：持续接收UDP组播数据包
+// 对每个有效数据包：1)调用handler处理 2)更新缓存 3)保存到数据库
 void BMCListener::runLoop() {
     while (running_) {
         std::uint8_t buffer[2048];
@@ -149,16 +166,25 @@ void BMCListener::runLoop() {
     }
 }
 
+// 获取指定机箱的BMC信息
+// box_id: 机箱编号（1-9）
+// 返回: BMC信息，不存在时返回std::nullopt
 std::optional<UdpInfo> BMCListener::getBoxBMC(int box_id) const {
     if (!bmc_cache_) return std::nullopt;
     return bmc_cache_->getByBoxId(box_id);
 }
 
+// 获取所有机箱的BMC信息
+// 返回: 所有机箱的BMC信息列表
 std::vector<UdpInfo> BMCListener::getAllBoxBMC() const {
     if (!bmc_cache_) return {};
     return bmc_cache_->getAll();
 }
 
+// 查询指定节点的BMC传感器时序数据
+// host_ip: 节点IP地址
+// duration: 时间范围（支持简写如"1h"/"5m"/"10s"，自动转换为PostgreSQL interval格式）
+// 返回: BMC传感器数据映射（传感器名称->传感器时序数据列表）
 std::unordered_map<std::string, std::vector<BMCSensorRow>> BMCListener::queryBMCSensor(
     const std::string& host_ip,
     const std::string& duration) const {
@@ -193,12 +219,19 @@ std::unordered_map<std::string, std::vector<BMCSensorRow>> BMCListener::queryBMC
     return repository_->queryBMCSensor(host_ip, interval);
 }
 
+// 获取指定节点的最新BMC传感器数据（每个传感器只返回最新一条记录）
+// host_ip: 节点IP地址
+// 返回: BMC传感器数据映射（传感器名称->最新传感器数据）
 std::unordered_map<std::string, BMCSensorRow> BMCListener::getLatestBMCSensor(
     const std::string& host_ip) const {
     if (!repository_) return {};
     return repository_->getLatestBMCSensor(host_ip);
 }
 
+// 获取指定机箱和板卡的板卡在位状态
+// box_id: 机箱编号（1-9）
+// board_id: 板卡编号（1-14）
+// 返回: 板卡在位状态（0表示不在位，非0表示在位），不存在时返回std::nullopt
 std::optional<std::uint8_t> BMCListener::getBoardPrst(int box_id, int board_id) const {
     if (!bmc_cache_) return std::nullopt;
     return bmc_cache_->getBoardPrst(box_id, board_id);

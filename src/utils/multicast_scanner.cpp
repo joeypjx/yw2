@@ -15,6 +15,13 @@ namespace utils {
 
 using json = nlohmann::json;
 
+// 组播扫描器构造函数
+// manager_ip: 管理节点IP地址
+// manager_port: 管理节点端口
+// url: 服务URL路径
+// multicast_ip: 组播IP地址
+// multicast_port: 组播端口
+// interval_ms: 发送间隔（毫秒）
 MulticastScanner::MulticastScanner(const std::string& manager_ip,
                                    int manager_port,
                                    std::string url,
@@ -28,10 +35,12 @@ MulticastScanner::MulticastScanner(const std::string& manager_ip,
       multicast_port_(multicast_port),
       interval_ms_(interval_ms) {}
 
+// 析构函数，自动停止扫描器
 MulticastScanner::~MulticastScanner() {
     stop();
 }
 
+// 启动组播扫描器，创建UDP套接字并开始周期性发送组播消息
 void MulticastScanner::start() {
     if (running_.exchange(true)) return;
     if (!openSocket()) {
@@ -41,16 +50,21 @@ void MulticastScanner::start() {
     worker_ = std::thread(&MulticastScanner::runLoop, this);
 }
 
+// 停止组播扫描器，关闭套接字并等待工作线程结束
 void MulticastScanner::stop() {
     if (!running_.exchange(false)) return;
     if (worker_.joinable()) worker_.join();
     closeSocket();
 }
 
+// 设置发送间隔时间
+// interval_ms: 新的间隔时间（毫秒）
 void MulticastScanner::setIntervalMs(int interval_ms) {
     interval_ms_ = interval_ms;
 }
 
+// 主循环：周期性发送组播消息
+// 每次发送后等待指定间隔时间，直到stop()被调用
 void MulticastScanner::runLoop() {
     while (running_) {
         (void)sendOnce();
@@ -58,6 +72,9 @@ void MulticastScanner::runLoop() {
     }
 }
 
+// 发送一次组播消息
+// 构造包含管理节点信息的JSON消息，通过UDP组播发送
+// 返回: 发送成功返回true，失败返回false（网络错误时会关闭套接字）
 bool MulticastScanner::sendOnce() {
     if (sock_ < 0) {
         if (!openSocket()) return false;
@@ -89,6 +106,9 @@ bool MulticastScanner::sendOnce() {
     return true;
 }
 
+// 打开UDP套接字并配置组播选项
+// 设置组播接口（如果指定了manager_ip）和TTL值
+// 返回: 成功返回true，失败返回false
 bool MulticastScanner::openSocket() {
     closeSocket();
     sock_ = ::socket(AF_INET, SOCK_DGRAM, 0);
@@ -112,6 +132,7 @@ bool MulticastScanner::openSocket() {
     return true;
 }
 
+// 关闭UDP套接字
 void MulticastScanner::closeSocket() {
     if (sock_ >= 0) {
         ::close(sock_);

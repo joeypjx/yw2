@@ -15,6 +15,9 @@
 namespace yw {
 namespace node {
 
+// 节点管理器构造函数
+// service: HTTP服务实例，用于注册节点相关的API路由
+// 初始化节点缓存、启动节点扫描器，并设置路由
 NodeManager::NodeManager(std::shared_ptr<hv::HttpService> service)
     : service_(std::move(service)) {
     node_cache_ = std::make_unique<NodeCache>();
@@ -37,11 +40,15 @@ NodeManager::NodeManager(std::shared_ptr<hv::HttpService> service)
     setupRoutes();
 }
 
+// 节点管理器析构函数
+// HTTP服务器由AppContext管理，无需特殊处理
 NodeManager::~NodeManager() {
     // 析构函数不需要特殊处理，HTTP服务器由AppContext管理
 }
 
 // INodeModule 接口实现
+// 获取所有节点信息，并根据最后更新时间判断在线状态
+// 返回: 所有节点的扩展信息列表（包含在线状态）
 std::vector<NodeExt> NodeManager::getAllNodes() const {
     auto list = node_cache_->getAllNodes();
     const auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(
@@ -54,6 +61,9 @@ std::vector<NodeExt> NodeManager::getAllNodes() const {
     return list;
 }
 
+// 根据IP地址获取节点信息
+// ip: 节点IP地址
+// 返回: 节点扩展信息，不存在时返回std::nullopt
 std::optional<NodeExt> NodeManager::getNodeByIP(const std::string& ip) const {
     auto ext = node_cache_->getNode(ip);
     if (!ext) return std::nullopt;
@@ -64,6 +74,9 @@ std::optional<NodeExt> NodeManager::getNodeByIP(const std::string& ip) const {
     return ext;
 }
 
+// 根据机箱号获取节点列表
+// box_id: 机箱编号（1-9）
+// 返回: 匹配机箱号的所有节点扩展信息列表
 std::vector<NodeExt> NodeManager::getNodesByBoxId(int box_id) const {
     auto list = node_cache_->getAllNodes();
     std::vector<NodeExt> filtered;
@@ -108,6 +121,8 @@ namespace {
     }
     
     // 辅助函数：验证 Node 数据
+    // nodeJson: 节点数据JSON对象
+    // 返回: 验证通过返回空字符串，失败返回错误消息
     std::string validateNodeData(const nlohmann::json& nodeJson) {
         // 检查必需字段 host_ip
         if (!nodeJson.contains("host_ip") || nodeJson["host_ip"].is_null()) {
@@ -163,13 +178,17 @@ namespace {
     }
 }
 
+// 设置节点相关的HTTP路由
+// 注册 /heartbeat 和 /resource 端点
 void NodeManager::setupRoutes() {
     if (!service_) {
         spdlog::error("HttpService not available for route setup");
         return;
     }
     
-    // 创建HttpService并配置路由
+    // POST /heartbeat - 接收节点心跳数据
+    // 请求体：包含节点信息的JSON对象
+    // 功能：更新节点缓存，检测板卡类型变化并触发告警
     service_->POST("/heartbeat", [this](const HttpContextPtr& ctx) {
         try {
             auto body = ctx->body();

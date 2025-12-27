@@ -6,6 +6,10 @@
 namespace yw {
 namespace alert {
 
+// 告警创建工厂构造函数
+// alertRepo: 告警事件仓库实例，不能为空
+// dbInterface: 数据库查询接口实例，不能为空
+// 初始化心跳检查相关参数，从配置文件读取心跳超时时间
 AlertCreationFactory::AlertCreationFactory(std::shared_ptr<AlertEventRepository> alertRepo,
                                            std::shared_ptr<DatabaseQueryInterface> dbInterface)
     : alertRepo_(alertRepo), dbInterface_(dbInterface),
@@ -20,14 +24,26 @@ AlertCreationFactory::AlertCreationFactory(std::shared_ptr<AlertEventRepository>
     }
 }
 
+// 析构函数，停止心跳检查线程
 AlertCreationFactory::~AlertCreationFactory() {
     stopAliveCheck();
 }
 
+// 设置告警推送回调函数
+// callback: 当创建或更新告警时调用的回调函数
 void AlertCreationFactory::setPushCallback(std::function<void(const AlertEvent&)> callback) {
     pushCallback_ = std::move(callback);
 }
 
+// 从业务组件状态创建告警事件
+// hostIp: 节点IP地址
+// instanceId: 实例ID
+// uuid: 组件UUID
+// index: 组件索引
+// status: 组件状态（异常状态会触发告警）
+// stack_name: 业务栈名称
+// component_name: 组件名称
+// 返回: 创建的告警事件指针，失败返回nullptr
 std::shared_ptr<AlertEvent> AlertCreationFactory::createAlertFromComponent(const std::string& hostIp,
                                                               const std::string& instanceId,
                                                               const std::string& uuid,
@@ -118,6 +134,12 @@ std::shared_ptr<AlertEvent> AlertCreationFactory::createAlertFromComponent(const
     }
 }
 
+// 创建板卡类型变化告警
+// box_id: 机箱编号
+// slot_id: 槽位编号
+// cached_board_type: 缓存的板卡类型
+// new_board_type: 新的板卡类型
+// 返回: 创建的告警事件指针，失败返回nullptr
 std::shared_ptr<AlertEvent> AlertCreationFactory::createBoardTypeChangeAlert(int box_id, int slot_id,
                                                                 const std::string& cached_board_type,
                                                                 const std::string& new_board_type) {
@@ -172,6 +194,8 @@ std::shared_ptr<AlertEvent> AlertCreationFactory::createBoardTypeChangeAlert(int
     }
 }
 
+// 启动节点存活检查线程
+// intervalSeconds: 检查间隔（秒）
 void AlertCreationFactory::startAliveCheck(int intervalSeconds) {
     if (aliveCheckRunning_) {
         spdlog::debug("节点存活检查已经在运行中");
@@ -188,6 +212,7 @@ void AlertCreationFactory::startAliveCheck(int intervalSeconds) {
     spdlog::debug("节点存活检查已启动，检查间隔: {} 秒", aliveCheckIntervalSeconds_);
 }
 
+// 停止节点存活检查线程
 void AlertCreationFactory::stopAliveCheck() {
     if (!aliveCheckRunning_) {
         return;
@@ -204,6 +229,8 @@ void AlertCreationFactory::stopAliveCheck() {
     spdlog::debug("节点存活检查已停止");
 }
 
+// 节点存活检查工作线程主循环
+// 定期执行节点存活检查，检查间隔可中断
 void AlertCreationFactory::aliveCheckWorkerLoop() {
     spdlog::debug("节点存活检查工作线程已启动");
     
@@ -229,6 +256,9 @@ void AlertCreationFactory::aliveCheckWorkerLoop() {
     spdlog::debug("节点存活检查工作线程已退出");
 }
 
+// 执行节点存活状态评估
+// 查询所有节点的最新心跳时间，对超时的节点创建心跳超时告警
+// 返回: 本次评估创建的告警数量
 int AlertCreationFactory::performEvaluationForAlive() {
     auto startTime = std::chrono::system_clock::now();
     

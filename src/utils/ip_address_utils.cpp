@@ -7,6 +7,10 @@
 namespace yw {
 namespace utils {
 
+// 根据机箱号和槽位号计算板卡IP地址
+// 规则：IP地址格式为 192.168.{network_id}.{host_id}
+// - network_id: 槽位1-7使用 box_id*2，槽位8-14使用 box_id*2+1
+// - host_id: 根据槽位号映射（1->5, 2->37, 3->69, 4->101, 5->133, 6->170, 7->180, 8->5, 9->37, 10->69, 11->101, 12->133, 13->181, 14->182）
 std::string IPAddressUtils::calculateHostIP(int box_id, int slot_id) {
     // 验证参数范围
     if (box_id < 1 || box_id > 9) {
@@ -40,6 +44,8 @@ std::string IPAddressUtils::calculateHostIP(int box_id, int slot_id) {
     return "192.168." + std::to_string(network_id) + "." + std::to_string(host_id);
 }
 
+// 从IP地址解析出机箱号和槽位号
+// 注意：某些host_id对应多个slot_id（如host_id=5对应slot_id=1或8），需要结合network_id的奇偶性判断
 std::optional<BoxSlotInfo> IPAddressUtils::parseHostIP(const std::string& host_ip) {
     if (!isValidBoardIP(host_ip)) {
         return std::nullopt;
@@ -107,6 +113,8 @@ std::optional<BoxSlotInfo> IPAddressUtils::parseHostIP(const std::string& host_i
     return BoxSlotInfo(box_id, slot_id);
 }
 
+// 验证IP地址是否为有效的板卡IP地址
+// 有效格式：192.168.x.y，其中x范围2-19，y范围5-182
 bool IPAddressUtils::isValidBoardIP(const std::string& host_ip) {
     // 检查格式是否为 192.168.x.y
     std::regex ip_pattern(R"(^192\.168\.(\d{1,3})\.(\d{1,3})$)");
@@ -137,6 +145,8 @@ bool IPAddressUtils::isValidBoardIP(const std::string& host_ip) {
     }
 }
 
+// 根据槽位号获取对应的host_id
+// 注意：槽位1-7和8-12的host_id有重复，需要结合network_id区分
 int IPAddressUtils::getHostIdBySlotId(int slot_id) {
     // slot_id 到 host_id 的映射表（基于 bmc_repository.cpp 中的逻辑）
     switch (slot_id) {
@@ -175,6 +185,8 @@ int IPAddressUtils::getSlotIdByHostId(int host_id) {
     }
 }
 
+// 解析IP地址字符串，提取network_id和host_id
+// 格式：192.168.{network_id}.{host_id}
 bool IPAddressUtils::parseIPAddress(const std::string& host_ip, int& network_id, int& host_id) {
     std::regex ip_pattern(R"(^192\.168\.(\d{1,3})\.(\d{1,3})$)");
     std::smatch matches;

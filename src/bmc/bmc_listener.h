@@ -16,22 +16,34 @@
 namespace yw {
 namespace bmc {
 
+// BMC监听器，监听UDP组播消息并处理BMC数据
 class BMCListener : public IBMCModule {
 public:
     using PacketHandler = std::function<void(const UdpInfo&)>;
 
+    // 构造函数，初始化BMC监听器
+    // listen_ip: 监听IP地址（空字符串表示监听所有接口）
+    // mcast_group: 组播组地址
+    // mcast_port: 组播端口
+    // conninfo: 数据库连接信息
     BMCListener(const std::string& listen_ip,
                 const std::string& mcast_group = "224.100.200.15",
                 std::uint16_t mcast_port = 5715,
                 const std::string& conninfo = "");
+    // 析构函数，停止监听并清理资源
     ~BMCListener();
 
+    // 启动BMC监听器，开始接收UDP组播消息
     void start();
+    // 停止BMC监听器
     void stop();
 
+    // 设置数据包处理回调函数
     void setHandler(PacketHandler handler);
+    // 设置BMC仓库实例
     void setRepository(std::unique_ptr<BMCRepository> repo);
 
+    // 获取板卡在位状态
     std::optional<std::uint8_t> getBoardPrst(int box_id, int board_id) const override;
 
     // IBMCModule 接口实现

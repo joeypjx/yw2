@@ -8,6 +8,8 @@
 namespace yw {
 namespace alert {
 
+// 告警规则仓库构造函数
+// dbInterface: 数据库查询接口实例，不能为空
 DatabaseAlertRuleRepository::DatabaseAlertRuleRepository(std::shared_ptr<DatabaseQueryInterface> dbInterface)
     : dbInterface_(dbInterface) {
     if (!dbInterface_) {
@@ -15,6 +17,9 @@ DatabaseAlertRuleRepository::DatabaseAlertRuleRepository(std::shared_ptr<Databas
     }
 }
 
+// 保存告警规则（如果已存在则更新，否则插入）
+// rule: 要保存的告警规则对象
+// 返回: 保存成功返回true，失败抛出异常
 bool DatabaseAlertRuleRepository::saveRule(const AlertRule& rule) {
     if (!rule.isValid()) {
         throw std::invalid_argument("告警规则无效: " + rule.getValidationError());
@@ -67,6 +72,9 @@ bool DatabaseAlertRuleRepository::saveRule(const AlertRule& rule) {
     }
 }
 
+// 根据ID获取告警规则
+// id: 告警规则唯一标识符
+// 返回: 告警规则对象指针，不存在时返回nullptr，失败抛出异常
 std::shared_ptr<AlertRule> DatabaseAlertRuleRepository::getRuleById(const std::string& id) {
     try {
         std::string sql = buildSelectSql() + " WHERE id = $1";
@@ -85,6 +93,8 @@ std::shared_ptr<AlertRule> DatabaseAlertRuleRepository::getRuleById(const std::s
     }
 }
 
+// 获取所有启用的告警规则
+// 返回: 启用的告警规则列表，按创建时间倒序排列，失败抛出异常
 std::vector<AlertRule> DatabaseAlertRuleRepository::getEnabledRules() {
     try {
         std::string sql = buildSelectSql() + " WHERE enabled = true ORDER BY created_at DESC";
@@ -102,6 +112,9 @@ std::vector<AlertRule> DatabaseAlertRuleRepository::getEnabledRules() {
     }
 }
 
+// 删除告警规则
+// id: 要删除的告警规则ID
+// 返回: 删除成功返回true，失败抛出异常
 bool DatabaseAlertRuleRepository::deleteRule(const std::string& id) {
     try {
         std::string sql = buildDeleteSql();
@@ -114,6 +127,9 @@ bool DatabaseAlertRuleRepository::deleteRule(const std::string& id) {
     }
 }
 
+// 检查告警规则是否存在
+// id: 告警规则ID
+// 返回: 存在返回true，不存在返回false，失败抛出异常
 bool DatabaseAlertRuleRepository::ruleExists(const std::string& id) {
     try {
         std::string sql = "SELECT COUNT(*) as count FROM alert_rule WHERE id = $1";
@@ -132,6 +148,9 @@ bool DatabaseAlertRuleRepository::ruleExists(const std::string& id) {
     }
 }
 
+// 从数据库查询结果行解析告警规则对象
+// row: 数据库查询结果行
+// 返回: 解析后的告警规则对象，失败抛出异常
 AlertRule DatabaseAlertRuleRepository::parseRuleFromQueryResult(const QueryRow& row) {
     try {
         std::string jsonStr = row.getValue("expression");
@@ -198,6 +217,8 @@ AlertRule DatabaseAlertRuleRepository::parseRuleFromQueryResult(const QueryRow& 
     }
 }
 
+// 构建插入告警规则的SQL语句
+// 返回: INSERT SQL语句字符串
 std::string DatabaseAlertRuleRepository::buildInsertSql() {
     return R"(
         INSERT INTO alert_rule (
@@ -209,6 +230,8 @@ std::string DatabaseAlertRuleRepository::buildInsertSql() {
     )";
 }
 
+// 构建更新告警规则的SQL语句
+// 返回: UPDATE SQL语句字符串
 std::string DatabaseAlertRuleRepository::buildUpdateSql() {
     return R"(
         UPDATE alert_rule SET
@@ -225,6 +248,8 @@ std::string DatabaseAlertRuleRepository::buildUpdateSql() {
     )";
 }
 
+// 构建查询告警规则的SQL语句（SELECT部分）
+// 返回: SELECT SQL语句字符串
 std::string DatabaseAlertRuleRepository::buildSelectSql() {
     return R"(
         SELECT 
@@ -234,6 +259,8 @@ std::string DatabaseAlertRuleRepository::buildSelectSql() {
     )";
 }
 
+// 构建删除告警规则的SQL语句
+// 返回: DELETE SQL语句字符串
 std::string DatabaseAlertRuleRepository::buildDeleteSql() {
     return "DELETE FROM alert_rule WHERE id = $1";
 }

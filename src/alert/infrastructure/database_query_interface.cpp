@@ -11,16 +11,27 @@ namespace alert {
 // PostgreSQLQueryInterface 实现
 //=============================================================================
 
+// PostgreSQL查询接口构造函数
+// conninfo: PostgreSQL连接字符串
+// minConnections: 连接池最小连接数
+// maxConnections: 连接池最大连接数
 PostgreSQLQueryInterface::PostgreSQLQueryInterface(const std::string& conninfo,
                                                    size_t minConnections,
                                                    size_t maxConnections)
     : connectionPool_(std::make_unique<yw::utils::PostgreSQLConnectionPool>(conninfo, minConnections, maxConnections)) {
 }
 
+// 执行无参数的SQL查询
+// sql: SQL查询语句
+// 返回: 查询结果
 QueryResult PostgreSQLQueryInterface::executeQuery(const std::string& sql) {
     return executeQuery(sql, {});
 }
 
+// 执行参数化SQL查询
+// sql: SQL查询语句（使用$1, $2等占位符）
+// params: 参数列表
+// 返回: 查询结果，失败抛出异常
 QueryResult PostgreSQLQueryInterface::executeQuery(const std::string& sql, 
                                                    const std::vector<std::string>& params) {
     // 获取连接
@@ -34,6 +45,11 @@ QueryResult PostgreSQLQueryInterface::executeQuery(const std::string& sql,
     return executeQueryWithConnection(conn, sql, params);
 }
 
+// 使用指定的连接执行参数化SQL查询
+// conn: 数据库连接
+// sql: SQL查询语句（使用$1, $2等占位符）
+// params: 参数列表
+// 返回: 查询结果，失败抛出异常
 QueryResult PostgreSQLQueryInterface::executeQueryWithConnection(
     std::shared_ptr<pqxx::connection> conn,
     const std::string& sql,
@@ -89,6 +105,9 @@ QueryResult PostgreSQLQueryInterface::executeQueryWithConnection(
     }
 }
 
+// 将pqxx查询结果转换为QueryResult对象
+// result: pqxx查询结果
+// 返回: 转换后的QueryResult对象
 QueryResult PostgreSQLQueryInterface::convertResult(const pqxx::result& result) {
     QueryResult queryResult;
     

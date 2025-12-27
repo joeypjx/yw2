@@ -6,14 +6,22 @@
 namespace yw {
 namespace monitor {
 
+// 资源仓库构造函数
+// conninfo: PostgreSQL连接字符串
+// minConnections: 连接池最小连接数
+// maxConnections: 连接池最大连接数
 ResourceRepository::ResourceRepository(const std::string& conninfo,
                                        size_t minConnections,
                                        size_t maxConnections)
     : connectionPool_(std::make_unique<yw::utils::PostgreSQLConnectionPool>(conninfo, minConnections, maxConnections)) {
 }
  
+// 资源仓库析构函数
 ResourceRepository::~ResourceRepository() = default;
 
+// 保存资源数据到数据库
+// data: 资源数据对象（包含CPU、内存、磁盘、网络、GPU等指标）
+// 将数据插入到对应的时序表中（resource_alive, resource_cpu, resource_memory等）
 void ResourceRepository::save(const Resource& data) {
     // 从连接池获取连接
     yw::utils::ConnectionGuard guard(*connectionPool_);
@@ -24,13 +32,14 @@ void ResourceRepository::save(const Resource& data) {
     
     pqxx::work tx{*conn};
 
-    // Alive 心跳
+    // 插入节点在线心跳记录到resource_alive表
     tx.exec_params(
         "INSERT INTO resource_alive(time, host_ip, alive) VALUES (now(), $1::inet, 1)",
         data.host_ip
     );
 
-    // CPU
+    // 插入CPU资源数据到resource_cpu表
+    // 包括使用率、负载、核心数、温度、电压、电流、功耗等指标
     tx.exec_params(
         "INSERT INTO resource_cpu(time, host_ip, usage_percent, load_avg_1m, load_avg_5m, load_avg_15m, core_count, core_allocated, temperature, voltage, current, power)"
         " VALUES (now(), $1::inet, $2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
@@ -47,7 +56,8 @@ void ResourceRepository::save(const Resource& data) {
         data.resource.cpu.power
     );
 
-    // Memory
+    // 插入内存资源数据到resource_memory表
+    // 包括总量、已用、空闲、使用率等指标
     tx.exec_params(
         "INSERT INTO resource_memory(time, host_ip, total, used, free, usage_percent)"
         " VALUES (now(), $1::inet, $2,$3,$4,$5)",
@@ -58,7 +68,8 @@ void ResourceRepository::save(const Resource& data) {
         data.resource.memory.usage_percent
     );
 
-    // Network
+    // 插入网络资源数据到resource_network表
+    // 遍历每个网络接口，记录收发字节数、包数、错误数、速率等
     for (const auto& nic : data.resource.network) {
         tx.exec_params(
             "INSERT INTO resource_network(time, host_ip, interface, rx_bytes, tx_bytes, rx_packets, tx_packets, rx_errors, tx_errors, rx_rate, tx_rate, rx_drop_rate, tx_drop_rate, state)"
@@ -74,7 +85,8 @@ void ResourceRepository::save(const Resource& data) {
         );
     }
 
-    // Disk
+    // 插入磁盘资源数据到resource_disk表
+    // 遍历每个磁盘设备，记录容量、已用、空闲、使用率等
     for (const auto& d : data.resource.disk) {
         tx.exec_params(
             "INSERT INTO resource_disk(time, host_ip, device, mount_point, total, used, free, usage_percent)"
@@ -85,7 +97,9 @@ void ResourceRepository::save(const Resource& data) {
         );
     }
 
-    // GPU（节点级冗余字段可一起存）
+    // 插入GPU资源数据到resource_gpu表
+    // 遍历每个GPU设备，记录计算使用率、显存使用率、温度、功耗等
+    // 同时记录节点级别的GPU分配情况和总数
     for (const auto& g : data.resource.gpu) {
         tx.exec_params(
             "INSERT INTO resource_gpu(time, host_ip, gpu_index, name, compute_usage, mem_usage, mem_used, mem_total, temperature, power, free, gpu_allocated, gpu_num)"
@@ -100,7 +114,8 @@ void ResourceRepository::save(const Resource& data) {
         );
     }
 
-    // Component
+    // 插入组件资源数据到resource_component表
+    // 遍历每个组件（容器/进程），记录CPU负载、内存使用、网络流量等
     for (const auto& comp : data.component) {
         tx.exec_params(
             "INSERT INTO resource_component(time, host_ip, instance_id, uuid, idx, name, container_id, state, type, cpu_load, mem_used, mem_limit, mem_usage, net_tx, net_rx, net_rx_rate, net_tx_rate)"
@@ -119,6 +134,11 @@ void ResourceRepository::save(const Resource& data) {
     tx.commit();
 }
 
+// 查询指定节点在指定时间范围内的时序指标数据
+// host_ip: 节点IP地址
+// duration: 时间范围（PostgreSQL interval格式，如"5 minutes"）
+// kinds: 指标类型列表（如"cpu", "memory", "disk"等），空列表表示查询所有类型
+// 返回: 时序指标数据（包含CPU、内存、磁盘、网络、GPU等）
 MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
                                                      const std::string& duration,
                                                      const std::vector<std::string>& kinds) {
@@ -189,12 +209,17 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
             out.cpu.push_back(std::move(p));
         }
 
-        // delete the first and last element
-        out.cpu.erase(out.cpu.begin());
-        out.cpu.erase(out.cpu.end() - 1);
+        // 删除首尾元素（gapfill可能产生的不完整数据点）
+        if (out.cpu.size() >= 2) {
+            out.cpu.erase(out.cpu.begin());
+            out.cpu.erase(out.cpu.end() - 1);
+        } else if (out.cpu.size() == 1) {
+            out.cpu.clear();
+        }
     }
 
     // Memory - 每10秒聚合平均值
+    // 查询内存使用情况（总量、已用、空闲、使用率）
     if (query_all || need.count("memory")) {
         pqxx::result r = tx.exec_params(
             "SELECT "
@@ -228,12 +253,17 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
             out.memory.push_back(std::move(p));
         }
 
-        // delete the first and last element
-        out.memory.erase(out.memory.begin());
-        out.memory.erase(out.memory.end() - 1);
+        // 删除首尾元素（gapfill可能产生的不完整数据点）
+        if (out.memory.size() >= 2) {
+            out.memory.erase(out.memory.begin());
+            out.memory.erase(out.memory.end() - 1);
+        } else if (out.memory.size() == 1) {
+            out.memory.clear();
+        }
     }
 
     // Network - 每10秒聚合平均值，按 interface 分组
+    // 查询网络接口的收发字节数、包数、错误数、速率等
     if (query_all || need.count("network")) {
         const char* network_query = R"SQL(
 WITH bucket_series AS (
@@ -304,7 +334,8 @@ ORDER BY
         }
     }
 
-    // Disk - 每10秒聚合平均值，按 device key 分组
+    // Disk - 每10秒聚合平均值，按 device 和 mount_point 分组
+    // 查询磁盘分区的使用情况（总量、已用、空闲、使用率）
     if (query_all || need.count("disk")) {
         const char* disk_query = R"SQL(
 WITH bucket_series AS (
@@ -446,6 +477,13 @@ ORDER BY
     return out;
 }
 
+// 查询指定节点在指定时间戳范围内的时序指标数据（使用动态bucket大小）
+// host_ip: 节点IP地址
+// start_time: 开始时间戳（秒）
+// end_time: 结束时间戳（秒）
+// kinds: 指标类型列表（如"cpu", "memory", "disk"等），空列表表示查询所有类型
+// 返回: 时序指标数据（包含CPU、内存、磁盘、网络、GPU等）
+// 注意：bucket大小会根据时间范围动态调整，目标数据点数量在300-1000之间
 MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
                                                      std::int64_t start_time,
                                                      std::int64_t end_time,
@@ -549,7 +587,8 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
         }
     }
 
-    // Memory - 每10秒聚合平均值
+    // Memory - 使用动态bucket大小聚合平均值
+    // 查询内存使用情况（总量、已用、空闲、使用率）
     if (query_all || need.count("memory")) {
         pqxx::result r = tx.exec_params(
             "SELECT "
@@ -584,7 +623,8 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
         }
     }
 
-    // Network - 按 interface 分组，使用 time_bucket_gapfill 优化
+    // Network - 使用动态bucket大小，按 interface 分组聚合
+    // 查询网络接口的收发字节数、包数、错误数、速率、丢包率、状态等
     if (query_all || need.count("network")) {
         // 使用 time_bucket_gapfill 替代 CROSS JOIN，性能更好
         std::string network_query = 
@@ -636,7 +676,8 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
         }
     }
 
-    // Disk - 按 device key 分组，使用 time_bucket_gapfill 优化
+    // Disk - 使用动态bucket大小，按 device 和 mount_point 分组聚合
+    // 查询磁盘分区的使用情况（总量、已用、空闲、使用率）
     if (query_all || need.count("disk")) {
         std::string disk_query = 
             "SELECT "
@@ -672,7 +713,8 @@ MetricsSeries ResourceRepository::queryMetricsSeries(const std::string& host_ip,
         }
     }
 
-    // GPU - 按 gpu_index 分组，使用 time_bucket_gapfill 优化
+    // GPU - 使用动态bucket大小，按 gpu_index 和 name 分组聚合
+    // 查询GPU的计算使用率、内存使用率、温度、功耗等指标
     if (query_all || need.count("gpu")) {
         std::string gpu_query = 
             "SELECT "

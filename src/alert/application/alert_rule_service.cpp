@@ -5,6 +5,9 @@
 namespace yw {
 namespace alert {
 
+// 告警规则服务构造函数
+// alertRuleRepo: 告警规则仓库实例，不能为空
+// 初始化时自动加载所有启用的规则到内存
 AlertRuleService::AlertRuleService(std::shared_ptr<AlertRuleRepository> alertRuleRepo)
     : alertRuleRepo_(alertRuleRepo) {
     if (!alertRuleRepo_) {
@@ -14,6 +17,9 @@ AlertRuleService::AlertRuleService(std::shared_ptr<AlertRuleRepository> alertRul
     reloadRules();
 }
 
+// 添加告警规则（保存到数据库并更新内存缓存）
+// rule: 要添加的告警规则
+// 返回: 成功返回true，失败返回false
 bool AlertRuleService::addAlertRule(const AlertRule& rule) {
     try {
         // 1. 保存到数据库
@@ -59,6 +65,9 @@ bool AlertRuleService::addAlertRule(const AlertRule& rule) {
     }
 }
 
+// 更新告警规则（更新数据库并同步内存缓存）
+// rule: 要更新的告警规则
+// 返回: 成功返回true，失败返回false
 bool AlertRuleService::updateAlertRule(const AlertRule& rule) {
     try {
         // 1. 更新数据库
@@ -88,6 +97,9 @@ bool AlertRuleService::updateAlertRule(const AlertRule& rule) {
     }
 }
 
+// 删除告警规则（从数据库和内存中删除）
+// ruleId: 要删除的告警规则ID
+// 返回: 成功返回true，失败返回false
 bool AlertRuleService::deleteAlertRule(const std::string& ruleId) {
     try {
         // 1. 从数据库删除
@@ -118,6 +130,9 @@ bool AlertRuleService::deleteAlertRule(const std::string& ruleId) {
     }
 }
 
+// 根据ID获取告警规则（优先从内存查找，不存在则从数据库加载）
+// ruleId: 告警规则ID
+// 返回: 告警规则对象指针，不存在时返回nullptr
 std::shared_ptr<AlertRule> AlertRuleService::getAlertRuleById(const std::string& ruleId) {
     try {
         // 先从内存查找
@@ -143,10 +158,13 @@ std::shared_ptr<AlertRule> AlertRuleService::getAlertRuleById(const std::string&
     }
 }
 
+// 获取所有内存中的告警规则（仅启用的规则）
+// 返回: 告警规则列表
 std::vector<AlertRule> AlertRuleService::getAllAlertRules() const {
     return rules_;
 }
 
+// 重新从数据库加载所有启用的告警规则到内存
 void AlertRuleService::reloadRules() {
     try {
         // 从数据库加载所有启用的告警规则

@@ -25,19 +25,24 @@
 namespace yw {
 namespace web {
 
+// 告警推送器，负责通过WebSocket向客户端推送告警消息
 class AlertPusher {
 public:
+    // 构造函数，初始化WebSocket服务
+    // server: HTTP服务器实例
     AlertPusher(hv::HttpServer* server);
 
-    /**
-     * @brief 推送告警 JSON 到所有 WebSocket 客户端
-     * @param alertJson 告警的 JSON 表示
-     */
+    // 推送告警JSON到所有WebSocket客户端
+    // alertJson: 告警的JSON对象
+    // 自动清理已断开的连接
     void pushJson(const nlohmann::json& alertJson);
 
+    // 停止告警推送器，清理所有连接和WebSocket服务
     void stop();
 
 private:
+    // 初始化WebSocket服务，注册连接、断开和消息处理回调
+    // 返回: 初始化成功返回true
     bool init();
 
     hv::HttpServer*                                        server_;

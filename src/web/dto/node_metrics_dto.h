@@ -14,6 +14,7 @@ namespace web {
 // latest_* 明细结构
 // --------------------
 
+// 最新容器指标数据（用于/node/metrics API响应）
 struct LatestContainerMetrics {
     int         container_count = 0;
     int         paused_count = 0;
@@ -22,6 +23,7 @@ struct LatestContainerMetrics {
     std::int64_t timestamp = 0;
 };
 
+// 最新CPU指标数据（用于/node/metrics API响应）
 struct LatestCpuMetrics {
     int          core_allocated = 0;
     int          core_count = 0;
@@ -36,6 +38,7 @@ struct LatestCpuMetrics {
     double       voltage = 0.0;
 };
 
+// 磁盘采样数据（单个磁盘分区的使用情况）
 struct DiskSample {
     std::string   device;
     std::uint64_t free = 0;
@@ -46,12 +49,14 @@ struct DiskSample {
     std::uint64_t used = 0;
 };
 
+// 最新磁盘指标数据（用于/node/metrics API响应）
 struct LatestDiskMetrics {
     int                    disk_count = 0;
     std::vector<DiskSample> disks;
     std::int64_t           timestamp = 0;
 };
 
+// GPU采样数据（单个GPU的使用情况）
 struct GpuSample {
     double       compute_usage = 0.0;
     double       current = 0.0;
@@ -66,12 +71,14 @@ struct GpuSample {
     double       voltage = 0.0;
 };
 
+// 最新GPU指标数据（用于/node/metrics API响应）
 struct LatestGpuMetrics {
     int                 gpu_count = 0;
     std::vector<GpuSample> gpus;
     std::int64_t        timestamp = 0;
 };
 
+// 最新内存指标数据（用于/node/metrics API响应）
 struct LatestMemoryMetrics {
     std::uint64_t free = 0;
     std::int64_t  timestamp = 0;
@@ -80,6 +87,7 @@ struct LatestMemoryMetrics {
     std::uint64_t used = 0;
 };
 
+// 网络采样数据（单个网络接口的统计信息）
 struct NetworkSample {
     std::string   interface;
     std::uint64_t rx_bytes = 0;
@@ -96,12 +104,14 @@ struct NetworkSample {
     int           state = 0;
 };
 
+// 最新网络指标数据（用于/node/metrics API响应）
 struct LatestNetworkMetrics {
     int                     network_count = 0;
     std::vector<NetworkSample> networks;
     std::int64_t            timestamp = 0;
 };
 
+// 最新传感器指标数据（用于/node/metrics API响应，BMC传感器数据）
 struct LatestSensorMetrics {
     int                              sensor_count = 0;
     std::vector<nlohmann::json>      sensors; // 结构未定义，保持原样透传
@@ -112,6 +122,7 @@ struct LatestSensorMetrics {
 // 顶层：NodeMetrics
 // --------------------
 
+// 节点完整指标数据，包含所有资源类型的最新指标
 struct NodeMetrics {
     int                              bmc_company = 0;
     std::string                      bmc_version;
@@ -147,6 +158,7 @@ struct NodeMetrics {
 // JSON 映射
 // --------------------
 
+// 定义LatestContainerMetrics结构的JSON序列化/反序列化
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LatestContainerMetrics,
     container_count,
     paused_count,
@@ -155,6 +167,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LatestContainerMetrics,
     timestamp
 )
 
+// 定义LatestCpuMetrics结构的JSON序列化/反序列化
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LatestCpuMetrics,
     core_allocated,
     core_count,
@@ -169,6 +182,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LatestCpuMetrics,
     voltage
 )
 
+// 定义DiskSample结构的JSON序列化/反序列化
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(DiskSample,
     device,
     free,
@@ -179,12 +193,14 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(DiskSample,
     used
 )
 
+// 定义LatestDiskMetrics结构的JSON序列化/反序列化
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LatestDiskMetrics,
     disk_count,
     disks,
     timestamp
 )
 
+// 定义GpuSample结构的JSON序列化/反序列化
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(GpuSample,
     compute_usage,
     current,
@@ -199,12 +215,14 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(GpuSample,
     voltage
 )
 
+// 定义LatestGpuMetrics结构的JSON序列化/反序列化
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LatestGpuMetrics,
     gpu_count,
     gpus,
     timestamp
 )
 
+// 定义LatestMemoryMetrics结构的JSON序列化/反序列化
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LatestMemoryMetrics,
     free,
     timestamp,
@@ -213,6 +231,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LatestMemoryMetrics,
     used
 )
 
+// 定义NetworkSample结构的JSON序列化/反序列化
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(NetworkSample,
     interface,
     rx_bytes,
@@ -229,18 +248,21 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(NetworkSample,
     state
 )
 
+// 定义LatestNetworkMetrics结构的JSON序列化/反序列化
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LatestNetworkMetrics,
     network_count,
     networks,
     timestamp
 )
 
+// 定义LatestSensorMetrics结构的JSON序列化/反序列化
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LatestSensorMetrics,
     sensor_count,
     sensors,
     timestamp
 )
 
+// 定义NodeMetrics结构的JSON序列化/反序列化
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(NodeMetrics,
     bmc_company,
     bmc_version,

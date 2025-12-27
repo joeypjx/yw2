@@ -1,4 +1,4 @@
-#include "IpmiClient.h"
+#include "ipmi_client.h"
 
 #include <freeipmi/api/ipmi-api.h>
 #include <freeipmi/spec/ipmi-privilege-level-spec.h>
@@ -14,13 +14,15 @@ namespace yw
     namespace ipmi
     {
 
+        // IPMI客户端内部实现结构
         struct IpmiClient::Impl
         {
-            ipmi_ctx_t ctx = nullptr;
-            Options opt;
+            ipmi_ctx_t ctx = nullptr;  // FreeIPMI上下文
+            Options opt;                // IPMI连接选项
         };
 
-        static std::string lastError(ipmi_ctx_t ctx, int err)
+        // 获取最后一次IPMI操作的错误信息
+        static std::string lastError(ipmi_ctx_t ctx, int /* err */)
         {
             int errnum = ipmi_ctx_errnum(ctx);
             const char *s = ipmi_ctx_errormsg(ctx);
@@ -29,6 +31,8 @@ namespace yw
             return "libfreeipmi error code " + std::to_string(errnum);
         }
 
+        // IPMI客户端构造函数，初始化FreeIPMI上下文并建立连接
+        // options: IPMI连接选项（主机名、用户名、密码等）
         IpmiClient::IpmiClient(const Options &options)
         {
             impl_ = new Impl();
@@ -71,6 +75,7 @@ namespace yw
             }
         }
 
+        // IPMI客户端析构函数，关闭连接并清理资源
         IpmiClient::~IpmiClient()
         {
             if (impl_)
@@ -86,6 +91,11 @@ namespace yw
             }
         }
 
+        // 发送原始IPMI命令
+        // inputs: 输入字节数组（IPMI命令数据）
+        // outputs: 输出参数，接收IPMI响应数据
+        // errorMessage: 输出参数，错误信息
+        // 返回: 成功返回true，失败返回false
         bool IpmiClient::sendRaw(const std::vector<uint8_t> &inputs, std::vector<uint8_t> &outputs, std::string &errorMessage)
         {
             if (!impl_ || !impl_->ctx)

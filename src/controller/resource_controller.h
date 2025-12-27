@@ -11,30 +11,49 @@
 namespace yw {
 namespace controller {
 
+// 资源控制器，负责板卡的重启、上下电等操作
 class ResourceController : public IControllerModule {
 public:
     using BinaryData = std::vector<uint8_t>;
 
+    // 构造函数
     ResourceController();
+    // 析构函数
     ~ResourceController() override = default;
 
     // 实现 IControllerModule 接口
+    // 重启指定槽位的板卡
+    // target_ip: 目标机箱IP地址
+    // slot_numbers: 要重启的槽位号列表
+    // req_id: 请求ID（可选）
+    // 返回: 操作响应结果
     OperationResponse resetBoard(
         const std::string& target_ip,
         const std::vector<int>& slot_numbers,
         uint32_t req_id = 0) override;
 
+    // 关闭指定槽位的板卡电源
+    // target_ip: 目标机箱IP地址
+    // slot_numbers: 要关闭的槽位号列表
+    // req_id: 请求ID（可选）
+    // 返回: 操作响应结果
     OperationResponse powerOffChassisBoards(
         const std::string& target_ip,
         const std::vector<int>& slot_numbers,
         uint32_t req_id = 0) override;
     
+    // 开启指定槽位的板卡电源
+    // target_ip: 目标机箱IP地址
+    // slot_numbers: 要开启的槽位号列表
+    // req_id: 请求ID（可选）
+    // 返回: 操作响应结果
     OperationResponse powerOnChassisBoards(
         const std::string& target_ip,
         const std::vector<int>& slot_numbers,
         uint32_t req_id = 0) override;
 
     // 工具方法
+    // 将二进制数据转换为十六进制字符串
     static std::string binaryToHex(const BinaryData& data) {
         std::string hex_string;
         hex_string.reserve(data.size() * 2);

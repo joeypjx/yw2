@@ -7,6 +7,11 @@
 namespace yw {
 namespace utils {
 
+// 解析持续时间字符串（如"5s"、"10m"、"2h"）
+// duration: 持续时间字符串，格式为"数字+单位"（单位可选，默认为秒）
+// value: 输出参数，解析出的数值
+// unit: 输出参数，解析出的单位字符（'s'/'m'/'h'）
+// 返回: 解析成功返回true，失败返回false
 bool DurationUtils::parseDuration(const std::string& duration, std::int64_t& value, char& unit) {
     if (duration.empty()) {
         return false;
@@ -40,6 +45,10 @@ bool DurationUtils::parseDuration(const std::string& duration, std::int64_t& val
     }
 }
 
+// 将持续时间字符串转换为毫秒数
+// duration: 持续时间字符串（如"5s"、"10m"、"2h"）
+// default_ms: 解析失败时的默认返回值
+// 返回: 转换后的毫秒数
 std::int64_t DurationUtils::parseToMilliseconds(const std::string& duration, std::int64_t default_ms) {
     std::int64_t value;
     char unit;
@@ -56,6 +65,10 @@ std::int64_t DurationUtils::parseToMilliseconds(const std::string& duration, std
     }
 }
 
+// 将持续时间字符串转换为PostgreSQL INTERVAL格式（如"INTERVAL '5 seconds'"）
+// duration: 持续时间字符串（如"5s"、"10m"、"2h"）
+// default_interval: 解析失败时的默认返回值
+// 返回: PostgreSQL INTERVAL格式字符串
 std::string DurationUtils::parseToPgInterval(const std::string& duration, const std::string& default_interval) {
     std::int64_t value;
     char unit;
@@ -75,6 +88,10 @@ std::string DurationUtils::parseToPgInterval(const std::string& duration, const 
     return "INTERVAL '" + std::to_string(value) + " " + unit_str + "'";
 }
 
+// 将持续时间字符串转换为PostgreSQL标准时间格式（如"5 seconds"）
+// duration: 持续时间字符串（如"5s"、"10m"、"2h"）
+// default_interval: 解析失败时的默认返回值
+// 返回: PostgreSQL标准时间格式字符串
 std::string DurationUtils::parseToPgStandard(const std::string& duration, const std::string& default_interval) {
     std::int64_t value;
     char unit;
@@ -94,6 +111,10 @@ std::string DurationUtils::parseToPgStandard(const std::string& duration, const 
     return std::to_string(value) + " " + unit_str;
 }
 
+// 将持续时间字符串转换为秒数
+// duration: 持续时间字符串（如"5s"、"10m"、"2h"）
+// default_seconds: 解析失败时的默认返回值
+// 返回: 转换后的秒数
 int DurationUtils::parseToSeconds(const std::string& duration, int default_seconds) {
     std::int64_t value;
     char unit;

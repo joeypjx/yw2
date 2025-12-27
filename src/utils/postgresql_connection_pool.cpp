@@ -37,6 +37,9 @@ PostgreSQLConnectionPool::~PostgreSQLConnectionPool() {
     spdlog::debug("PostgreSQL连接池已销毁");
 }
 
+// 从连接池获取一个可用连接
+// 如果池中有可用连接则直接返回，否则创建新连接（不超过最大连接数）
+// 如果连接已失效则自动重建
 std::shared_ptr<pqxx::connection> PostgreSQLConnectionPool::acquireConnection() {
     std::unique_lock<std::mutex> lock(mutex_);
     
@@ -69,6 +72,8 @@ std::shared_ptr<pqxx::connection> PostgreSQLConnectionPool::acquireConnection() 
     return conn;
 }
 
+// 释放连接回连接池
+// 如果连接有效则归还到池中，如果失效则从池中移除并减少总连接数
 void PostgreSQLConnectionPool::releaseConnection(std::shared_ptr<pqxx::connection> conn) {
     if (!conn) {
         return;
@@ -95,6 +100,9 @@ void PostgreSQLConnectionPool::releaseConnection(std::shared_ptr<pqxx::connectio
     condition_.notify_one();
 }
 
+// 检查连接是否有效（通过执行简单查询测试）
+// conn: 要检查的连接
+// 返回: 连接有效返回true，无效返回false
 bool PostgreSQLConnectionPool::isConnectionValid(std::shared_ptr<pqxx::connection> conn) const {
     if (!conn) {
         return false;
@@ -115,15 +123,21 @@ bool PostgreSQLConnectionPool::isConnectionValid(std::shared_ptr<pqxx::connectio
     return false;
 }
 
+// 获取连接池中可用连接的数量
+// 返回: 当前可用连接数
 size_t PostgreSQLConnectionPool::getPoolSize() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return availableConnections_.size();
 }
 
+// 获取当前活跃连接数（正在使用的连接数）
+// 返回: 当前活跃连接数
 size_t PostgreSQLConnectionPool::getActiveConnections() const {
     return activeConnections_.load();
 }
 
+// 创建新的数据库连接并增加总连接数计数
+// 返回: 新创建的连接，失败抛出异常
 std::shared_ptr<pqxx::connection> PostgreSQLConnectionPool::createConnection() {
     try {
         auto conn = std::make_shared<pqxx::connection>(conninfo_);
@@ -139,6 +153,8 @@ std::shared_ptr<pqxx::connection> PostgreSQLConnectionPool::createConnection() {
     }
 }
 
+// 初始化连接池，创建最小数量的连接
+// 如果部分连接创建失败，会记录错误但继续尝试创建其他连接
 void PostgreSQLConnectionPool::initializePool() {
     std::lock_guard<std::mutex> lock(mutex_);
     
@@ -159,6 +175,10 @@ void PostgreSQLConnectionPool::initializePool() {
 // ConnectionGuard 实现
 //=============================================================================
 
+// 连接守卫构造函数，自动从连接池获取连接
+// pool: 连接池引用
+// RAII模式：构造时获取连接，析构时自动释放
+// 如果无法获取连接，抛出异常
 ConnectionGuard::ConnectionGuard(PostgreSQLConnectionPool& pool)
     : pool_(pool) {
     conn_ = pool_.acquireConnection();
@@ -167,12 +187,15 @@ ConnectionGuard::ConnectionGuard(PostgreSQLConnectionPool& pool)
     }
 }
 
+// 连接守卫析构函数，自动释放连接回连接池
 ConnectionGuard::~ConnectionGuard() {
     if (conn_) {
         pool_.releaseConnection(conn_);
     }
 }
 
+// 检查当前持有的连接是否有效
+// 返回: 连接有效返回true，无效返回false
 bool ConnectionGuard::isValid() const {
     return conn_ && pool_.isConnectionValid(conn_);
 }

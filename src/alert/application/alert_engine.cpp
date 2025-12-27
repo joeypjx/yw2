@@ -14,6 +14,11 @@
 namespace yw {
 namespace alert {
 
+// 告警引擎构造函数
+// dbInterface: 数据库查询接口，不能为空
+// alertRepo: 告警事件仓库，不能为空
+// alertRuleService: 告警规则服务，不能为空
+// 初始化告警工厂和查询服务，设置默认评估间隔为5秒
 AlertEngine::AlertEngine(std::shared_ptr<DatabaseQueryInterface> dbInterface,
                          std::shared_ptr<AlertEventRepository> alertRepo,
                          std::shared_ptr<AlertRuleService> alertRuleService)
@@ -39,10 +44,13 @@ AlertEngine::AlertEngine(std::shared_ptr<DatabaseQueryInterface> dbInterface,
     alertQueryService_ = std::make_shared<AlertQueryService>(alertRepo_);
 }
 
+// 析构函数，自动停止告警引擎
 AlertEngine::~AlertEngine() {
     stop();
 }
 
+// 启动告警引擎，初始化告警规则并启动工作线程
+// intervalSeconds: 评估间隔（秒），默认5秒
 void AlertEngine::start(int intervalSeconds) {
     if (running_) {
         spdlog::debug("告警引擎已经在运行中");
@@ -67,6 +75,7 @@ void AlertEngine::start(int intervalSeconds) {
     spdlog::debug("告警引擎已启动，评估间隔: {} 秒", intervalSeconds_);
 }
 
+// 停止告警引擎，停止工作线程和节点存活检查
 void AlertEngine::stop() {
     if (!running_) {
         return;
@@ -88,6 +97,8 @@ void AlertEngine::stop() {
     spdlog::debug("告警引擎已停止");
 }
 
+// 告警引擎工作线程主循环
+// 定期执行告警评估，检查间隔可中断
 void AlertEngine::workerLoop() {
     spdlog::debug("告警引擎工作线程已启动");
     
@@ -113,6 +124,8 @@ void AlertEngine::workerLoop() {
     spdlog::debug("告警引擎工作线程已退出");
 }
 
+// 初始化告警引擎，重新加载告警规则
+// 失败时抛出异常
 void AlertEngine::initialize() {
     try {
         // 通过 AlertRuleService 重新加载规则
@@ -160,6 +173,8 @@ int AlertEngine::performEvaluation() {
     }
 }
 
+// 评估所有启用的告警规则，生成告警事件列表
+// 返回: 所有规则生成的告警事件列表
 std::vector<AlertEvent> AlertEngine::evaluateAllRules() {
     std::vector<AlertEvent> allAlerts;
                         
@@ -190,6 +205,9 @@ std::vector<AlertEvent> AlertEngine::evaluateAllRules() {
     return allAlerts;
 }
 
+// 处理告警状态更新（Firing转Resolved，Pending删除）
+// currentAlerts: 当前评估生成的告警列表
+// 返回: 状态更新的告警数量
 int AlertEngine::processAlertStatusUpdates(const std::vector<AlertEvent>& currentAlerts) {
     try {
         // 获取当前数据库中firing和pending状态的告警指纹（只获取硬件状态类型）
@@ -276,6 +294,9 @@ int AlertEngine::processAlertStatusUpdates(const std::vector<AlertEvent>& curren
     }
 }
 
+// 将告警列表更新到数据库
+// alerts: 要更新的告警列表
+// 返回: 成功更新的告警数量
 int AlertEngine::updateAlertsToDatabase(const std::vector<AlertEvent>& alerts) {
     int successCount = 0;
     
@@ -360,6 +381,8 @@ int AlertEngine::updateAlertsToDatabase(const std::vector<AlertEvent>& alerts) {
     return successCount;
 }
 
+// 设置告警推送回调函数
+// callback: 当创建或更新告警时调用的回调函数
 void AlertEngine::setPushCallback(std::function<void(const AlertEvent&)> callback) {
     pushCallback_ = std::move(callback);
     // 同时设置到 AlertFactory

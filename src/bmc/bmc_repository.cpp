@@ -1,48 +1,28 @@
 #include "bmc_repository.h"
 #include "utils/postgresql_connection_pool.h"
+#include "utils/ip_address_utils.h"
 #include <pqxx/pqxx>
 #include <string>
 
 namespace yw {
 namespace bmc {
 
-namespace {
-static std::uint8_t ipmbaddrToSlotId(std::uint8_t ipmbaddr) {
-    switch (ipmbaddr) {
-        case 0x7c: return 1;   case 0x7a: return 2;   case 0x38: return 3;   case 0x76: return 4;
-        case 0x34: return 5;   case 0x32: return 6;   case 0x70: return 7;   case 0x6e: return 8;
-        case 0x2c: return 9;   case 0x2a: return 10;  case 0x68: return 11;  case 0x26: return 12;
-        case 0x02: return 13;  case 0x04: return 14;  default: return 0;
-    }
-}
-static std::string calculateHostIP(int box_id, int slot_id) {
-    int network_id; int host_id;
-    if (slot_id >= 1 && slot_id <= 7) {
-        network_id = box_id * 2;
-        switch (slot_id) {
-            case 1: host_id = 5; break; case 2: host_id = 37; break; case 3: host_id = 69; break;
-            case 4: host_id = 101; break; case 5: host_id = 133; break; case 6: host_id = 170; break; case 7: host_id = 180; break;
-            default: host_id = 5; break;
-        }
-    } else if (slot_id >= 8 && slot_id <= 12) {
-        network_id = box_id * 2 + 1;
-        switch (slot_id) {
-            case 8: host_id = 5; break; case 9: host_id = 37; break; case 10: host_id = 69; break; case 11: host_id = 101; break; case 12: host_id = 133; case 13: host_id = 181; break; case 14: host_id = 182; break;
-            default: host_id = 5; break;
-        }
-    } else { return std::string(); }
-    return std::string("192.168.") + std::to_string(network_id) + "." + std::to_string(host_id);
-}
-} // namespace
-
+// BMC仓库构造函数
+// conninfo: PostgreSQL连接字符串
+// minConnections: 连接池最小连接数
+// maxConnections: 连接池最大连接数
 BMCRepository::BMCRepository(const std::string& conninfo,
                              size_t minConnections,
                              size_t maxConnections)
     : connectionPool_(std::make_unique<yw::utils::PostgreSQLConnectionPool>(conninfo, minConnections, maxConnections)) {
 }
 
+// BMC仓库析构函数
 BMCRepository::~BMCRepository() = default;
 
+// 保存BMC UDP数据包到数据库
+// pkt: UDP组播接收到的BMC信息（包含风扇、传感器、板卡信息等）
+// 将数据插入到对应的时序表中（bmc_fan, bmc_sensor等）
 void BMCRepository::save(const UdpInfo& pkt) {
     // 从连接池获取连接
     yw::utils::ConnectionGuard guard(*connectionPool_);
@@ -77,36 +57,8 @@ void BMCRepository::save(const UdpInfo& pkt) {
         return out;
     };
 
-    auto calculateHostIP = [](int box_id, int slot_id) -> std::string {
-        if (slot_id == 0) return std::string(); // 电源模块不计算host_ip
-        int network_id; int host_id;
-        if (slot_id >= 1 && slot_id <= 7) {
-            network_id = box_id * 2;
-            switch (slot_id) {
-                case 1: host_id = 5; break; 
-                case 2: host_id = 37; break; 
-                case 3: host_id = 69; break;
-                case 4: host_id = 101; break;
-                case 5: host_id = 133; break;
-                case 6: host_id = 170; break;
-                case 7: host_id = 180; break;
-                default: return std::string();
-            }
-        } else if (slot_id >= 8 && slot_id <= 12) {
-            network_id = box_id * 2 + 1;
-            switch (slot_id) {
-                case 8: host_id = 5; break;
-                case 9: host_id = 37; break;
-                case 10: host_id = 69; break;
-                case 11: host_id = 101; break;
-                case 12: host_id = 133; break;
-                default: return std::string();
-            }
-        } else { 
-            return std::string(); 
-        }
-        return std::string("192.168.") + std::to_string(network_id) + "." + std::to_string(host_id);
-    };
+    // 使用 IPAddressUtils 工具类计算 IP 地址
+    // 注意：slot_id == 0（电源模块）时，IPAddressUtils 会返回空字符串，符合预期
 
     // 负载槽映射：协议中负载槽顺序是：槽1、槽2、槽3、槽4、槽6、槽7、槽9、槽10、槽11、槽12
     static const int slot_mapping[] = {1, 2, 3, 4, 6, 7, 9, 10, 11, 12};
@@ -129,7 +81,7 @@ void BMCRepository::save(const UdpInfo& pkt) {
         
         // 获取对应的槽位ID
         int slot_id = slot_mapping[si];
-        const std::string host_ip = calculateHostIP(pkt.boxid, slot_id);
+        const std::string host_ip = yw::utils::IPAddressUtils::calculateHostIP(pkt.boxid, slot_id);
         if (host_ip.empty()) continue;
         
         // 根据传感器数量处理（最多8个）
@@ -160,6 +112,10 @@ void BMCRepository::save(const UdpInfo& pkt) {
     tx.commit();
 }
 
+// 查询指定节点的BMC传感器时序数据
+// host_ip: 节点IP地址
+// duration: 时间范围（PostgreSQL interval格式，如"5 minutes"）
+// 返回: BMC传感器数据映射（传感器名称->传感器时序数据列表）
 std::unordered_map<std::string, std::vector<BMCSensorRow>> BMCRepository::queryBMCSensor(
     const std::string& host_ip,
     const std::string& duration) {
@@ -239,6 +195,10 @@ ORDER BY
     return out;
 }
 
+// 获取指定节点的最新BMC传感器数据（每个传感器只返回最新一条记录）
+// host_ip: 节点IP地址
+// 返回: BMC传感器数据映射（传感器名称->最新传感器数据）
+// 注意：只查询最近5分钟的数据，避免扫描整个表
 std::unordered_map<std::string, BMCSensorRow> BMCRepository::getLatestBMCSensor(
     const std::string& host_ip) {
     std::unordered_map<std::string, BMCSensorRow> out;

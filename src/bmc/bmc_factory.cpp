@@ -6,6 +6,9 @@
 namespace yw {
 namespace bmc {
 
+// 创建BMC模块实例
+// 从配置文件加载BMC监听参数和数据库连接信息，创建并启动BMC监听器
+// 返回: BMC模块共享指针
 std::shared_ptr<IBMCModule> BMCFactory::getBMCModule() {
     // 从配置加载 BMC 与数据库参数
     const std::string listen_ip   = yw::utils::JsonConfig::Get<std::string>("bmc.listen_ip", "");

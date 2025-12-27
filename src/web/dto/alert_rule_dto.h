@@ -14,19 +14,23 @@ namespace web {
 // 面向用户返回/提交的告警规则视图
 // --------------------
 
+// 用户告警规则条件（操作符和阈值）
 struct UserRuleCondition {
     std::string op;    // 对应 JSON 字段 "operator"
     double      threshold = 0.0;
 };
 
+// JSON序列化：将UserRuleCondition转换为JSON
 inline void to_json(nlohmann::json& j, const UserRuleCondition& c) {
     j = nlohmann::json{{"operator", c.op}, {"threshold", c.threshold}};
 }
+// JSON反序列化：从JSON解析UserRuleCondition
 inline void from_json(const nlohmann::json& j, UserRuleCondition& c) {
     j.at("operator").get_to(c.op);
     j.at("threshold").get_to(c.threshold);
 }
 
+// 用户告警规则表达式（包含条件、指标、表名和标签）
 struct UserRuleExpression {
     std::vector<UserRuleCondition> conditions;
     std::string                    metric;
@@ -34,6 +38,7 @@ struct UserRuleExpression {
     std::vector<std::map<std::string, std::string>> tags;    // 新增：表达式中的 tags 数组（每个元素为一个对象）
 };
 
+// JSON序列化：将UserRuleExpression转换为JSON
 inline void to_json(nlohmann::json& j, const UserRuleExpression& e) {
     j = nlohmann::json{
         {"conditions", e.conditions},
@@ -42,6 +47,7 @@ inline void to_json(nlohmann::json& j, const UserRuleExpression& e) {
         {"tags", e.tags}
     };
 }
+// JSON反序列化：从JSON解析UserRuleExpression
 inline void from_json(const nlohmann::json& j, UserRuleExpression& e) {
     if (j.contains("conditions")) j.at("conditions").get_to(e.conditions); else e.conditions.clear();
     e.metric = j.value("metric", std::string());
@@ -49,6 +55,7 @@ inline void from_json(const nlohmann::json& j, UserRuleExpression& e) {
     e.tags = j.value("tags", std::vector<std::map<std::string, std::string>>{});
 }
 
+// 用户告警规则完整视图（用于API请求和响应）
 struct UserAlertRule {
     std::string        alert_name;
     std::string        alert_type;
@@ -63,6 +70,7 @@ struct UserAlertRule {
     std::string        updated_at;
 };
 
+// JSON序列化：将UserAlertRule转换为JSON
 inline void to_json(nlohmann::json& j, const UserAlertRule& r) {
     j = nlohmann::json{
         {"alert_name", r.alert_name},
@@ -78,6 +86,7 @@ inline void to_json(nlohmann::json& j, const UserAlertRule& r) {
         {"updated_at", r.updated_at}
     };
 }
+// JSON反序列化：从JSON解析UserAlertRule
 inline void from_json(const nlohmann::json& j, UserAlertRule& r) {
     j.at("alert_name").get_to(r.alert_name);
     r.alert_type = j.value("alert_type", std::string());

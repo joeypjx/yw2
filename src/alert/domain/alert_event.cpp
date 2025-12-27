@@ -10,6 +10,11 @@
 namespace yw {
 namespace alert {
 
+// 告警事件构造函数
+// fingerprint: 告警指纹（唯一标识）
+// labels: 告警标签（用于过滤和分组）
+// annotations: 告警注释（描述信息）
+// 自动生成ID和时间戳，初始状态为Pending
 AlertEvent::AlertEvent(const std::string& fingerprint, const std::unordered_map<std::string, std::string>& labels,
              const std::unordered_map<std::string, std::string>& annotations)
     : fingerprint_(fingerprint), labels_(labels), annotations_(annotations) {
@@ -21,6 +26,7 @@ AlertEvent::AlertEvent(const std::string& fingerprint, const std::unordered_map<
     status_ = AlertStatus::Pending;
 }
 
+// 生成唯一的告警ID（格式：alert_YYYYMMDD_HHMMSS_毫秒_随机数）
 void AlertEvent::generateId() {
     // 使用时间戳和随机数生成唯一ID
     auto now = std::chrono::system_clock::now();
@@ -39,6 +45,7 @@ void AlertEvent::generateId() {
     id_ = oss.str();
 }
 
+// 设置创建时间为当前时间（ISO 8601格式，包含毫秒）
 void AlertEvent::setCreatedNow() {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
@@ -52,6 +59,7 @@ void AlertEvent::setCreatedNow() {
     created_at_ = oss.str();
 }
 
+// 设置更新时间为当前时间（ISO 8601格式，包含毫秒）
 void AlertEvent::setUpdatedNow() {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
@@ -65,6 +73,7 @@ void AlertEvent::setUpdatedNow() {
     updated_at_ = oss.str();
 }
 
+// 设置开始时间为当前时间（ISO 8601格式，包含毫秒）
 void AlertEvent::setStartsNow() {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
@@ -78,6 +87,7 @@ void AlertEvent::setStartsNow() {
     starts_at_ = oss.str();
 }
 
+// 设置结束时间为当前时间（ISO 8601格式，包含毫秒）
 void AlertEvent::setEndsNow() {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
@@ -91,6 +101,8 @@ void AlertEvent::setEndsNow() {
     ends_at_ = oss.str();
 }
 
+// 将告警状态转换为Pending
+// 清空starts_at和ends_at字段
 void AlertEvent::transitionToPending() {
     status_ = AlertStatus::Pending;
     setUpdatedNow();
@@ -99,6 +111,8 @@ void AlertEvent::transitionToPending() {
     ends_at_.clear();
 }
 
+// 将告警状态从Pending转换为Firing
+// 设置starts_at为当前时间，清空ends_at
 void AlertEvent::transitionToFiring() {
     if (status_ == AlertStatus::Pending) {
         status_ = AlertStatus::Firing;
@@ -109,6 +123,8 @@ void AlertEvent::transitionToFiring() {
     }
 }
 
+// 将告警状态从Firing转换为Resolved
+// 设置ends_at为当前时间
 void AlertEvent::transitionToResolved() {
     if (status_ == AlertStatus::Firing) {
         status_ = AlertStatus::Resolved;
@@ -117,30 +133,47 @@ void AlertEvent::transitionToResolved() {
     }
 }
 
+// 添加或更新告警标签
+// key: 标签键
+// value: 标签值
 void AlertEvent::addLabel(const std::string& key, const std::string& value) {
     labels_[key] = value;
 }
 
+// 添加或更新告警注释
+// key: 注释键
+// value: 注释值
 void AlertEvent::addAnnotation(const std::string& key, const std::string& value) {
     annotations_[key] = value;
 }
 
+// 获取告警标签值
+// key: 标签键
+// 返回: 标签值，不存在时返回空字符串
 std::string AlertEvent::getLabel(const std::string& key) const {
     auto it = labels_.find(key);
     return (it != labels_.end()) ? it->second : "";
 }
 
+// 获取告警注释值
+// key: 注释键
+// 返回: 注释值，不存在时返回空字符串
 std::string AlertEvent::getAnnotation(const std::string& key) const {
     auto it = annotations_.find(key);
     return (it != annotations_.end()) ? it->second : "";
 }
 
+// 将告警事件转换为JSON对象
+// 返回: JSON对象
 nlohmann::json AlertEvent::toJson() const {
     nlohmann::json j;
     to_json(j, *this);
     return j;
 }
 
+// 从JSON对象解析告警事件
+// j: JSON对象
+// 返回: 解析后的告警事件对象
 AlertEvent AlertEvent::fromJson(const nlohmann::json& j) {
     AlertEvent alert;
     

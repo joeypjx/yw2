@@ -13,8 +13,10 @@
 namespace yw {
 namespace controller {
 
+// 资源控制器构造函数
 ResourceController::ResourceController() = default;
 
+// 重置指定机箱的板卡（通过TCP发送控制命令）
 IControllerModule::OperationResponse ResourceController::resetBoard(
     const std::string& target_ip,
     const std::vector<int>& slot_numbers,
@@ -22,6 +24,7 @@ IControllerModule::OperationResponse ResourceController::resetBoard(
     return executeOperation("RESET", target_ip, slot_numbers, req_id);
 }
 
+// 关闭指定机箱的板卡电源（通过TCP发送控制命令）
 IControllerModule::OperationResponse ResourceController::powerOffChassisBoards(
     const std::string& target_ip,
     const std::vector<int>& slot_numbers,
@@ -29,6 +32,7 @@ IControllerModule::OperationResponse ResourceController::powerOffChassisBoards(
     return executeOperation("POWOFF", target_ip, slot_numbers, req_id);
 }
 
+// 开启指定机箱的板卡电源（通过TCP发送控制命令）
 IControllerModule::OperationResponse ResourceController::powerOnChassisBoards(
     const std::string& target_ip,
     const std::vector<int>& slot_numbers,
@@ -36,6 +40,8 @@ IControllerModule::OperationResponse ResourceController::powerOnChassisBoards(
     return executeOperation("POWON", target_ip, slot_numbers, req_id);
 }
 
+// 执行板卡控制操作（重置/上电/下电）
+// 通过TCP连接到目标IP的33000端口，发送二进制命令并等待响应
 IControllerModule::OperationResponse ResourceController::executeOperation(
     const std::string& cmd,
     const std::string& target_ip,

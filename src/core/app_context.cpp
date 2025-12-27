@@ -10,10 +10,13 @@
 namespace yw {
 namespace core {
 
+// 应用上下文析构函数，自动清理资源
 AppContext::~AppContext() {
     cleanup();
 }
 
+// 初始化应用上下文，创建HTTP服务器并配置
+// 返回: 初始化成功返回true，失败返回false
 bool AppContext::initialize() {
     std::lock_guard<std::mutex> lock(mutex_);
     
@@ -43,16 +46,21 @@ bool AppContext::initialize() {
     }
 }
 
+// 获取HTTP服务实例
+// 返回: HTTP服务共享指针
 std::shared_ptr<hv::HttpService> AppContext::getHttpService() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return http_service_;
 }
 
+// 获取HTTP服务器实例
+// 返回: HTTP服务器共享指针
 std::shared_ptr<hv::HttpServer> AppContext::getHttpServer() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return http_server_;
 }
 
+// 清理应用上下文，停止所有模块和HTTP服务器
 void AppContext::cleanup() {
     std::lock_guard<std::mutex> lock(mutex_);
     
@@ -81,6 +89,7 @@ void AppContext::cleanup() {
     }
 }
 
+// 在独立线程中运行HTTP服务器
 void AppContext::runHttpServer() {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!http_server_) {
@@ -105,56 +114,79 @@ void AppContext::runHttpServer() {
     });
 }
 
-// 模块注入/获取
+// 设置节点模块
+// m: 节点模块实例
 void AppContext::setNodeModule(std::shared_ptr<yw::node::INodeModule> m) {
     std::lock_guard<std::mutex> lock(mutex_);
     node_module_ = std::move(m);
 }
+// 设置监控模块
+// m: 监控模块实例
 void AppContext::setMonitorModule(std::shared_ptr<yw::monitor::IMonitorModule> m) {
     std::lock_guard<std::mutex> lock(mutex_);
     monitor_module_ = std::move(m);
 }
+// 设置BMC模块
+// m: BMC模块实例
 void AppContext::setBMCModule(std::shared_ptr<yw::bmc::IBMCModule> m) {
     std::lock_guard<std::mutex> lock(mutex_);
     bmc_module_ = std::move(m);
 }
+// 设置控制器模块
+// m: 控制器模块实例
 void AppContext::setControllerModule(std::shared_ptr<yw::controller::IControllerModule> m) {
     std::lock_guard<std::mutex> lock(mutex_);
     controller_module_ = std::move(m);
 }
 
+// 获取节点模块
+// 返回: 节点模块实例
 std::shared_ptr<yw::node::INodeModule> AppContext::getNodeModule() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return node_module_;
 }
+// 获取监控模块
+// 返回: 监控模块实例
 std::shared_ptr<yw::monitor::IMonitorModule> AppContext::getMonitorModule() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return monitor_module_;
 }
+// 获取BMC模块
+// 返回: BMC模块实例
 std::shared_ptr<yw::bmc::IBMCModule> AppContext::getBMCModule() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return bmc_module_;
 }
+// 获取控制器模块
+// 返回: 控制器模块实例
 std::shared_ptr<yw::controller::IControllerModule> AppContext::getControllerModule() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return controller_module_;
 }
 
+// 设置告警模块
+// m: 告警模块实例
 void AppContext::setAlertModule(std::shared_ptr<yw::alert::IAlertModule> m) {
     std::lock_guard<std::mutex> lock(mutex_);
     alert_module_ = std::move(m);
 }
 
+// 设置Web模块
+// m: Web模块实例
 void AppContext::setWebModule(std::shared_ptr<yw::web::IWebModule> m) {
     std::lock_guard<std::mutex> lock(mutex_);
     web_module_ = std::move(m);
 }
 
+// 获取告警模块
+// 返回: 告警模块实例
 std::shared_ptr<yw::alert::IAlertModule> AppContext::getAlertModule() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return alert_module_;
 }
 
+// 获取Web模块
+// 返回: Web模块实例
 std::shared_ptr<yw::web::IWebModule> AppContext::getWebModule() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return web_module_;

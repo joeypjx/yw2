@@ -16,6 +16,8 @@ using ResponseBuilder = yw::utils::ResponseBuilder;
 
 namespace {
     // 辅助函数：解析请求体为 JSON
+    // ctx: HTTP上下文
+    // 返回: 解析后的JSON对象，请求体为空时抛出异常
     json parseRequestBody(const HttpContextPtr& ctx) {
         auto body = ctx->body();
         if (body.empty()) {
@@ -24,7 +26,9 @@ namespace {
         return json::parse(body);
     }
 
-    // 辅助函数：从参数构建 AlertFilters
+    // 辅助函数：从HTTP请求参数构建告警过滤条件
+    // params: HTTP请求参数字典
+    // 返回: 告警过滤条件对象（包含状态、严重程度、类型、IP、机箱号、槽位号等）
     template<typename MapType>
     yw::alert::AlertFilters buildAlertFilters(const MapType& params) {
         yw::alert::AlertFilters filters;
@@ -71,6 +75,9 @@ namespace {
     }
 
     // 辅助函数：限制 JSON 数组大小
+    // array: 要限制的JSON数组
+    // maxSize: 最大元素数量
+    // 返回: 限制后的JSON数组（如果原数组小于等于maxSize则返回原数组）
     json limitArraySize(const json& array, size_t maxSize) {
         if (!array.is_array() || array.size() <= maxSize) {
             return array;
@@ -83,11 +90,15 @@ namespace {
     }
 }
 
+// 注册告警相关的HTTP路由
+// service: HTTP服务实例
+// alertModule: 告警模块实例
 void registerAlertRoutes(hv::HttpService* service, 
                           std::shared_ptr<yw::alert::IAlertModule> alertModule) {
     if (!service || !alertModule) return;
 
     // POST /alarm/rules - 创建告警规则
+    // 请求体：告警规则JSON对象
     service->POST("/alarm/rules", [alertModule](const HttpContextPtr& ctx) {
         try {
             auto ruleJson = parseRequestBody(ctx);
@@ -112,6 +123,7 @@ void registerAlertRoutes(hv::HttpService* service,
     });
 
     // GET /alarm/rules - 获取所有告警规则
+    // 返回：告警规则JSON数组
     service->GET("/alarm/rules", [alertModule](const HttpContextPtr& ctx) {
         try {
             json rulesArray = alertModule->getAllAlertRules();
@@ -123,6 +135,8 @@ void registerAlertRoutes(hv::HttpService* service,
     });
 
     // GET /alarm/rules/{id} - 获取特定告警规则
+    // 路径参数：id - 告警规则ID
+    // 返回：告警规则JSON对象，不存在时返回404
     service->GET("/alarm/rules/{id}", [alertModule](const HttpContextPtr& ctx) {
         try {
             const std::string ruleId = ctx->param("id");
@@ -143,6 +157,8 @@ void registerAlertRoutes(hv::HttpService* service,
     });
 
     // POST /alarm/rules/{id}/update - 更新告警规则
+    // 路径参数：id - 告警规则ID
+    // 请求体：告警规则JSON对象
     service->POST("/alarm/rules/{id}/update", [alertModule](const HttpContextPtr& ctx) {
         try {
             const std::string ruleId = ctx->param("id");
@@ -171,6 +187,7 @@ void registerAlertRoutes(hv::HttpService* service,
     });
 
     // POST /alarm/rules/{id}/delete - 删除告警规则
+    // 路径参数：id - 告警规则ID
     service->POST("/alarm/rules/{id}/delete", [alertModule](const HttpContextPtr& ctx) {
         try {
             const std::string ruleId = ctx->param("id");
@@ -189,7 +206,9 @@ void registerAlertRoutes(hv::HttpService* service,
         }
     });
 
-    // GET /alarm/events - 获取告警事件
+    // GET /alarm/events - 获取告警事件列表
+    // 查询参数：status, severity, alert_type, host_ip, box_id, slot_id, description, start_time, end_time, limit等
+    // 返回：告警事件JSON数组
     service->GET("/alarm/events", [alertModule](const HttpContextPtr& ctx) {
         try {
             auto params = ctx->params();
@@ -212,6 +231,8 @@ void registerAlertRoutes(hv::HttpService* service,
     });
 
     // GET /alarm/events/{id} - 获取特定告警事件
+    // 路径参数：id - 告警事件ID
+    // 返回：告警事件JSON对象，不存在时返回404
     service->GET("/alarm/events/{id}", [alertModule](const HttpContextPtr& ctx) {
         try {
             const std::string alertId = ctx->param("id");
@@ -232,6 +253,7 @@ void registerAlertRoutes(hv::HttpService* service,
     });
 
     // GET /alarm/count - 获取告警总数
+    // 返回：告警总数JSON对象
     service->GET("/alarm/count", [alertModule](const HttpContextPtr& ctx) {
         try {
             size_t count = alertModule->getAlertCount();

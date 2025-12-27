@@ -15,15 +15,21 @@ namespace pqxx {
 namespace yw {
 namespace alert {
 
-// 查询结果行
+// 查询结果行，包含列名到值的映射
 struct QueryRow {
     std::unordered_map<std::string, std::string> columns;
     
+    // 获取指定列的值
+    // column: 列名
+    // 返回: 列值，不存在时返回空字符串
     std::string getValue(const std::string& column) const {
         auto it = columns.find(column);
         return (it != columns.end()) ? it->second : "";
     }
     
+    // 获取指定列的双精度浮点数值
+    // column: 列名
+    // 返回: 列值转换为double，不存在或转换失败时返回0.0
     double getDoubleValue(const std::string& column) const {
         auto it = columns.find(column);
         if (it != columns.end()) {
@@ -37,7 +43,7 @@ struct QueryRow {
     }
 };
 
-// 查询结果
+// 查询结果，包含多行数据
 struct QueryResult {
     std::vector<QueryRow> rows;
     
@@ -46,24 +52,34 @@ struct QueryResult {
     const QueryRow& operator[](size_t index) const { return rows[index]; }
 };
 
+// 数据库查询接口抽象类
+// 提供统一的数据库查询接口，支持无参数和参数化查询
 class DatabaseQueryInterface {
 public:
     virtual ~DatabaseQueryInterface() = default;
     
+    // 执行无参数的SQL查询
+    // sql: SQL查询语句
+    // 返回: 查询结果
     virtual QueryResult executeQuery(const std::string& sql) = 0;
+    
+    // 执行参数化SQL查询
+    // sql: SQL查询语句（使用$1, $2等占位符）
+    // params: 参数列表
+    // 返回: 查询结果
     virtual QueryResult executeQuery(const std::string& sql, 
                                    const std::vector<std::string>& params) = 0;
 };
 
 
+// PostgreSQL查询接口实现类
+// 使用连接池管理数据库连接，提供参数化查询功能
 class PostgreSQLQueryInterface : public DatabaseQueryInterface {
 public:
-    /**
-     * @brief 构造函数
-     * @param conninfo 数据库连接信息
-     * @param minConnections 连接池最小连接数（默认2）
-     * @param maxConnections 连接池最大连接数（默认10）
-     */
+    // 构造函数，初始化PostgreSQL连接池
+    // conninfo: PostgreSQL连接字符串
+    // minConnections: 连接池最小连接数（默认2）
+    // maxConnections: 连接池最大连接数（默认10）
     explicit PostgreSQLQueryInterface(const std::string& conninfo,
                                       size_t minConnections = 2,
                                       size_t maxConnections = 10);
@@ -76,16 +92,19 @@ public:
 private:
     std::unique_ptr<yw::utils::PostgreSQLConnectionPool> connectionPool_;
     
-    /**
-     * @brief 使用真正的参数化查询执行 SQL
-     */
+    // 使用指定的连接执行参数化SQL查询
+    // conn: 数据库连接
+    // sql: SQL查询语句（使用$1, $2等占位符）
+    // params: 参数列表
+    // 返回: 查询结果
     QueryResult executeQueryWithConnection(std::shared_ptr<pqxx::connection> conn,
                                           const std::string& sql,
                                           const std::vector<std::string>& params = {});
     
 private:
     // 内部辅助函数：将 pqxx::result 转换为 QueryResult
-    // 在实现文件中定义，使用 pqxx::result 类型
+    // result: pqxx查询结果
+    // 返回: 转换后的QueryResult对象
     QueryResult convertResult(const pqxx::result& result);
 };
 

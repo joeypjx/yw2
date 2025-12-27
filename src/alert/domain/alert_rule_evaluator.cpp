@@ -8,11 +8,17 @@
 namespace yw {
 namespace alert {
 
+// 构造函数，初始化告警规则评估器
+// dbInterface: 数据库查询接口
 AlertRuleEvaluator::AlertRuleEvaluator(std::shared_ptr<DatabaseQueryInterface> dbInterface)
     : dbInterface_(dbInterface) {}
 
+// 评估告警规则，执行SQL查询并生成告警事件
+// rule: 要评估的告警规则
+// 返回: 生成的告警事件列表（如果规则未启用则返回空列表）
 std::vector<AlertEvent> AlertRuleEvaluator::evaluateRule(const AlertRule& rule) {
 
+    // 如果规则未启用，直接返回空列表
     if (rule.isEnabled() == false) {
         return std::vector<AlertEvent>();
     }
@@ -27,41 +33,51 @@ std::vector<AlertEvent> AlertRuleEvaluator::evaluateRule(const AlertRule& rule) 
     return convertQueryResultToAlerts(result, rule);
 }
 
+// 将告警规则转换为SQL查询语句
+// rule: 告警规则对象
+// 返回: 生成的SQL查询语句（使用DISTINCT ON获取每个节点和标签组合的最新数据）
 std::string AlertRuleEvaluator::convertRuleToSQL(const AlertRule& rule) {
     const auto& expr = rule.getExpression();
     std::string tableName = getTableName(expr.stable);
     
-    // 构建标签列字符串
+    // 构建标签列字符串（如", gpu_index, disk_name"）
     std::ostringstream tagColumnsList;
     auto tagColumns = getTagColumns(expr.stable);
     for (const auto& column : tagColumns) {
         tagColumnsList << ", " << column;
     }
     
-    // 使用子查询获取每个节点（和标签组合）的最新数据
+    // 使用DISTINCT ON子查询获取每个节点（和标签组合）的最新数据
+    // 例如：SELECT DISTINCT ON (host_ip, gpu_index) host_ip, gpu_index, compute_usage FROM resource_gpu ...
     std::ostringstream sql;
     sql << "SELECT DISTINCT ON (host_ip" << tagColumnsList.str() << ") ";
     sql << "host_ip" << tagColumnsList.str() << ", " << expr.metric;
     sql << " FROM " << tableName;
     sql << " WHERE time >= NOW() - INTERVAL '10 seconds'"; // 查询最近10秒的数据
     
-    // 添加WHERE条件
+    // 添加WHERE条件（如标签过滤、指标条件等）
     std::string whereConditions = buildWhereConditions(rule);
     if (!whereConditions.empty()) {
         sql << " AND " << whereConditions;
     }
     
+    // 按host_ip和标签列排序，时间降序，以获取最新数据
     sql << " ORDER BY host_ip" << tagColumnsList.str() << ", time DESC";
     
     return sql.str();
 }
 
+// 将查询结果转换为告警事件列表
+// result: 数据库查询结果
+// rule: 告警规则对象
+// 返回: 生成的告警事件列表（只包含满足告警条件的事件）
 std::vector<AlertEvent> AlertRuleEvaluator::convertQueryResultToAlerts(const QueryResult& result, 
                                                                  const AlertRule& rule) {
     std::vector<AlertEvent> alerts;
     
+    // 遍历查询结果的每一行
     for (const auto& row : result.rows) {
-        // 检查是否满足告警条件
+        // 检查指标值是否满足告警条件
         double metricValue = row.getDoubleValue(rule.getExpression().metric);
         bool conditionMet = checkAlertConditions(metricValue, rule.getExpression().conditions);
         
@@ -69,7 +85,7 @@ std::vector<AlertEvent> AlertRuleEvaluator::convertQueryResultToAlerts(const Que
             continue; // 跳过不满足条件的行
         }
         
-        // 构建标签
+        // 构建标签（label），包含告警的基本信息和指标值
         std::unordered_map<std::string, std::string> labels;
         labels["alert_name"] = rule.getAlertName();
         labels["alert_type"] = rule.getAlertType();
@@ -153,6 +169,9 @@ std::string AlertRuleEvaluator::buildWhereConditions(const AlertRule& rule) {
     return conditions.str();
 }
 
+// 构建标签过滤条件
+// tags: 标签组列表，每个标签组是一个键值对映射
+// 返回: SQL条件字符串（格式：(tag1='val1' AND tag2='val2') OR (tag3='val3')）
 std::string AlertRuleEvaluator::buildTagConditions(const std::vector<std::unordered_map<std::string, std::string>>& tags) {
     if (tags.empty()) {
         return "";
@@ -161,12 +180,14 @@ std::string AlertRuleEvaluator::buildTagConditions(const std::vector<std::unorde
     std::ostringstream conditions;
     bool first = true;
     
+    // 遍历每个标签组（标签组之间用OR连接）
     for (const auto& tagGroup : tags) {
         if (!first) {
             conditions << " OR ";
         }
         conditions << "(";
         
+        // 遍历标签组内的每个标签（标签之间用AND连接）
         bool firstTag = true;
         for (const auto& tag : tagGroup) {
             if (!firstTag) {
@@ -183,6 +204,10 @@ std::string AlertRuleEvaluator::buildTagConditions(const std::vector<std::unorde
     return conditions.str();
 }
 
+// 构建指标条件（如CPU使用率>80%）
+// conditions: 告警条件列表
+// metric: 指标名称
+// 返回: SQL条件字符串（格式：metric > 80 AND metric < 100）
 std::string AlertRuleEvaluator::buildMetricConditions(const std::vector<AlertCondition>& conditions, 
                                                       const std::string& metric) {
     if (conditions.empty()) {
@@ -192,6 +217,7 @@ std::string AlertRuleEvaluator::buildMetricConditions(const std::vector<AlertCon
     std::ostringstream sql;
     bool first = true;
     
+    // 遍历每个条件（条件之间用AND连接）
     for (const auto& condition : conditions) {
         if (!first) {
             sql << " AND ";
@@ -201,7 +227,7 @@ std::string AlertRuleEvaluator::buildMetricConditions(const std::vector<AlertCon
         if (op == "==") op = "=";
         if (op == "!=") op = "<>";
         
-        // 对于alive字段，需要特殊处理类型转换
+        // 对于alive字段（布尔类型），需要特殊处理类型转换为整数
         if (metric == "alive") {
             sql << metric << "::integer " << op << " " << static_cast<int>(condition.threshold);
         } else {
@@ -213,6 +239,10 @@ std::string AlertRuleEvaluator::buildMetricConditions(const std::vector<AlertCon
     return sql.str();
 }
 
+// 根据stable名称获取对应的数据库表名
+// stable: stable名称（如"cpu", "memory", "disk"等）
+// 返回: 对应的数据库表名（如"resource_cpu"）
+// 异常: 如果stable名称未知则抛出invalid_argument异常
 std::string AlertRuleEvaluator::getTableName(const std::string& stable) {
     if (stable == "cpu") return "resource_cpu";
     if (stable == "memory") return "resource_memory";
@@ -223,6 +253,9 @@ std::string AlertRuleEvaluator::getTableName(const std::string& stable) {
     throw std::invalid_argument("Unknown stable: " + stable);
 }
 
+// 根据stable名称获取标签列名列表
+// stable: stable名称（如"cpu", "memory", "disk"等）
+// 返回: 标签列名列表（如disk返回{"device", "mount_point"}）
 std::vector<std::string> AlertRuleEvaluator::getTagColumns(const std::string& stable) {
     if (stable == "cpu") return {};
     if (stable == "memory") return {};
@@ -233,14 +266,19 @@ std::vector<std::string> AlertRuleEvaluator::getTagColumns(const std::string& st
     return {};
 }
 
+// 填充模板字符串中的占位符（如{{host_ip}}）
+// templateStr: 模板字符串（如"节点{{host_ip}}的CPU使用率过高"）
+// labels: 标签键值对映射
+// 返回: 填充后的字符串（如"节点192.168.2.101的CPU使用率过高"）
 std::string AlertRuleEvaluator::fillPlaceholders(const std::string& templateStr, 
                                                 const std::unordered_map<std::string, std::string>& labels) {
     std::string result = templateStr;
     
-    // 替换 {{key}} 格式的占位符
+    // 使用正则表达式替换{{key}}格式的占位符
     std::regex placeholderRegex(R"(\{\{([^}]+)\}\})");
     std::smatch match;
     
+    // 循环查找并替换所有占位符
     while (std::regex_search(result, match, placeholderRegex)) {
         std::string key = match[1].str();
         auto it = labels.find(key);
@@ -251,10 +289,16 @@ std::string AlertRuleEvaluator::fillPlaceholders(const std::string& templateStr,
     return result;
 }
 
+// 检查指标值是否满足告警条件
+// value: 指标值
+// conditions: 告警条件列表
+// 返回: 如果所有条件都满足返回true，否则返回false
 bool AlertRuleEvaluator::checkAlertConditions(double value, const std::vector<AlertCondition>& conditions) {
+    // 遍历所有条件，全部满足才返回true
     for (const auto& condition : conditions) {
         bool conditionMet = false;
         
+        // 根据操作符检查条件是否满足
         if (condition.operator_ == ">") {
             conditionMet = (value > condition.threshold);
         } else if (condition.operator_ == "<") {

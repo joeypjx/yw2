@@ -20,6 +20,9 @@ using ResponseBuilder = yw::utils::ResponseBuilder;
 
 namespace {
     // 辅助函数：获取节点的监控资源
+    // host_ip: 节点IP地址
+    // monitor_module: 监控模块实例（可为nullptr）
+    // 返回: 监控资源指针，失败或模块不可用时返回nullptr
     const monitor::Resource* getNodeResource(const std::string& host_ip,
                                             monitor::IMonitorModule* monitor_module) {
         if (!monitor_module) {
@@ -37,6 +40,9 @@ namespace {
     }
 
     // 辅助函数：获取节点的BMC传感器数据
+    // host_ip: 节点IP地址
+    // bmc_module: BMC模块实例（可为nullptr）
+    // 返回: BMC传感器数据映射（传感器名称->传感器数据），失败或模块不可用时返回空映射
     std::unordered_map<std::string, bmc::BMCSensorRow> getBMCSensors(const std::string& host_ip,
                                                                       bmc::IBMCModule* bmc_module) {
         if (!bmc_module) {
@@ -51,13 +57,19 @@ namespace {
     }
 }
 
+// 注册指标相关的HTTP路由
+// service: HTTP服务实例
+// node_module: 节点模块实例
+// monitor_module: 监控模块实例
+// bmc_module: BMC模块实例
 void registerMetricsRoutes(hv::HttpService* service,
                            node::INodeModule* node_module,
                            monitor::IMonitorModule* monitor_module,
                            bmc::IBMCModule* bmc_module) {
     if (!service) return;
 
-    // /node/metrics
+    // GET /node/metrics - 获取所有节点的最新指标数据
+    // 返回：节点指标JSON数组，包含CPU、内存、磁盘、网络、GPU、传感器等指标
     service->GET("/node/metrics", [node_module, monitor_module, bmc_module](const HttpContextPtr& ctx) {
         if (!node_module) {
             return ResponseBuilder::sendErrorWithReturn(ctx, "node module unavailable", HTTP_STATUS_INTERNAL_SERVER_ERROR);
@@ -120,7 +132,11 @@ void registerMetricsRoutes(hv::HttpService* service,
         return ResponseBuilder::sendSuccessWithReturn(ctx, data);
     });
 
-    // /node/historical-metrics - 查询节点历史指标数据
+    // GET /node/historical-metrics - 查询节点历史指标数据
+    // 查询参数：host_ip（必需）- 节点IP地址
+    // 查询参数：time_range（可选，默认"1m"）- 时间范围（如"5m", "1h"）
+    // 查询参数：metrics（可选）- 逗号分隔的指标类型列表（如"cpu,memory"）
+    // 返回：历史指标JSON对象，包含时序数据
     service->GET("/node/historical-metrics", [node_module, monitor_module, bmc_module](const HttpContextPtr& ctx) {
         // ========== 1. 模块可用性检查 ==========
         if (!monitor_module) {

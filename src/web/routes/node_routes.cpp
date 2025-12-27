@@ -19,7 +19,11 @@ using json = nlohmann::json;
 using ResponseBuilder = yw::utils::ResponseBuilder;
 
 namespace {
-    // 辅助函数：将节点转换为 NodeView JSON
+    // 辅助函数：将节点扩展信息转换为 NodeView JSON
+    // node: 节点扩展信息（包含节点数据和更新时间）
+    // monitor_module: 监控模块实例（可为nullptr）
+    // bmc_module: BMC模块实例（可为nullptr）
+    // 返回: NodeView JSON对象
     json convertNodeToView(const node::NodeExt& node,
                           monitor::IMonitorModule* monitor_module,
                           bmc::IBMCModule* bmc_module) {
@@ -44,6 +48,8 @@ namespace {
     }
 
     // 辅助函数：处理类型参数，将 "system" 展开为所有类型
+    // types: 指标类型列表（如["cpu", "memory"]）
+    // 返回: 标准化后的类型列表（如果包含"system"则展开为所有类型，空列表则返回默认类型）
     std::vector<std::string> normalizeExportTypes(const std::vector<std::string>& types) {
         if (types.empty()) {
             return {"cpu", "memory", "network", "disk", "gpu"};
@@ -52,7 +58,9 @@ namespace {
         return has_system ? std::vector<std::string>{"cpu", "memory", "network", "disk", "gpu"} : types;
     }
 
-    // 辅助函数：将 ExportDataPoint 转换为 JSON
+    // 辅助函数：将导出数据点转换为 JSON
+    // dataPoint: 导出数据点（包含时间戳和各种指标值）
+    // 返回: JSON对象（包含时间戳、CPU使用率、内存使用率、磁盘使用率、网络速率、GPU使用率等）
     json convertDataPointToJson(const monitor::ExportDataPoint& dataPoint) {
         json point = {
             {"timestamp", dataPoint.timestamp},
@@ -85,6 +93,11 @@ namespace {
     }
 }
 
+// 注册节点相关的HTTP路由
+// service: HTTP服务实例
+// node_module: 节点模块实例
+// monitor_module: 监控模块实例
+// bmc_module: BMC模块实例
 void registerNodeRoutes(hv::HttpService* service,
                         node::INodeModule* node_module,
                         monitor::IMonitorModule* monitor_module,
@@ -92,6 +105,10 @@ void registerNodeRoutes(hv::HttpService* service,
                             
     if (!service) return;
     
+    // GET /node - 获取节点列表或单个节点
+    // 查询参数：host_ip（可选）- 节点IP地址
+    // 查询参数：box_id（可选）- 机箱编号
+    // 返回：节点列表或单个节点JSON对象
     service->GET("/node", [node_module, monitor_module, bmc_module](const HttpContextPtr& ctx) {
         if (!node_module) {
             return ResponseBuilder::sendErrorWithReturn(ctx, "node module unavailable", HTTP_STATUS_INTERNAL_SERVER_ERROR);

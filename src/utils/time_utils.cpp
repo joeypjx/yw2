@@ -7,6 +7,9 @@
 namespace yw {
 namespace utils {
 
+// 解析ISO 8601格式的时间字符串
+// isoTime: ISO格式时间字符串（如"2024-01-01T12:00:00.000"或"2024-01-01T12:00:00Z"）
+// 返回: 解析后的时间点，失败时返回默认构造的time_point
 std::chrono::system_clock::time_point TimeUtils::parseISOTime(const std::string& isoTime) {
     try {        
         // 解析时间字符串 (例如: 2024-01-01T12:00:00.000)

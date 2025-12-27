@@ -9,12 +9,15 @@
 namespace yw {
 namespace node {
 
+// 节点缓存构造函数，自动初始化所有可能的节点槽位
 NodeCache::NodeCache() {
     initialize();
 }
 
 NodeCache::~NodeCache() = default;
 
+// 初始化节点缓存，为所有机箱和槽位创建初始节点记录
+// 支持9个机箱，每个机箱12个槽位（跳过槽位6和7）
 bool NodeCache::initialize() {
     // init 9 box , 12 boards per box
     std::vector<NodeRecord> nodes;
@@ -63,6 +66,8 @@ bool NodeCache::initialize() {
     return true;
 }
 
+// 添加或更新节点信息
+// 如果节点已存在则更新，不存在则添加，同时更新最后更新时间戳
 bool NodeCache::addOrUpdateNode(const Node& node) {
     if (node.host_ip.empty()) {
         return false;  // IP地址不能为空
@@ -80,6 +85,7 @@ bool NodeCache::addOrUpdateNode(const Node& node) {
     return true;
 }
 
+// 根据IP地址获取节点信息（包含最后更新时间）
 std::optional<NodeExt> NodeCache::getNode(const std::string& ip) const {
     if (ip.empty()) {
         return std::nullopt;
@@ -94,6 +100,7 @@ std::optional<NodeExt> NodeCache::getNode(const std::string& ip) const {
     return std::nullopt;
 }
 
+// 获取所有节点信息（包含最后更新时间）
 std::vector<NodeExt> NodeCache::getAllNodes() const {
     std::lock_guard<std::mutex> lock(mutex_);
     std::vector<NodeExt> result;

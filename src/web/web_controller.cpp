@@ -21,6 +21,14 @@ namespace web {
 
 using json = nlohmann::json;
 
+// Web控制器构造函数，初始化HTTP服务和路由
+// server: HTTP服务器实例
+// service: HTTP服务实例
+// node_module: 节点模块
+// monitor_module: 监控模块
+// bmc_module: BMC模块
+// controller_module: 控制器模块
+// alert_module: 告警模块
 WebController::WebController(std::shared_ptr<hv::HttpServer> server,
                              std::shared_ptr<hv::HttpService> service,
                              std::shared_ptr<node::INodeModule> node_module,
@@ -53,12 +61,14 @@ WebController::WebController(std::shared_ptr<hv::HttpServer> server,
     }
 }
 
+// Web控制器析构函数，停止告警推送器
 WebController::~WebController() {
     if (pusher_) {
         pusher_->stop();
     }
 }
 
+// 设置HTTP路由，注册所有API端点
 void WebController::setupRoutes() {
     // 仅负责装配分域路由
     routes::registerNodeRoutes(service_.get(), node_module_.get(), monitor_module_.get(), bmc_module_.get());

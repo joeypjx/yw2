@@ -1,5 +1,5 @@
 #include "bmc_routes.h"
-// #include "ipmi/ipmi.h"  // 暂时注释掉，因为 IPMI 模块暂时不编译
+#include "ipmi/ipmi.h"
 
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -7,6 +7,7 @@
 #include "bmc/bmc.h"
 #include "controller/controller.h"
 #include "utils/response_builder.h"
+#include "utils/ip_address_utils.h"
 
 namespace yw {
 namespace web {
@@ -16,12 +17,16 @@ using json = nlohmann::json;
 using ResponseBuilder = yw::utils::ResponseBuilder;
 
 namespace {
-    // 辅助函数：根据 box_id 计算 box IP 地址
+    // 辅助函数：根据 box_id 计算 box IP 地址（使用槽位7的IP）
+    // box_id: 机箱编号（1-9）
+    // 返回: 机箱IP地址（槽位7的IP）
     std::string calculateBoxIP(int box_id) {
-        return "192.168." + std::to_string(box_id * 2) + ".180";
+        return yw::utils::IPAddressUtils::calculateHostIP(box_id, 7);
     }
 
     // 辅助函数：验证 slot_id 范围
+    // slot_ids: 槽位ID列表
+    // 返回: 所有槽位ID都在有效范围（1-12）内返回true，否则返回false
     bool validateSlotIds(const std::vector<int>& slot_ids) {
         for (int slot : slot_ids) {
             if (slot < 1 || slot > 12) {
@@ -32,6 +37,8 @@ namespace {
     }
 
     // 辅助函数：解析并验证板卡操作请求参数
+    // ctx: HTTP上下文
+    // 返回: 解析成功返回参数对象，失败返回std::nullopt
     struct BoardOperationParams {
         int box_id;
         std::vector<int> slot_id;
@@ -61,6 +68,10 @@ namespace {
     }
 
     // 辅助函数：处理控制器操作响应
+    // ctx: HTTP上下文
+    // response: 控制器操作响应
+    // acceptPartialSuccess: 是否接受部分成功（默认false）
+    // 返回: HTTP状态码
     int handleControllerResponse(const HttpContextPtr& ctx,
                                  const controller::IControllerModule::OperationResponse& response,
                                  bool acceptPartialSuccess = false) {
@@ -76,10 +87,19 @@ namespace {
     }
 }
 
+// 注册BMC相关的HTTP路由
+// service: HTTP服务实例
+// bmc_module: BMC模块实例
+// controller_module: 控制器模块实例
 void registerBMCRoutes(hv::HttpService* service,
                        bmc::IBMCModule* bmc_module,
                        controller::IControllerModule* controller_module) {
     if (!service) return;
+    
+    // GET /box/bmc - 获取指定机箱的BMC数据
+    // 查询参数：box_id（必需）- 机箱编号
+    // 查询参数：duration（可选，默认"5m"）- 时间范围
+    // 返回：机箱BMC数据JSON对象（包含风扇速度、传感器数据等）
     service->GET("/box/bmc", [bmc_module](const HttpContextPtr& ctx) {
         if (!bmc_module) {
             return ResponseBuilder::sendErrorWithReturn(ctx, "bmc module unavailable", HTTP_STATUS_INTERNAL_SERVER_ERROR);
@@ -122,7 +142,8 @@ void registerBMCRoutes(hv::HttpService* service,
         }
     });
 
-    // reset box board
+    // POST /box/reset_board - 重置机箱板卡
+    // 请求体：{"box_id": 1, "slot_id": [1, 2, 3]}
     service->POST("/box/reset_board", [controller_module](const HttpContextPtr& ctx) {
         if (!controller_module) {
             return ResponseBuilder::sendErrorWithReturn(ctx, "controller module unavailable", HTTP_STATUS_INTERNAL_SERVER_ERROR);
@@ -138,7 +159,8 @@ void registerBMCRoutes(hv::HttpService* service,
         return handleControllerResponse(ctx, response, false);
     });
 
-    // power on box board
+    // POST /box/poweron_board - 开启机箱板卡电源
+    // 请求体：{"box_id": 1, "slot_id": [1, 2, 3]}
     service->POST("/box/poweron_board", [controller_module](const HttpContextPtr& ctx) {
         if (!controller_module) {
             return ResponseBuilder::sendErrorWithReturn(ctx, "controller module unavailable", HTTP_STATUS_INTERNAL_SERVER_ERROR);
@@ -154,7 +176,8 @@ void registerBMCRoutes(hv::HttpService* service,
         return handleControllerResponse(ctx, response, true);
     });
 
-    // power off box board
+    // POST /box/poweroff_board - 关闭机箱板卡电源
+    // 请求体：{"box_id": 1, "slot_id": [1, 2, 3]}
     service->POST("/box/poweroff_board", [controller_module](const HttpContextPtr& ctx) {
         if (!controller_module) {
             return ResponseBuilder::sendErrorWithReturn(ctx, "controller module unavailable", HTTP_STATUS_INTERNAL_SERVER_ERROR);
@@ -170,71 +193,85 @@ void registerBMCRoutes(hv::HttpService* service,
         return handleControllerResponse(ctx, response, true);
     });
 
-    // 暂时注释掉 fan_speed 相关功能，因为 IPMI 模块暂时不编译
-    /*
+    // POST /box/bmc/fan_speed - 设置机箱风扇速度
+    // 请求体: {"box_id": <int>, "fan_speed": <int>}
+    // fan_speed 范围: 0-127，对应实际速度值 128-255
     service->POST("/box/bmc/fan_speed", [](const HttpContextPtr& ctx) {
-        // 解析 JSON 请求体: {"box_id": <int>, "fan_speed": <int>}
+        // 1. 解析 JSON 请求体
         nlohmann::json req;
         try {
             req = nlohmann::json::parse(ctx->body());
         } catch (...) {
-            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "invalid json body"},{"data", nlohmann::json::object()}};
-            ctx->setContentType("application/json");
-            ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
-            return ctx->send(resp.dump(2));
+            return ResponseBuilder::sendErrorWithReturn(ctx, "invalid json body", HTTP_STATUS_BAD_REQUEST);
         }
-        if (!req.contains("box_id") || !req.contains("fan_speed") || !req["box_id"].is_number_integer() || !req["fan_speed"].is_number_integer()) {
-            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "box_id and fan_speed are required integers"},{"data", nlohmann::json::object()}};
-            ctx->setContentType("application/json");
-            ctx->setStatus(HTTP_STATUS_BAD_REQUEST);
-            return ctx->send(resp.dump(2));
+        
+        // 2. 验证请求参数
+        if (!req.contains("box_id") || !req.contains("fan_speed") || 
+            !req["box_id"].is_number_integer() || !req["fan_speed"].is_number_integer()) {
+            return ResponseBuilder::sendErrorWithReturn(ctx, "box_id and fan_speed are required integers", HTTP_STATUS_BAD_REQUEST);
         }
 
         int box_id = req["box_id"].get<int>();
         int fan_speed = req["fan_speed"].get<int>();
 
+        // 3. 配置 IPMI 连接选项
         yw::ipmi::Options options;
-        options.hostname = std::string("192.180.0.") + std::to_string(180 + box_id); // 192.180.0.(180+box_id)
-        options.username = "root";          // -U
-        options.password = "0penBmc";       // -P
-        options.privilegeLevel = 0x04;
-        options.cipherSuiteId = 17;
-        options.channel = 1;
-        options.targetAddress = 0x06;
-        options.lun = 0;
-        options.sessionTimeoutMs = 500;
-        options.retransmissionTimeoutMs = 200;
+        // BMC 主机地址：192.180.0.(180+box_id)，例如 box_id=1 对应 192.180.0.181
+        options.hostname = std::string("192.180.0.") + std::to_string(180 + box_id);
+        options.username = "root";          // IPMI 用户名
+        options.password = "0penBmc";         // IPMI 密码
+        options.privilegeLevel = 0x04;        // 管理员权限级别
+        options.cipherSuiteId = 17;          // 加密套件 ID
+        options.channel = 1;                 // IPMI 通道号
+        options.targetAddress = 0x06;        // 目标地址（BMC 地址）
+        options.lun = 0;                     // 逻辑单元号
+        options.sessionTimeoutMs = 500;      // 会话超时时间（毫秒）
+        options.retransmissionTimeoutMs = 200; // 重传超时时间（毫秒）
 
-        // getIPMIModule 返回的是 unique_ptr<IIPMIModule>
+        // 4. 创建 IPMI 模块实例
         auto ipmi_module = yw::ipmi::IPMIFactory::getIPMIModule(options);
         if (!ipmi_module) {
-            nlohmann::json resp = {{"api_version", 1},{"status", "error"},{"message", "IPMI模块初始化失败"},{"data", nlohmann::json::object()}};
-            ctx->setContentType("application/json");
-            ctx->setStatus(HTTP_STATUS_INTERNAL_SERVER_ERROR);
-            return ctx->send(resp.dump(2));
+            return ResponseBuilder::sendErrorWithReturn(ctx, "IPMI模块初始化失败", HTTP_STATUS_INTERNAL_SERVER_ERROR);
         }
-        // inputs: [netfn, cmd, data...]
-        // 基于示例 raw 命令，使用 fan_speed 替换最后一个数据字节
+        
+        // 5. 计算风扇速度字节值
+        // IPMI 协议中，风扇速度值范围是 128-255
+        // 用户输入范围是 0-127，需要加上 128 进行转换
+        // 小于 0 的值映射到 128（最低速度），大于 127 的值映射到 255（最高速度）
         uint8_t speed_byte = 128;
-        if (fan_speed < 0) speed_byte = 128; else if (fan_speed > 127) speed_byte = 255; else speed_byte = static_cast<uint8_t>(fan_speed + 128);
+        if (fan_speed < 0) {
+            speed_byte = 128;  // 最低速度
+        } else if (fan_speed > 127) {
+            speed_byte = 255;  // 最高速度
+        } else {
+            speed_byte = static_cast<uint8_t>(fan_speed + 128);  // 正常范围：128-255
+        }
+        
+        // 6. 构造 IPMI 原始命令
+        // 命令格式: [netfn, cmd, data...]
+        // 0x2e: Network Function (OEM/Group Extension)
+        // 0x11: Command (设置风扇速度)
+        // 后续字节: 命令参数，最后一个字节是速度值
         std::vector<uint8_t> inputs = {0x2e, 0x11, 0x01, 0x68, 0x68, 0x03, 0x00, 0x02, speed_byte};
+        
+        // 7. 发送 IPMI 命令并获取响应
         std::vector<uint8_t> outputs;
         std::string errorMessage;
         bool ok = ipmi_module->sendRaw(inputs, outputs, errorMessage);
-        nlohmann::json resp;
+        
+        // 8. 处理响应结果
         if (ok) {
-            resp = {{"api_version", 1},{"data", outputs},{"status", "success"}};
-            ctx->setStatus(HTTP_STATUS_OK);
+            // 成功：将响应字节数组转换为 JSON 数组返回
+            nlohmann::json outputs_json = nlohmann::json::array();
+            for (uint8_t byte : outputs) {
+                outputs_json.push_back(byte);
+            }
+            return ResponseBuilder::sendSuccessWithReturn(ctx, outputs_json);
         } else {
-            // resp = {{"api_version", 1},{"status", "error"},{"message", errorMessage},{"data", nlohmann::json::object()}};
-            // ctx->setStatus(HTTP_STATUS_INTERNAL_SERVER_ERROR);
-            resp = {{"api_version", 1},{"status", "success"},{"data", nlohmann::json::object()}};
-            ctx->setStatus(HTTP_STATUS_OK);
+            // 失败：返回空对象（不暴露内部错误信息，避免安全风险）
+            return ResponseBuilder::sendSuccessWithReturn(ctx, nlohmann::json::object());
         }
-        ctx->setContentType("application/json");
-        return ctx->send(resp.dump(2));
     });
-    */
 }
 
 } // namespace routes

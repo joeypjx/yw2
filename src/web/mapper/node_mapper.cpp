@@ -5,14 +5,16 @@ namespace web {
 namespace mapper {
 
 namespace {
-// 常量定义
+// 常量定义：容器状态
 constexpr const char* CONTAINER_STATE_RUNNING = "RUNNING";
 constexpr const char* CONTAINER_STATE_PAUSED = "PAUSED";
 constexpr const char* CONTAINER_STATE_STOPPED = "STOPPED";
+// 常量定义：节点状态
 constexpr const char* NODE_STATUS_OFFLINE = "offline";
 constexpr const char* NODE_STATUS_OFFLINE_IN_POSITION = "offline_in_position";
 
 // 辅助函数：应用节点状态特殊逻辑
+// 如果节点离线但在位（prst != 0），则状态改为"offline_in_position"
 inline void applyNodeStatusLogic(std::string& status, const std::optional<std::uint8_t>& prst) {
   if (status == NODE_STATUS_OFFLINE && prst.has_value() && prst.value() != 0) {
     status = NODE_STATUS_OFFLINE_IN_POSITION;
@@ -31,6 +33,9 @@ void copyNodeExtBaseFields(DTO& dto, const node::NodeExt& ext) {
 }
 
 // 辅助函数：转换容器统计
+// components: 组件列表
+// timestamp: 时间戳（毫秒）
+// 返回: 容器指标数据（包含总数、运行中、暂停、停止的数量）
 LatestContainerMetrics convertContainerMetrics(const std::vector<monitor::ComponentEntry>& components, std::int64_t timestamp) {
   LatestContainerMetrics metrics;
   metrics.container_count = static_cast<int>(components.size());
@@ -54,6 +59,9 @@ LatestContainerMetrics convertContainerMetrics(const std::vector<monitor::Compon
 }
 
 // 辅助函数：转换 CPU 指标
+// cpu: CPU资源数据
+// timestamp: 时间戳（毫秒）
+// 返回: CPU指标数据（包含使用率、负载、温度、功耗等）
 LatestCpuMetrics convertCpuMetrics(const monitor::CpuResource& cpu, std::int64_t timestamp) {
   LatestCpuMetrics metrics;
   metrics.core_allocated = cpu.core_allocated;
@@ -71,6 +79,9 @@ LatestCpuMetrics convertCpuMetrics(const monitor::CpuResource& cpu, std::int64_t
 }
 
 // 辅助函数：转换内存指标
+// mem: 内存资源数据
+// timestamp: 时间戳（毫秒）
+// 返回: 内存指标数据（包含总量、已用、空闲、使用率）
 LatestMemoryMetrics convertMemoryMetrics(const monitor::MemoryResource& mem, std::int64_t timestamp) {
   LatestMemoryMetrics metrics;
   metrics.total = mem.total;
@@ -82,6 +93,9 @@ LatestMemoryMetrics convertMemoryMetrics(const monitor::MemoryResource& mem, std
 }
 
 // 辅助函数：转换网络指标
+// networks: 网络接口列表
+// timestamp: 时间戳（毫秒）
+// 返回: 网络指标数据（包含所有网络接口的统计信息）
 LatestNetworkMetrics convertNetworkMetrics(const std::vector<monitor::NetworkInterface>& networks, std::int64_t timestamp) {
   LatestNetworkMetrics metrics;
   metrics.network_count = static_cast<int>(networks.size());
@@ -111,6 +125,9 @@ LatestNetworkMetrics convertNetworkMetrics(const std::vector<monitor::NetworkInt
 }
 
 // 辅助函数：转换磁盘指标
+// disks: 磁盘分区列表
+// timestamp: 时间戳（毫秒）
+// 返回: 磁盘指标数据（包含所有磁盘分区的使用情况）
 LatestDiskMetrics convertDiskMetrics(const std::vector<monitor::DiskPartition>& disks, std::int64_t timestamp) {
   LatestDiskMetrics metrics;
   metrics.disk_count = static_cast<int>(disks.size());
@@ -134,6 +151,9 @@ LatestDiskMetrics convertDiskMetrics(const std::vector<monitor::DiskPartition>& 
 }
 
 // 辅助函数：转换 GPU 指标
+// gpus: GPU资源列表
+// timestamp: 时间戳（毫秒）
+// 返回: GPU指标数据（包含所有GPU的使用情况）
 LatestGpuMetrics convertGpuMetrics(const std::vector<monitor::GpuResource>& gpus, std::int64_t timestamp) {
   LatestGpuMetrics metrics;
   metrics.gpu_count = static_cast<int>(gpus.size());
@@ -161,6 +181,9 @@ LatestGpuMetrics convertGpuMetrics(const std::vector<monitor::GpuResource>& gpus
 }
 
 // 辅助函数：转换 BMC 传感器数据
+// sensors: BMC传感器数据映射（传感器名称->传感器数据）
+// timestamp: 时间戳（毫秒）
+// 返回: 传感器指标数据（JSON格式）
 LatestSensorMetrics convertBmcSensors(const std::unordered_map<std::string, bmc::BMCSensorRow>& sensors, std::int64_t timestamp) {
   LatestSensorMetrics metrics;
   metrics.sensor_count = static_cast<int>(sensors.size());
@@ -187,6 +210,11 @@ LatestSensorMetrics convertBmcSensors(const std::unordered_map<std::string, bmc:
 
 } // anonymous namespace
 
+// 将节点扩展信息转换为NodeView对象
+// ext: 节点扩展信息（包含节点数据和更新时间）
+// res: 监控资源数据（可为nullptr）
+// prst: 板卡在位状态（可为nullopt）
+// 返回: NodeView对象（用于/node API响应）
 NodeView toNodeView(const node::NodeExt &ext, const monitor::Resource *res,
                     const std::optional<std::uint8_t> prst) {
   NodeView v;
@@ -230,6 +258,13 @@ NodeView toNodeView(const node::NodeExt &ext, const monitor::Resource *res,
   return v;
 }
 
+// 将节点扩展信息转换为NodeMetrics对象
+// nx: 节点扩展信息（包含节点数据和更新时间）
+// res: 监控资源数据（可为nullptr）
+// now_seconds: 当前时间戳（秒）
+// bmc_sensors: BMC传感器数据映射（可为nullptr）
+// prst: 板卡在位状态（可为nullopt）
+// 返回: NodeMetrics对象（用于/node/metrics API响应）
 NodeMetrics toNodeMetrics(
     const node::NodeExt &nx, const monitor::Resource *res,
     std::int64_t now_seconds,
@@ -269,6 +304,10 @@ NodeMetrics toNodeMetrics(
   return m;
 }
 
+// 将资源窗口数据转换为HistoricalMetricsView对象
+// win: 资源窗口数据（包含节点信息和时序指标）
+// bmc_sensor: BMC传感器数据JSON（可为nullptr）
+// 返回: HistoricalMetricsView对象（用于/node/historical-metrics API响应）
 HistoricalMetricsView
 toHistoricalMetricsView(const monitor::ResourceWindow &win,
                         const nlohmann::json *bmc_sensor) {

@@ -23,14 +23,25 @@ namespace alert {
  * 
  * 负责定期评估告警规则，管理告警状态，并更新数据库
  */
+// 告警引擎类，负责定期评估告警规则，管理告警状态，并更新数据库
 class AlertEngine {
 public:
+    // 构造函数，初始化告警引擎
+    // dbInterface: 数据库查询接口
+    // alertRepo: 告警事件仓库
+    // alertRuleService: 告警规则服务
     AlertEngine(std::shared_ptr<DatabaseQueryInterface> dbInterface,
                 std::shared_ptr<AlertEventRepository> alertRepo,
                 std::shared_ptr<AlertRuleService> alertRuleService);
+    // 析构函数，停止告警引擎
     ~AlertEngine();
+    // 启动告警引擎，开始定期评估告警规则
+    // intervalSeconds: 评估间隔（秒），默认5秒
     void start(int intervalSeconds = 5);
+    // 停止告警引擎
     void stop();
+    // 设置告警推送回调函数
+    // callback: 当创建或更新告警时调用的回调函数
     void setPushCallback(std::function<void(const AlertEvent&)> callback);
 
 private:
@@ -58,15 +69,36 @@ private:
     
     std::function<void(const AlertEvent&)> pushCallback_;
     
+    // 工作线程主循环
     void workerLoop();
+    // 初始化告警引擎，创建必要的服务实例
     void initialize();
+    // 执行一次完整的告警评估
+    // 返回: 本次评估生成的告警数量
     int performEvaluation();
+    // 评估所有启用的告警规则
+    // 返回: 生成的告警事件列表
     std::vector<AlertEvent> evaluateAllRules();
+    // 处理告警状态更新（Pending转Firing，Firing转Resolved）
+    // currentAlerts: 当前评估生成的告警列表
+    // 返回: 状态更新的告警数量
     int processAlertStatusUpdates(const std::vector<AlertEvent>& currentAlerts);
+    // 将告警列表更新到数据库
+    // alerts: 要更新的告警列表
+    // 返回: 成功更新的告警数量
     int updateAlertsToDatabase(const std::vector<AlertEvent>& alerts);
+    // 获取当前所有Firing状态的告警指纹集合
     std::unordered_set<std::string> getCurrentFiringFingerprints();
+    // 获取当前所有Pending状态的告警指纹集合
     std::unordered_set<std::string> getCurrentPendingFingerprints();
+    // 判断Pending告警是否应该转为Firing状态
+    // pendingAlert: 待判断的Pending告警
+    // 返回: 应该转为Firing返回true，否则返回false
     bool shouldTransitionToFiring(const AlertEvent& pendingAlert);
+    // 检查告警对应的节点是否有最近的数据
+    // alert: 告警事件
+    // seconds: 时间窗口（秒），默认10秒
+    // 返回: 有最近数据返回true，否则返回false
     bool hasNodeRecentData(const AlertEvent& alert, int seconds = 10);
 };
 

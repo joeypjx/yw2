@@ -14,11 +14,13 @@ namespace web {
 // /node 列表视图 DTO
 // --------------------
 
+// GPU设备信息
 struct GpuDevice {
     int index = 0;
     std::string name;
 };
 
+// 节点列表视图数据，用于 /node API 响应
 struct NodeView {
     int          box_id = 0;
     int          slot_id = 0;
