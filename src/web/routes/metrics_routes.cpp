@@ -34,17 +34,14 @@ namespace {
     // 辅助函数：获取节点的监控资源
     // host_ip: 节点IP地址
     // monitor_module: 监控模块实例（可为nullptr）
-    // 返回: 监控资源指针，失败或模块不可用时返回nullptr
-    const monitor::Resource* getNodeResource(const std::string& host_ip,
-                                            monitor::IMonitorModule* monitor_module) {
+    // 返回: 监控资源共享指针，失败或模块不可用时返回nullptr
+    std::shared_ptr<const monitor::Resource> getNodeResource(const std::string& host_ip,
+                                                              monitor::IMonitorModule* monitor_module) {
         if (!monitor_module) {
             return nullptr;
         }
         try {
-            auto resPtr = monitor_module->getNodeResource(host_ip);
-            if (resPtr) {
-                return resPtr.get();
-            }
+            return monitor_module->getNodeResource(host_ip);
         } catch (const std::exception& e) {
             spdlog::warn("Failed to get monitor resource for {}: {}", host_ip, e.what());
         }
@@ -101,7 +98,9 @@ void registerMetricsRoutes(hv::HttpService* service,
             for (const auto& node : nodes) {
                 try {
                     // 获取监控资源（可选）
-                    const monitor::Resource* res = getNodeResource(node.host_ip, monitor_module);
+                    // 保持 shared_ptr 生命周期，直到 toNodeMetrics 完成
+                    auto resPtr = getNodeResource(node.host_ip, monitor_module);
+                    const monitor::Resource* res = resPtr ? resPtr.get() : nullptr;
                     
                     // 获取BMC传感器数据（可选）
                     std::unordered_map<std::string, bmc::BMCSensorRow> bmc_sensors = getBMCSensors(node.host_ip, bmc_module);

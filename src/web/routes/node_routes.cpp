@@ -40,14 +40,12 @@ namespace {
                           monitor::IMonitorModule* monitor_module,
                           bmc::IBMCModule* bmc_module) {
         // 获取监控资源
+        // 保持 shared_ptr 生命周期，直到 toNodeView 完成
         const monitor::Resource* res = nullptr;
-        std::optional<monitor::Resource> resHolder;
+        std::shared_ptr<const monitor::Resource> resPtr;
         if (monitor_module) {
-            auto resPtr = monitor_module->getNodeResource(node.host_ip);
-            if (resPtr) {
-                resHolder = *resPtr;
-                res = &(*resHolder);
-            }
+            resPtr = monitor_module->getNodeResource(node.host_ip);
+            res = resPtr ? resPtr.get() : nullptr;
         }
 
         // 获取 BMC prst（如果 bmc_module 可用）
