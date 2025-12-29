@@ -51,7 +51,12 @@ public:
     std::shared_ptr<AlertRule> getAlertRuleById(const std::string& ruleId);
     
     /**
-     * @brief 获取所有告警规则
+     * @brief 获取所有启用的告警规则（从内存缓存）
+     */
+    std::vector<AlertRule> getEnabledAlertRules() const;
+    
+    /**
+     * @brief 获取所有告警规则（从数据库，包括启用和未启用的）
      */
     std::vector<AlertRule> getAllAlertRules() const;
     

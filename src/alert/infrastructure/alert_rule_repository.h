@@ -32,6 +32,8 @@ public:
     virtual std::shared_ptr<AlertRule> getRuleById(const std::string& id) = 0;
     // 获取所有启用的告警规则
     virtual std::vector<AlertRule> getEnabledRules() = 0;
+    // 获取所有告警规则（包括启用和未启用的）
+    virtual std::vector<AlertRule> getAllRules() = 0;
     // 删除告警规则
     virtual bool deleteRule(const std::string& id) = 0;
     // 检查告警规则是否存在
@@ -47,6 +49,7 @@ public:
     bool saveRule(const AlertRule& rule) override;
     std::shared_ptr<AlertRule> getRuleById(const std::string& id) override;
     std::vector<AlertRule> getEnabledRules() override;
+    std::vector<AlertRule> getAllRules() override;
     bool deleteRule(const std::string& id) override;
     bool ruleExists(const std::string& id) override;
 

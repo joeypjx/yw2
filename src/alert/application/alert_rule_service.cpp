@@ -170,9 +170,20 @@ std::shared_ptr<AlertRule> AlertRuleService::getAlertRuleById(const std::string&
 }
 
 // 获取所有内存中的告警规则（仅启用的规则）
-// 返回: 告警规则列表
-std::vector<AlertRule> AlertRuleService::getAllAlertRules() const {
+// 返回: 启用的告警规则列表
+std::vector<AlertRule> AlertRuleService::getEnabledAlertRules() const {
     return rules_;
+}
+
+// 获取所有告警规则（从数据库，包括启用和未启用的）
+// 返回: 所有告警规则列表
+std::vector<AlertRule> AlertRuleService::getAllAlertRules() const {
+    try {
+        return alertRuleRepo_->getAllRules();
+    } catch (const std::exception& e) {
+        spdlog::error("获取所有告警规则失败: {}", e.what());
+        return {};
+    }
 }
 
 // 重新从数据库加载所有启用的告警规则到内存

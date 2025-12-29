@@ -124,6 +124,25 @@ std::vector<AlertRule> DatabaseAlertRuleRepository::getEnabledRules() {
     }
 }
 
+// 获取所有告警规则（包括启用和未启用的）
+// 返回: 所有告警规则列表，按创建时间倒序排列，失败抛出异常
+std::vector<AlertRule> DatabaseAlertRuleRepository::getAllRules() {
+    try {
+        std::string sql = buildSelectSql() + " ORDER BY created_at DESC";
+        
+        QueryResult result = dbInterface_->executeQuery(sql);
+        
+        std::vector<AlertRule> rules;
+        for (const auto& row : result.rows) {
+            rules.push_back(parseRuleFromQueryResult(row));
+        }
+        
+        return rules;
+    } catch (const std::exception& e) {
+        throw std::runtime_error("获取所有告警规则失败: " + std::string(e.what()));
+    }
+}
+
 // 删除告警规则
 // id: 要删除的告警规则ID
 // 返回: 删除成功返回true，失败抛出异常

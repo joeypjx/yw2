@@ -191,8 +191,8 @@ int AlertEngine::performEvaluation() {
 std::vector<AlertEvent> AlertEngine::evaluateAllRules() {
     std::vector<AlertEvent> allAlerts;
                         
-    // 从 AlertRuleService 获取所有规则
-    auto rules = alertRuleService_->getAllAlertRules();
+    // 从 AlertRuleService 获取所有启用的规则
+    auto rules = alertRuleService_->getEnabledAlertRules();
     
     for (size_t i = 0; i < rules.size(); ++i) {
         const auto& rule = rules[i];
@@ -435,9 +435,9 @@ bool AlertEngine::shouldTransitionToFiring(const AlertEvent& pendingAlert) {
         std::string alertName = alertNameIt->second;
         spdlog::debug("检查Pending告警是否应该转为Firing: {} (指纹: {})", alertName, pendingAlert.getFingerprint());
         
-        // 查找对应的告警规则
+        // 查找对应的告警规则（从启用的规则中查找）
         AlertRule* rule = nullptr;
-        auto rules = alertRuleService_->getAllAlertRules();
+        auto rules = alertRuleService_->getEnabledAlertRules();
         for (auto& r : rules) {
             if (r.getAlertName() == alertName) {
                 rule = &r;
