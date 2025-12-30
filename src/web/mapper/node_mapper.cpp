@@ -37,9 +37,18 @@ inline void applyNodeStatusLogic(std::string& status, const std::optional<std::u
 template<typename DTO>
 void copyNodeExtBaseFields(DTO& dto, const node::NodeExt& ext) {
   dto.box_id = ext.box_id;
-  dto.cpu_id = ext.cpu_id;
   dto.slot_id = ext.slot_id;
+  dto.cpu_id = ext.cpu_id;
+  dto.srio_id = ext.srio_id;
   dto.host_ip = ext.host_ip;
+  dto.hostname = ext.hostname;
+  dto.service_port = ext.service_port;
+  dto.box_type = ext.box_type;
+  dto.board_type = ext.board_type;
+  dto.cpu_type = ext.cpu_type;
+  dto.os_type = ext.os_type;
+  dto.resource_type = ext.resource_type;
+  dto.cpu_arch = ext.cpu_arch;
   dto.status = ext.status;
   dto.updated_at = ext.updated_at;
 }
