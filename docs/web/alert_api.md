@@ -8,6 +8,7 @@
 - 告警规则管理（增删改查）
 - 告警事件查询
 - 告警统计
+- 组件状态告警上报
 
 ## 接口列表
 
@@ -319,7 +320,7 @@ POST /alarm/rules/rule_001/delete
 | end_time | string | 否 | 结束时间 |
 | stack_name | string | 否 | 堆栈名称 |
 | component_name | string | 否 | 组件名称 |
-| limit | integer | 否 | 返回数量限制，默认100，范围1-1000 |
+| limit | integer | 否 | 返回数量限制，默认10000，范围1-100000 |
 
 **请求示例：**
 
@@ -489,6 +490,97 @@ GET /alarm/count
 |--------|------|------|
 | count | integer | 告警事件总数 |
 
+### 9. 组件状态告警上报
+
+**接口路径：** `POST /alert/component`
+
+**功能描述：** 上报业务组件状态异常告警。当业务组件（如容器、进程等）状态异常时，通过此接口创建告警事件。
+
+**请求体：**
+
+```json
+{
+  "host_ip": "192.168.10.58",
+  "instance_id": "instance_001",
+  "uuid": "550e8400-e29b-41d4-a716-446655440000",
+  "index": 0,
+  "status": "异常",
+  "link_name": "业务栈名称",
+  "name": "组件名称"
+}
+```
+
+**请求参数说明：**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| host_ip | string | 是 | 节点IP地址 |
+| instance_id | string | 是 | 实例ID |
+| uuid | string | 否 | 组件UUID |
+| index | integer | 否 | 组件索引，默认0 |
+| status | string | 否 | 组件状态，默认"unknown" |
+| link_name | string | 否 | 业务栈名称（如果为空，则使用instance_name） |
+| instance_name | string | 否 | 实例名称（当link_name为空时使用） |
+| name | string | 否 | 组件名称 |
+
+**请求示例：**
+
+```bash
+POST /alert/component
+Content-Type: application/json
+
+{
+  "host_ip": "192.168.10.58",
+  "instance_id": "container_001",
+  "uuid": "550e8400-e29b-41d4-a716-446655440000",
+  "index": 0,
+  "status": "异常",
+  "link_name": "web服务栈",
+  "name": "nginx容器"
+}
+```
+
+**响应格式：**
+
+成功响应：
+```json
+{
+  "api_version": 1,
+  "status": "success",
+  "data": {
+    "id": "alert_1234567890_123456_12345",
+    "fingerprint": "业务组件状态异常|host_ip=192.168.10.58|instance_id=container_001|uuid=550e8400-e29b-41d4-a716-446655440000|index=0",
+    "message": "Component alert created successfully"
+  }
+}
+```
+
+**错误响应：**
+
+```json
+{
+  "api_version": 1,
+  "status": "error",
+  "data": {}
+}
+```
+
+**响应字段说明：**
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| id | string | 告警事件ID |
+| fingerprint | string | 告警指纹（用于唯一标识告警） |
+| message | string | 操作结果消息 |
+
+**注意事项：**
+
+1. `host_ip` 和 `instance_id` 为必填字段，缺少任一字段将返回400错误
+2. `link_name` 和 `instance_name` 至少需要提供一个，如果 `link_name` 为空，系统会自动使用 `instance_name`
+3. 如果相同指纹的告警已存在，系统会更新现有告警的状态为 `firing`，而不是创建新告警
+4. 告警指纹格式：`业务组件状态异常|host_ip={host_ip}|instance_id={instance_id}|uuid={uuid}|index={index}`
+5. 创建的告警类型为"业务链路"，严重程度为"严重"，状态直接设为 `firing`
+
 ## 注意事项
 
 1. 告警规则ID必须唯一，告警规则名称（alert_name）也必须唯一
@@ -503,6 +595,8 @@ GET /alarm/count
 7. 告警事件ID由规则ID和标签组合生成，格式为：`规则ID|标签1=值1|标签2=值2|...`
 8. 告警事件的fingerprint与ID相同，用于唯一标识告警
 9. 查询告警事件时，如果不提供任何过滤条件，默认返回除pending状态外的所有告警
-10. limit参数用于限制返回的告警数量，防止返回过多数据，默认100，最大1000
+10. limit参数用于限制返回的告警数量，防止返回过多数据，默认10000，最大100000
 11. 告警规则更新后，告警引擎会在下次评估周期重新评估该规则
 12. 删除告警规则时，响应中只返回规则ID，不包含message字段
+13. 组件状态告警通过 `/alert/component` 接口上报，创建的告警类型为"业务链路"，严重程度为"严重"，状态直接设为 `firing`
+14. 组件告警的指纹格式为：`业务组件状态异常|host_ip={host_ip}|instance_id={instance_id}|uuid={uuid}|index={index}`，相同指纹的告警会被去重

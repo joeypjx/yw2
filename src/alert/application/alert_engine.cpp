@@ -14,7 +14,6 @@
 #include "alert_engine.h"
 #include "alert_creation_factory.h"
 #include "alert_rule_service.h"
-#include "alert_query_service.h"
 #include "../domain/alert_rule_evaluator.h"
 #include "utils/json_config.h"
 #include "utils/duration_utils.h"
@@ -31,16 +30,15 @@ namespace alert {
 // dbInterface: 数据库查询接口，不能为空
 // alertRepo: 告警事件仓库，不能为空
 // alertRuleService: 告警规则服务，不能为空
+// alertFactory: 告警创建工厂（可选，如果不提供则内部创建）
 // 初始化告警工厂和查询服务，设置默认评估间隔为5秒
 AlertEngine::AlertEngine(std::shared_ptr<DatabaseQueryInterface> dbInterface,
                          std::shared_ptr<AlertEventRepository> alertRepo,
-                         std::shared_ptr<AlertRuleService> alertRuleService)
+                         std::shared_ptr<AlertRuleService> alertRuleService,
+                         std::shared_ptr<AlertCreationFactory> alertFactory)
     : dbInterface_(dbInterface), alertRepo_(alertRepo),
       alertRuleService_(alertRuleService),
-      running_(false), shouldStop_(false), intervalSeconds_(5),
-      totalEvaluations_(0), totalAlertsGenerated_(0),
-      lastEvaluationTime_(std::chrono::system_clock::now()),
-      startTime_(std::chrono::system_clock::now()) {
+      running_(false), shouldStop_(false), intervalSeconds_(5) {
     
     if (!dbInterface_) {
         throw std::invalid_argument("DatabaseQueryInterface不能为空");
@@ -52,9 +50,12 @@ AlertEngine::AlertEngine(std::shared_ptr<DatabaseQueryInterface> dbInterface,
         throw std::invalid_argument("AlertRuleService不能为空");
     }
     
-    // 初始化服务类
-    alertFactory_ = std::make_shared<AlertCreationFactory>(alertRepo_, dbInterface_);
-    alertQueryService_ = std::make_shared<AlertQueryService>(alertRepo_);
+    // 使用传入的工厂实例，如果没有则创建新的
+    if (alertFactory) {
+        alertFactory_ = alertFactory;
+    } else {
+        alertFactory_ = std::make_shared<AlertCreationFactory>(alertRepo_, dbInterface_);
+    }
 }
 
 // 析构函数，自动停止告警引擎
@@ -167,11 +168,6 @@ int AlertEngine::performEvaluation() {
         // 3. 更新告警到数据库
         int updatedCount = updateAlertsToDatabase(currentAlerts);
         spdlog::debug("更新了 {} 个告警到数据库", updatedCount);
-        
-        // 更新统计信息
-        totalEvaluations_++;
-        totalAlertsGenerated_ += currentAlerts.size();
-        lastEvaluationTime_ = std::chrono::system_clock::now();
         
         auto endTime = std::chrono::system_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();

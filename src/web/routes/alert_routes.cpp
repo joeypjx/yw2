@@ -18,6 +18,7 @@
 #include "alert_routes.h"
 #include "utils/response_builder.h"
 #include "alert/alert.h"
+#include "domain/alert_event.h"
 
 namespace yw {
 namespace web {
@@ -79,27 +80,13 @@ namespace {
             filters.component_name = ResponseBuilder::getParam(params, "component_name");
         }
         
-        // 验证并设置 limit（默认100，范围1-1000）
-        int limit = ResponseBuilder::getIntParam(params, "limit", 100);
-        filters.limit = std::max(1, std::min(1000, limit));
+        // 验证并设置 limit（默认10000，范围1-100000）
+        int limit = ResponseBuilder::getIntParam(params, "limit", 10000);
+        filters.limit = std::max(1, std::min(100000, limit));
         
         return filters;
     }
 
-    // 辅助函数：限制 JSON 数组大小
-    // array: 要限制的JSON数组
-    // maxSize: 最大元素数量
-    // 返回: 限制后的JSON数组（如果原数组小于等于maxSize则返回原数组）
-    json limitArraySize(const json& array, size_t maxSize) {
-        if (!array.is_array() || array.size() <= maxSize) {
-            return array;
-        }
-        json limited = json::array();
-        for (size_t i = 0; i < maxSize; ++i) {
-            limited.push_back(array[i]);
-        }
-        return limited;
-    }
 }
 
 // 注册告警相关的HTTP路由
@@ -227,12 +214,7 @@ void registerAlertRoutes(hv::HttpService* service,
             yw::alert::AlertFilters filters = buildAlertFilters(params);
             
             // 使用统一的过滤接口查询告警
-            json alertsArray;
-            if (!filters.hasAnyFilter()) {
-                alertsArray = limitArraySize(alertModule->getAlertsExceptPending(), filters.limit);
-            } else {
-                alertsArray = alertModule->getAlertsByFilters(filters);
-            }
+            json alertsArray = alertModule->getAlertsByFilters(filters);
             
             return ResponseBuilder::sendSuccessWithReturn(ctx, alertsArray);
 
@@ -272,6 +254,57 @@ void registerAlertRoutes(hv::HttpService* service,
             json data = {{"count", count}};
             return ResponseBuilder::sendSuccessWithReturn(ctx, data);
 
+        } catch (const std::exception& e) {
+            return ResponseBuilder::sendErrorWithReturn(ctx, 
+                                                       "internal error: " + std::string(e.what()));
+        }
+    });
+
+    // POST /alert/component - 组件状态告警上报
+    service->POST("/alert/component", [alertModule](const HttpContextPtr& ctx) {
+        try {
+            auto body = ctx->body();
+            if (body.empty()) {
+                return ResponseBuilder::sendErrorWithReturn(ctx, 
+                                                           "empty request body", 
+                                                           HTTP_STATUS_BAD_REQUEST);
+            }
+
+            auto j = nlohmann::json::parse(body);
+            
+            // 提取组件信息
+            std::string hostIp = j.value("host_ip", "");
+            std::string instanceId = j.value("instance_id", "");
+            std::string uuid = j.value("uuid", "");
+            int index = j.value("index", 0);
+            std::string status = j.value("status", "unknown");
+            std::string stack_name = j.value("link_name", "");
+            std::string component_name = j.value("name", "");
+            
+            // 验证必需字段
+            if (hostIp.empty() || instanceId.empty()) {
+                return ResponseBuilder::sendErrorWithReturn(ctx, 
+                                                           "host_ip and instance_id are required", 
+                                                           HTTP_STATUS_BAD_REQUEST);
+            }
+            
+            // 使用IAlertModule创建组件告警
+            auto alert = alertModule->createAlertFromComponent(hostIp, instanceId, uuid, index, status, stack_name, component_name);
+            
+            if (alert) {
+                json data = {{"id", alert->getId()}, 
+                            {"fingerprint", alert->getFingerprint()},
+                            {"message", "Component alert created successfully"}};
+                return ResponseBuilder::sendSuccessWithReturn(ctx, data);
+            } else {
+                return ResponseBuilder::sendErrorWithReturn(ctx, 
+                                                           "failed to create component alert");
+            }
+
+        } catch (const json::exception& e) {
+            return ResponseBuilder::sendErrorWithReturn(ctx, 
+                                                       "invalid JSON format: " + std::string(e.what()), 
+                                                       HTTP_STATUS_BAD_REQUEST);
         } catch (const std::exception& e) {
             return ResponseBuilder::sendErrorWithReturn(ctx, 
                                                        "internal error: " + std::string(e.what()));

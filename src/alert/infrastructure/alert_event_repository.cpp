@@ -3,8 +3,8 @@
 // 告警事件仓库（DatabaseAlertEventRepository）的实现文件，负责告警事件的数据持久化。
 // 主要功能包括：
 // 1. 事件持久化：将告警事件保存到PostgreSQL数据库（如果已存在则更新，否则插入）
-// 2. 事件查询：从数据库查询告警事件（按ID、按状态、按主机IP、按机箱号、按过滤条件等）
-// 3. 事件删除：从数据库删除指定的告警事件（通常用于清理已解决的告警）
+// 2. 事件查询：从数据库查询告警事件（按ID、按指纹、按状态和类型、按过滤条件等）
+// 3. 事件删除：从数据库删除指定指纹和状态的告警事件（通常用于清理已解决的告警）
 // 4. SQL构建：构建INSERT、UPDATE、SELECT、DELETE等SQL语句，支持复杂的过滤条件
 // 5. 数据转换：在数据库记录和AlertEvent对象之间进行转换（包括JSON字段的序列化和反序列化）
 // 6. 错误处理：捕获和记录数据库操作异常，提供友好的错误信息
@@ -151,27 +151,6 @@ std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByFingerprintAndS
     }
 }
 
-// 根据状态获取告警事件列表（限制5000条）
-// status: 告警状态（pending/firing/resolved）
-// 返回: 匹配状态的告警事件列表，失败抛出异常
-std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByStatus(const std::string& status) {
-    try {
-        std::string sql = buildSelectSql() + " WHERE status = $1 ORDER BY created_at DESC LIMIT 5000";
-        std::vector<std::string> params = {status};
-        
-        QueryResult result = dbInterface_->executeQuery(sql, params);
-        
-        std::vector<AlertEvent> alerts;
-        for (const auto& row : result.rows) {
-            alerts.push_back(parseAlertFromQueryResult(row));
-        }
-        
-        return alerts;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("根据状态获取告警失败: " + std::string(e.what()));
-    }
-}
-
 // 根据状态和类型获取告警事件列表（限制5000条）
 // status: 告警状态（pending/firing/resolved）
 // alertType: 告警类型（如"硬件状态"、"业务链路"、"系统告警"）
@@ -194,175 +173,6 @@ std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByStatusAndType(c
     }
 }
 
-// 根据节点IP获取告警事件列表（限制5000条）
-// hostIp: 节点IP地址
-// 返回: 匹配IP地址的告警事件列表，失败抛出异常
-std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByHostIp(const std::string& hostIp) {
-    try {
-        // 从 labels JSON 中查询 host_ip
-        std::string sql = buildSelectSql() + " WHERE labels->>'host_ip' = $1 ORDER BY created_at DESC LIMIT 5000";
-        std::vector<std::string> params = {hostIp};
-        
-        QueryResult result = dbInterface_->executeQuery(sql, params);
-        
-        std::vector<AlertEvent> alerts;
-        for (const auto& row : result.rows) {
-            alerts.push_back(parseAlertFromQueryResult(row));
-        }
-        
-        return alerts;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("根据节点IP获取告警失败: " + std::string(e.what()));
-    }
-}
-
-// 根据机箱号获取告警事件列表（限制5000条）
-// boxId: 机箱编号（1-9）
-// 返回: 匹配机箱号的告警事件列表，失败抛出异常
-std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByBoxId(int boxId) {
-    try {
-        // 从 labels JSON 中查询 box_id
-        std::string sql = buildSelectSql() + " WHERE labels->>'box_id' = $1 ORDER BY created_at DESC LIMIT 5000";
-        std::vector<std::string> params = {std::to_string(boxId)};
-        
-        QueryResult result = dbInterface_->executeQuery(sql, params);
-        
-        std::vector<AlertEvent> alerts;
-        for (const auto& row : result.rows) {
-            alerts.push_back(parseAlertFromQueryResult(row));
-        }
-        
-        return alerts;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("根据机箱号获取告警失败: " + std::string(e.what()));
-    }
-}
-
-std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsBySlotId(int slotId) {
-    try {
-        // 从 labels JSON 中查询 slot_id
-        std::string sql = buildSelectSql() + " WHERE labels->>'slot_id' = $1 ORDER BY created_at DESC LIMIT 5000";
-        std::vector<std::string> params = {std::to_string(slotId)};
-        
-        QueryResult result = dbInterface_->executeQuery(sql, params);
-        
-        std::vector<AlertEvent> alerts;
-        for (const auto& row : result.rows) {
-            alerts.push_back(parseAlertFromQueryResult(row));
-        }
-        
-        return alerts;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("根据板卡号获取告警失败: " + std::string(e.what()));
-    }
-}
-
-// 根据时间范围获取告警事件列表（限制5000条）
-// startTime: 开始时间（PostgreSQL timestamp格式）
-// endTime: 结束时间（PostgreSQL timestamp格式）
-// 返回: 在指定时间范围内创建的告警事件列表，失败抛出异常
-std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByTimeRange(const std::string& startTime, const std::string& endTime) {
-    try {
-        // 根据 created_at 时间范围查询告警
-        std::string sql = buildSelectSql() + " WHERE created_at >= $1::timestamp AND created_at <= $2::timestamp ORDER BY created_at DESC LIMIT 5000";
-        std::vector<std::string> params = {startTime, endTime};
-        
-        QueryResult result = dbInterface_->executeQuery(sql, params);
-        
-        std::vector<AlertEvent> alerts;
-        for (const auto& row : result.rows) {
-            alerts.push_back(parseAlertFromQueryResult(row));
-        }
-        
-        return alerts;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("根据时间范围获取告警失败: " + std::string(e.what()));
-    }
-}
-
-// 根据告警类型获取告警事件列表（限制5000条）
-// alertType: 告警类型（如"硬件状态"、"业务链路"、"系统告警"）
-// 返回: 匹配类型的告警事件列表，失败抛出异常
-std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByAlertType(const std::string& alertType) {
-    try {
-        std::string sql = buildSelectSql() + " WHERE labels->>'alert_type' = $1 ORDER BY created_at DESC LIMIT 5000";
-        std::vector<std::string> params = {alertType};
-        
-        QueryResult result = dbInterface_->executeQuery(sql, params);
-        
-        std::vector<AlertEvent> alerts;
-        for (const auto& row : result.rows) {
-            alerts.push_back(parseAlertFromQueryResult(row));
-        }
-        
-        return alerts;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("根据告警类型获取告警失败: " + std::string(e.what()));
-    }
-}
-
-// 根据严重程度获取告警事件列表（限制5000条）
-// severity: 严重程度（如"critical"、"warning"、"info"）
-// 返回: 匹配严重程度的告警事件列表，失败抛出异常
-std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsBySeverity(const std::string& severity) {
-    try {
-        std::string sql = buildSelectSql() + " WHERE labels->>'severity' = $1 ORDER BY created_at DESC LIMIT 5000";
-        std::vector<std::string> params = {severity};
-        
-        QueryResult result = dbInterface_->executeQuery(sql, params);
-        
-        std::vector<AlertEvent> alerts;
-        for (const auto& row : result.rows) {
-            alerts.push_back(parseAlertFromQueryResult(row));
-        }
-        
-        return alerts;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("根据严重程度获取告警失败: " + std::string(e.what()));
-    }
-}
-
-// 根据描述内容获取告警事件列表（模糊匹配，限制5000条）
-// description: 描述关键词，支持LIKE模糊匹配
-// 返回: 描述中包含关键词的告警事件列表，失败抛出异常
-std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByDescription(const std::string& description) {
-    try {
-        // 从 annotations JSON 中查询 description，支持模糊匹配
-        std::string sql = buildSelectSql() + " WHERE annotations->>'description' LIKE $1 ORDER BY created_at DESC LIMIT 5000";
-        std::vector<std::string> params = {"%" + description + "%"};
-        
-        QueryResult result = dbInterface_->executeQuery(sql, params);
-        
-        std::vector<AlertEvent> alerts;
-        for (const auto& row : result.rows) {
-            alerts.push_back(parseAlertFromQueryResult(row));
-        }
-        
-        return alerts;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("根据描述获取告警失败: " + std::string(e.what()));
-    }
-}
-
-// 获取除Pending状态外的所有告警事件（即Firing和Resolved状态，限制5000条）
-// 返回: Firing和Resolved状态的告警事件列表，失败抛出异常
-std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsExceptPending() {
-    try {
-        std::string sql = buildSelectSql() + " WHERE status IN ('firing', 'resolved') ORDER BY created_at DESC LIMIT 5000";
-        
-        QueryResult result = dbInterface_->executeQuery(sql);
-        
-        std::vector<AlertEvent> alerts;
-        for (const auto& row : result.rows) {
-            alerts.push_back(parseAlertFromQueryResult(row));
-        }
-        
-        return alerts;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("获取除Pending外的告警失败: " + std::string(e.what()));
-    }
-}
-
 // 根据多个过滤条件组合查询告警事件
 // filters: 过滤条件对象，包含状态、类型、时间范围等多个条件
 // 返回: 匹配所有过滤条件的告警事件列表，失败抛出异常
@@ -380,8 +190,8 @@ std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByFilters(const A
         
         // 添加 LIMIT
         int limit = filters.limit;
-        if (limit <= 0) limit = 100;
-        if (limit > 1000) limit = 1000;
+        if (limit <= 0) limit = 10000;
+        if (limit > 100000) limit = 100000;
         sql += " LIMIT " + std::to_string(limit);
         
         // 执行查询
@@ -395,18 +205,6 @@ std::vector<AlertEvent> DatabaseAlertEventRepository::getAlertsByFilters(const A
         return alerts;
     } catch (const std::exception& e) {
         throw std::runtime_error("根据过滤条件获取告警失败: " + std::string(e.what()));
-    }
-}
-
-bool DatabaseAlertEventRepository::deleteAlert(const std::string& id) {
-    try {
-        std::string sql = buildDeleteSql();
-        std::vector<std::string> params = {id};
-        
-        QueryResult result = dbInterface_->executeQuery(sql, params);
-        return true;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("删除告警失败: " + std::string(e.what()));
     }
 }
 
@@ -492,11 +290,11 @@ bool DatabaseAlertEventRepository::alertExists(const std::string& id) {
     }
 }
 
-// 获取告警事件总数
-// 返回: 告警事件总数，失败抛出异常
+// 获取告警事件总数（排除pending状态）
+// 返回: 告警事件总数（firing和resolved状态），失败抛出异常
 size_t DatabaseAlertEventRepository::getAlertCount() {
     try {
-        std::string sql = "SELECT COUNT(*) FROM alert_event";
+        std::string sql = "SELECT COUNT(*) FROM alert_event WHERE status IN ('firing', 'resolved')";
         
         QueryResult result = dbInterface_->executeQuery(sql);
         if (!result.empty()) {
@@ -599,12 +397,6 @@ std::string DatabaseAlertEventRepository::buildSelectSql() {
     )";
 }
 
-// 构建删除告警事件的SQL语句
-// 返回: DELETE SQL语句字符串
-std::string DatabaseAlertEventRepository::buildDeleteSql() {
-    return "DELETE FROM alert_event WHERE id = $1";
-}
-
 // 根据过滤条件构建WHERE子句和参数列表
 // filters: 过滤条件对象
 // 返回: (WHERE子句字符串, 参数列表) 的pair
@@ -617,6 +409,9 @@ std::pair<std::string, std::vector<std::string>> DatabaseAlertEventRepository::b
     if (!filters.status.empty()) {
         conditions.push_back("status = $" + std::to_string(paramIndex++));
         params.push_back(filters.status);
+    } else {
+        // 如果未指定状态，默认排除pending状态
+        conditions.push_back("status IN ('firing', 'resolved')");
     }
     
     // 严重程度过滤

@@ -16,6 +16,7 @@
 #include "application/alert_rule_service.h"
 #include "application/alert_query_service.h"
 #include "application/alert_creation_factory.h"
+#include "domain/alert_event.h"
 #include "infrastructure/database_query_interface.h"
 #include "infrastructure/alert_rule_repository.h"
 #include "infrastructure/alert_event_repository.h"
@@ -140,12 +141,6 @@ public:
     // 告警查询
     //-------------------------------------------------------------------------
     
-    nlohmann::json getAlertsByStatus(const std::string& status) override {
-        if (!queryService_) return nlohmann::json::array();
-        auto alerts = queryService_->getAlertsByStatus(status);
-        return alertsToJson(alerts);
-    }
-    
     nlohmann::json getAlertsByFilters(const AlertFilters& filters) override {
         if (!queryService_) return nlohmann::json::array();
         auto alerts = queryService_->getAlertsByFilters(filters);
@@ -157,12 +152,6 @@ public:
         auto alert = queryService_->getAlertById(alertId);
         if (!alert) return nlohmann::json();
         return alert->toJson();
-    }
-    
-    nlohmann::json getAlertsExceptPending() override {
-        if (!queryService_) return nlohmann::json::array();
-        auto alerts = queryService_->getAlertsExceptPending();
-        return alertsToJson(alerts);
     }
 
     //-------------------------------------------------------------------------
@@ -195,16 +184,28 @@ public:
     // 告警创建
     //-------------------------------------------------------------------------
     
-    nlohmann::json createBoardTypeChangeAlert(
+    std::shared_ptr<AlertEvent> createBoardTypeChangeAlert(
         int box_id, int slot_id,
         const std::string& cached_board_type,
         const std::string& new_board_type) override {
         
-        if (!creationFactory_) return nlohmann::json();
-        auto alert = creationFactory_->createBoardTypeChangeAlert(
+        if (!creationFactory_) return nullptr;
+        return creationFactory_->createBoardTypeChangeAlert(
             box_id, slot_id, cached_board_type, new_board_type);
-        if (!alert) return nlohmann::json();
-        return alert->toJson();
+    }
+    
+    std::shared_ptr<AlertEvent> createAlertFromComponent(
+        const std::string& hostIp,
+        const std::string& instanceId,
+        const std::string& uuid,
+        int index,
+        const std::string& status,
+        const std::string& stack_name,
+        const std::string& component_name) override {
+        
+        if (!creationFactory_) return nullptr;
+        return creationFactory_->createAlertFromComponent(
+            hostIp, instanceId, uuid, index, status, stack_name, component_name);
     }
 
 private:
@@ -249,9 +250,9 @@ std::shared_ptr<IAlertModule> AlertFactory::createAlertModule(
         auto creationFactory = std::make_shared<AlertCreationFactory>(alertRepo, dbInterface);
         
         // 创建 AlertEngine（仅用于评估引擎功能）
-        // 传入共享的 ruleService，确保 AlertEngine 和 AlertModuleAdapter 使用同一个实例
+        // 传入共享的 ruleService 和 creationFactory，确保 AlertEngine 和 AlertModuleAdapter 使用同一个实例
         auto engine = std::make_shared<AlertEngine>(
-            dbInterface, alertRepo, ruleService);
+            dbInterface, alertRepo, ruleService, creationFactory);
         
         // 返回适配器，直接使用服务类
         return std::make_shared<AlertModuleAdapter>(

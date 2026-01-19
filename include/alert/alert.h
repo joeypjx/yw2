@@ -26,6 +26,7 @@ namespace alert {
 class Alert;
 class AlertRule;
 class AlertEngine;
+class AlertEvent;
 
 //=============================================================================
 // 告警模块接口
@@ -104,13 +105,6 @@ public:
     //-------------------------------------------------------------------------
     
     /**
-     * @brief 根据状态获取告警
-     * @param status 告警状态 (pending/firing/resolved)
-     * @return 告警列表的JSON数组
-     */
-    virtual nlohmann::json getAlertsByStatus(const std::string& status) = 0;
-    
-    /**
      * @brief 根据多条件过滤获取告警
      * @param filters 过滤条件
      * @return 告警列表的JSON数组
@@ -123,12 +117,6 @@ public:
      * @return 告警的JSON表示，未找到返回空JSON
      */
     virtual nlohmann::json getAlertById(const std::string& alertId) = 0;
-    
-    /**
-     * @brief 获取除 pending 状态外的所有告警
-     * @return 告警列表的JSON数组
-     */
-    virtual nlohmann::json getAlertsExceptPending() = 0;
 
     //-------------------------------------------------------------------------
     // 统计信息
@@ -160,12 +148,32 @@ public:
      * @param slot_id 槽位ID
      * @param cached_board_type 缓存的板卡类型
      * @param new_board_type 新的板卡类型
-     * @return 创建的告警JSON，失败返回空JSON
+     * @return 创建的告警事件指针，失败返回nullptr
      */
-    virtual nlohmann::json createBoardTypeChangeAlert(
+    virtual std::shared_ptr<AlertEvent> createBoardTypeChangeAlert(
         int box_id, int slot_id,
         const std::string& cached_board_type,
         const std::string& new_board_type) = 0;
+    
+    /**
+     * @brief 创建业务组件状态异常告警
+     * @param hostIp 主机IP
+     * @param instanceId 实例ID
+     * @param uuid 组件UUID
+     * @param index 组件索引
+     * @param status 组件状态
+     * @param stack_name 栈名称
+     * @param component_name 组件名称
+     * @return 创建的告警事件指针，失败返回nullptr
+     */
+    virtual std::shared_ptr<AlertEvent> createAlertFromComponent(
+        const std::string& hostIp,
+        const std::string& instanceId,
+        const std::string& uuid,
+        int index,
+        const std::string& status,
+        const std::string& stack_name,
+        const std::string& component_name) = 0;
 };
 
 //=============================================================================

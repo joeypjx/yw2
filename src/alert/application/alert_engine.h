@@ -19,7 +19,6 @@
 #include "../infrastructure/database_query_interface.h"
 #include "alert_creation_factory.h"
 #include "alert_rule_service.h"
-#include "alert_query_service.h"
 #include <vector>
 #include <memory>
 #include <thread>
@@ -43,9 +42,11 @@ public:
     // dbInterface: 数据库查询接口
     // alertRepo: 告警事件仓库
     // alertRuleService: 告警规则服务
+    // alertFactory: 告警创建工厂（可选，如果不提供则内部创建）
     AlertEngine(std::shared_ptr<DatabaseQueryInterface> dbInterface,
                 std::shared_ptr<AlertEventRepository> alertRepo,
-                std::shared_ptr<AlertRuleService> alertRuleService);
+                std::shared_ptr<AlertRuleService> alertRuleService,
+                std::shared_ptr<AlertCreationFactory> alertFactory = nullptr);
     // 析构函数，停止告警引擎
     ~AlertEngine();
     // 启动告警引擎，开始定期评估告警规则
@@ -64,7 +65,6 @@ private:
     // 服务类实例
     std::shared_ptr<AlertCreationFactory> alertFactory_;
     std::shared_ptr<AlertRuleService> alertRuleService_;
-    std::shared_ptr<AlertQueryService> alertQueryService_;
     
     // 运行状态
     std::atomic<bool> running_;
@@ -73,12 +73,6 @@ private:
     
     // 评估间隔
     int intervalSeconds_;
-    
-    // 统计信息
-    std::atomic<int> totalEvaluations_;
-    std::atomic<int> totalAlertsGenerated_;
-    std::chrono::system_clock::time_point lastEvaluationTime_;
-    std::chrono::system_clock::time_point startTime_;
     
     std::function<void(const AlertEvent&)> pushCallback_;
     
