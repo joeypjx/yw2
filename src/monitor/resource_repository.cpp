@@ -15,6 +15,9 @@
 #include "utils/postgresql_connection_pool.h"
 #include <pqxx/pqxx>
 #include <unordered_set>
+#include <thread>
+#include <chrono>
+#include <spdlog/spdlog.h>
 
 namespace yw {
 namespace monitor {
@@ -35,15 +38,28 @@ ResourceRepository::~ResourceRepository() = default;
 // 保存资源数据到数据库
 // data: 资源数据对象（包含CPU、内存、磁盘、网络、GPU等指标）
 // 将数据插入到对应的时序表中（resource_alive, resource_cpu, resource_memory等）
+// 包含重试机制以应对连接失效和临时网络问题
 void ResourceRepository::save(const Resource& data) {
-    // 从连接池获取连接
-    yw::utils::ConnectionGuard guard(*connectionPool_);
-    auto conn = guard.get();
-    if (!conn) {
-        throw std::runtime_error("无法从连接池获取连接");
-    }
+    const int MAX_RETRIES = 3;
+    int retry_count = 0;
+    std::exception_ptr last_exception;
     
-    pqxx::work tx{*conn};
+    while (retry_count < MAX_RETRIES) {
+        try {
+            // 从连接池获取连接
+            yw::utils::ConnectionGuard guard(*connectionPool_);
+            auto conn = guard.get();
+            if (!conn) {
+                throw std::runtime_error("无法从连接池获取连接");
+            }
+            
+            // 在使用前验证连接有效性
+            if (!connectionPool_->isConnectionValid(conn)) {
+                spdlog::warn("获取的连接无效，尝试重新获取");
+                throw std::runtime_error("获取的连接无效");
+            }
+            
+            pqxx::work tx{*conn};
 
     // 插入节点在线心跳记录到resource_alive表
     tx.exec_params(
@@ -144,7 +160,58 @@ void ResourceRepository::save(const Resource& data) {
         );
     }
 
-    tx.commit();
+            tx.commit();
+            // 成功保存，返回
+            return;
+            
+        } catch (const pqxx::broken_connection& e) {
+            // 数据库连接断开，可以重试
+            last_exception = std::current_exception();
+            retry_count++;
+            spdlog::error("数据库连接断开 (节点: {}): {}, 重试 {}/{}", 
+                         data.host_ip, e.what(), retry_count, MAX_RETRIES);
+            
+            if (retry_count >= MAX_RETRIES) {
+                spdlog::error("保存资源数据失败，已达到最大重试次数 (节点: {})", data.host_ip);
+                throw std::runtime_error("数据库连接失败，已重试 " + std::to_string(MAX_RETRIES) + " 次: " + std::string(e.what()));
+            }
+            
+            // 指数退避重试
+            std::this_thread::sleep_for(std::chrono::milliseconds(100 * retry_count));
+            
+        } catch (const pqxx::sql_error& e) {
+            // SQL执行错误，通常不应重试（如约束违反、语法错误等）
+            spdlog::error("SQL执行错误 (节点: {}): query={}, what={}", 
+                         data.host_ip, e.query(), e.what());
+            throw;
+            
+        } catch (const pqxx::pqxx_exception& e) {
+            // 其他 pqxx 异常，可能是事务相关问题
+            last_exception = std::current_exception();
+            retry_count++;
+            spdlog::error("数据库异常 (节点: {}): {}, 重试 {}/{}", 
+                         data.host_ip, e.what(), retry_count, MAX_RETRIES);
+            
+            if (retry_count >= MAX_RETRIES) {
+                spdlog::error("保存资源数据失败，已达到最大重试次数 (节点: {})", data.host_ip);
+                throw;
+            }
+            
+            // 短暂延迟后重试
+            std::this_thread::sleep_for(std::chrono::milliseconds(50 * retry_count));
+            
+        } catch (const std::exception& e) {
+            // 其他异常，记录并抛出
+            spdlog::error("保存资源数据时发生未知错误 (节点: {}): {}", data.host_ip, e.what());
+            throw;
+        }
+    }
+    
+    // 如果所有重试都失败，重新抛出最后一个异常
+    if (last_exception) {
+        spdlog::error("保存资源数据失败，所有重试均失败 (节点: {})", data.host_ip);
+        std::rethrow_exception(last_exception);
+    }
 }
 
 // 查询指定节点在指定时间范围内的时序指标数据

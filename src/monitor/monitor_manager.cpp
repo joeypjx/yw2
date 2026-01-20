@@ -50,8 +50,11 @@ MonitorManager::MonitorManager(std::shared_ptr<hv::HttpService> service)
     scanner_->start();
 
     // 初始化仓库（连接串改为配置项）
+    // 增加连接池大小以应对频繁的资源上报请求
     repository_ = std::make_unique<ResourceRepository>(
-        yw::utils::JsonConfig::Get<std::string>("db.conninfo", "postgres://postgres:HZ715Net@localhost:5432/yw")
+        yw::utils::JsonConfig::Get<std::string>("db.conninfo", "postgres://postgres:HZ715Net@localhost:5432/yw"),
+        yw::utils::JsonConfig::Get<int>("db.min_connections", 5),  // 最小连接数：5
+        yw::utils::JsonConfig::Get<int>("db.max_connections", 30)  // 最大连接数：30
     );
 
     // 初始化资源缓存
