@@ -185,7 +185,7 @@ void ResourceRepository::save(const Resource& data) {
                          data.host_ip, e.query(), e.what());
             throw;
             
-        } catch (const pqxx::pqxx_exception& e) {
+        } catch (const pqxx::failure& e) {
             // 其他 pqxx 异常，可能是事务相关问题
             last_exception = std::current_exception();
             retry_count++;
