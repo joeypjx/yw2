@@ -1,0 +1,586 @@
+270972:   ./build/bin/yw_app
+Address           Kbytes     RSS   Dirty Mode  Mapping
+0000000000400000    2496    1856       0 r-x-- yw_app (deleted)
+0000000000670000      64      64      64 r---- yw_app (deleted)
+0000000000680000     256     128     128 rw--- yw_app (deleted)
+00000000392b0000     576     448     448 rw---   [ anon ]
+0000fffdb0000000     192      64      64 rw---   [ anon ]
+0000fffdb0030000   65344       0       0 -----   [ anon ]
+0000fffdb8000000     192      64      64 rw---   [ anon ]
+0000fffdb8030000   65344       0       0 -----   [ anon ]
+0000fffdbc000000     192     128     128 rw---   [ anon ]
+0000fffdbc030000   65344       0       0 -----   [ anon ]
+0000fffdc0000000    1984    1984    1984 rw---   [ anon ]
+0000fffdc01f0000   63552       0       0 -----   [ anon ]
+0000fffdc4000000    1024    1024    1024 rw---   [ anon ]
+0000fffdc4100000   64512       0       0 -----   [ anon ]
+0000fffdc8000000    3648    3520    3520 rw---   [ anon ]
+0000fffdc8390000   61888       0       0 -----   [ anon ]
+0000fffdcc000000    1472    1472    1472 rw---   [ anon ]
+0000fffdcc170000   64064       0       0 -----   [ anon ]
+0000fffdd0000000     192      64      64 rw---   [ anon ]
+0000fffdd0030000   65344       0       0 -----   [ anon ]
+0000fffdd4000000     192      64      64 rw---   [ anon ]
+0000fffdd4030000   65344       0       0 -----   [ anon ]
+0000fffdd8fa0000      64       0       0 -----   [ anon ]
+0000fffdd8fb0000    8192      64      64 rw---   [ anon ]
+0000fffdd97b0000      64       0       0 -----   [ anon ]
+0000fffdd97c0000    8192      64      64 rw---   [ anon ]
+0000fffdd9fc0000      64       0       0 -----   [ anon ]
+0000fffdd9fd0000    8192      64      64 rw---   [ anon ]
+0000fffdda7d0000      64       0       0 -----   [ anon ]
+0000fffdda7e0000    8192      64      64 rw---   [ anon ]
+0000fffddafe0000      64       0       0 -----   [ anon ]
+0000fffddaff0000    8192      64      64 rw---   [ anon ]
+0000fffddb7f0000      64       0       0 -----   [ anon ]
+0000fffddb800000    8192      64      64 rw---   [ anon ]
+0000fffddc000000     192      64      64 rw---   [ anon ]
+0000fffddc030000   65344       0       0 -----   [ anon ]
+0000fffde0000000     192      64      64 rw---   [ anon ]
+0000fffde0030000   65344       0       0 -----   [ anon ]
+0000fffde4000000     192      64      64 rw---   [ anon ]
+0000fffde4030000   65344       0       0 -----   [ anon ]
+0000fffde8000000     192      64      64 rw---   [ anon ]
+0000fffde8030000   65344       0       0 -----   [ anon ]
+0000fffdec000000     192      64      64 rw---   [ anon ]
+0000fffdec030000   65344       0       0 -----   [ anon ]
+0000fffdf0000000     192      64      64 rw---   [ anon ]
+0000fffdf0030000   65344       0       0 -----   [ anon ]
+0000fffdf4000000     192      64      64 rw---   [ anon ]
+0000fffdf4030000   65344       0       0 -----   [ anon ]
+0000fffdf8000000     192      64      64 rw---   [ anon ]
+0000fffdf8030000   65344       0       0 -----   [ anon ]
+0000fffdfc000000     192      64      64 rw---   [ anon ]
+0000fffdfc030000   65344       0       0 -----   [ anon ]
+0000fffe00000000     192      64      64 rw---   [ anon ]
+0000fffe00030000   65344       0       0 -----   [ anon ]
+0000fffe04000000     192      64      64 rw---   [ anon ]
+0000fffe04030000   65344       0       0 -----   [ anon ]
+0000fffe08000000     192      64      64 rw---   [ anon ]
+0000fffe08030000   65344       0       0 -----   [ anon ]
+0000fffe0c000000     192      64      64 rw---   [ anon ]
+0000fffe0c030000   65344       0       0 -----   [ anon ]
+0000fffe10000000     192      64      64 rw---   [ anon ]
+0000fffe10030000   65344       0       0 -----   [ anon ]
+0000fffe14000000     192      64      64 rw---   [ anon ]
+0000fffe14030000   65344       0       0 -----   [ anon ]
+0000fffe18000000     192      64      64 rw---   [ anon ]
+0000fffe18030000   65344       0       0 -----   [ anon ]
+0000fffe1c000000     192      64      64 rw---   [ anon ]
+0000fffe1c030000   65344       0       0 -----   [ anon ]
+0000fffe20790000      64       0       0 -----   [ anon ]
+0000fffe207a0000    8192      64      64 rw---   [ anon ]
+0000fffe20fa0000      64       0       0 -----   [ anon ]
+0000fffe20fb0000    8192      64      64 rw---   [ anon ]
+0000fffe217b0000      64       0       0 -----   [ anon ]
+0000fffe217c0000    8192      64      64 rw---   [ anon ]
+0000fffe21fc0000      64       0       0 -----   [ anon ]
+0000fffe21fd0000    8192      64      64 rw---   [ anon ]
+0000fffe227d0000      64       0       0 -----   [ anon ]
+0000fffe227e0000    8192      64      64 rw---   [ anon ]
+0000fffe22fe0000      64       0       0 -----   [ anon ]
+0000fffe22ff0000    8192      64      64 rw---   [ anon ]
+0000fffe237f0000      64       0       0 -----   [ anon ]
+0000fffe23800000    8192      64      64 rw---   [ anon ]
+0000fffe24000000     192      64      64 rw---   [ anon ]
+0000fffe24030000   65344       0       0 -----   [ anon ]
+0000fffe28790000      64       0       0 -----   [ anon ]
+0000fffe287a0000    8192      64      64 rw---   [ anon ]
+0000fffe28fa0000      64       0       0 -----   [ anon ]
+0000fffe28fb0000    8192      64      64 rw---   [ anon ]
+0000fffe297b0000      64       0       0 -----   [ anon ]
+0000fffe297c0000    8192      64      64 rw---   [ anon ]
+0000fffe29fc0000      64       0       0 -----   [ anon ]
+0000fffe29fd0000    8192      64      64 rw---   [ anon ]
+0000fffe2a7d0000      64       0       0 -----   [ anon ]
+0000fffe2a7e0000    8192      64      64 rw---   [ anon ]
+0000fffe2afe0000      64       0       0 -----   [ anon ]
+0000fffe2aff0000    8192      64      64 rw---   [ anon ]
+0000fffe2b7f0000      64       0       0 -----   [ anon ]
+0000fffe2b800000    8192      64      64 rw---   [ anon ]
+0000fffe2c000000     192      64      64 rw---   [ anon ]
+0000fffe2c030000   65344       0       0 -----   [ anon ]
+0000fffe30000000     192      64      64 rw---   [ anon ]
+0000fffe30030000   65344       0       0 -----   [ anon ]
+0000fffe34000000     192      64      64 rw---   [ anon ]
+0000fffe34030000   65344       0       0 -----   [ anon ]
+0000fffe38000000     192      64      64 rw---   [ anon ]
+0000fffe38030000   65344       0       0 -----   [ anon ]
+0000fffe3c000000     192      64      64 rw---   [ anon ]
+0000fffe3c030000   65344       0       0 -----   [ anon ]
+0000fffe40000000     192      64      64 rw---   [ anon ]
+0000fffe40030000   65344       0       0 -----   [ anon ]
+0000fffe44790000      64       0       0 -----   [ anon ]
+0000fffe447a0000    8192      64      64 rw---   [ anon ]
+0000fffe44fa0000      64       0       0 -----   [ anon ]
+0000fffe44fb0000    8192      64      64 rw---   [ anon ]
+0000fffe457b0000      64       0       0 -----   [ anon ]
+0000fffe457c0000    8192      64      64 rw---   [ anon ]
+0000fffe45fc0000      64       0       0 -----   [ anon ]
+0000fffe45fd0000    8192      64      64 rw---   [ anon ]
+0000fffe467d0000      64       0       0 -----   [ anon ]
+0000fffe467e0000    8192      64      64 rw---   [ anon ]
+0000fffe46fe0000      64       0       0 -----   [ anon ]
+0000fffe46ff0000    8192      64      64 rw---   [ anon ]
+0000fffe477f0000      64       0       0 -----   [ anon ]
+0000fffe47800000    8192      64      64 rw---   [ anon ]
+0000fffe48000000     192      64      64 rw---   [ anon ]
+0000fffe48030000   65344       0       0 -----   [ anon ]
+0000fffe4c790000      64       0       0 -----   [ anon ]
+0000fffe4c7a0000    8192      64      64 rw---   [ anon ]
+0000fffe4cfa0000      64       0       0 -----   [ anon ]
+0000fffe4cfb0000    8192      64      64 rw---   [ anon ]
+0000fffe4d7b0000      64       0       0 -----   [ anon ]
+0000fffe4d7c0000    8192      64      64 rw---   [ anon ]
+0000fffe4dfc0000      64       0       0 -----   [ anon ]
+0000fffe4dfd0000    8192      64      64 rw---   [ anon ]
+0000fffe4e7d0000      64       0       0 -----   [ anon ]
+0000fffe4e7e0000    8192      64      64 rw---   [ anon ]
+0000fffe4efe0000      64       0       0 -----   [ anon ]
+0000fffe4eff0000    8192      64      64 rw---   [ anon ]
+0000fffe4f7f0000      64       0       0 -----   [ anon ]
+0000fffe4f800000    8192      64      64 rw---   [ anon ]
+0000fffe50000000     192      64      64 rw---   [ anon ]
+0000fffe50030000   65344       0       0 -----   [ anon ]
+0000fffe54000000     192      64      64 rw---   [ anon ]
+0000fffe54030000   65344       0       0 -----   [ anon ]
+0000fffe58000000    1472    1472    1472 rw---   [ anon ]
+0000fffe58170000   64064       0       0 -----   [ anon ]
+0000fffe5c010000     512     512     512 rw---   [ anon ]
+0000fffe5c150000      64      64       0 r-x-- libnss_files-2.28.so
+0000fffe5c160000      64      64      64 r---- libnss_files-2.28.so
+0000fffe5c170000      64      64      64 rw--- libnss_files-2.28.so
+0000fffe5c180000      64       0       0 -----   [ anon ]
+0000fffe5c190000    8192      64      64 rw---   [ anon ]
+0000fffe5c990000      64       0       0 -----   [ anon ]
+0000fffe5c9a0000    8192      64      64 rw---   [ anon ]
+0000fffe5d1a0000      64       0       0 -----   [ anon ]
+0000fffe5d1b0000    8192      64      64 rw---   [ anon ]
+0000fffe5d9b0000    1472    1216       0 r-x-- libc-2.28.so
+0000fffe5db20000      64      64      64 r---- libc-2.28.so
+0000fffe5db30000      64      64      64 rw--- libc-2.28.so
+0000fffe5db40000     128      64       0 r-x-- libgcc_s-7.3.0.so.1
+0000fffe5db60000      64      64      64 r---- libgcc_s-7.3.0.so.1
+0000fffe5db70000      64      64      64 rw--- libgcc_s-7.3.0.so.1
+0000fffe5db80000     704      64       0 r-x-- libm-2.28.so
+0000fffe5dc30000      64      64      64 r---- libm-2.28.so
+0000fffe5dc40000      64      64      64 rw--- libm-2.28.so
+0000fffe5dc50000    1600    1344       0 r-x-- libstdc++.so.6.0.24
+0000fffe5dde0000      64      64      64 r---- libstdc++.so.6.0.24
+0000fffe5ddf0000      64      64      64 rw--- libstdc++.so.6.0.24
+0000fffe5de00000      64      64       0 r-x-- librt-2.28.so
+0000fffe5de10000      64      64      64 r---- librt-2.28.so
+0000fffe5de20000      64      64      64 rw--- librt-2.28.so
+0000fffe5de30000     128     128       0 r-x-- libpthread-2.28.so
+0000fffe5de50000      64      64      64 r---- libpthread-2.28.so
+0000fffe5de60000      64      64      64 rw--- libpthread-2.28.so
+0000fffe5de70000     192     128       0 r-x-- libgpg-error.so.0.32.0
+0000fffe5dea0000      64      64      64 r---- libgpg-error.so.0.32.0
+0000fffe5deb0000      64      64      64 rw--- libgpg-error.so.0.32.0
+0000fffe5dec0000      64      64       0 r-x-- libdl-2.28.so
+0000fffe5ded0000      64      64      64 r---- libdl-2.28.so
+0000fffe5dee0000      64      64      64 rw--- libdl-2.28.so
+0000fffe5def0000     768     128       0 r-x-- libgcrypt.so.20.2.6
+0000fffe5dfb0000      64      64      64 r---- libgcrypt.so.20.2.6
+0000fffe5dfc0000      64      64      64 rw--- libgcrypt.so.20.2.6
+0000fffe5e000000      64      64       0 r----   [ anon ]
+0000fffe5e010000      64      64       0 r-x--   [ anon ]
+0000fffe5e020000     128     128       0 r-x-- ld-2.28.so
+0000fffe5e040000      64      64      64 r---- ld-2.28.so
+0000fffe5e050000      64      64      64 rw--- ld-2.28.so
+0000fffffaef0000     192     128     128 rw---   [ stack ]
+---------------- ------- ------- -------
+total kB         2741248   22016   16640
+
+
+
+270972:   ./build/bin/yw_app
+Address           Kbytes     RSS   Dirty Mode  Mapping
+0000000000400000    2496    1856       0 r-x-- yw_app (deleted)
+0000000000670000      64      64      64 r---- yw_app (deleted)
+0000000000680000     256     128     128 rw--- yw_app (deleted)
+00000000392b0000     576     448     448 rw---   [ anon ]
+0000fffdb0000000     192      64      64 rw---   [ anon ]
+0000fffdb0030000   65344       0       0 -----   [ anon ]
+0000fffdb8000000     192      64      64 rw---   [ anon ]
+0000fffdb8030000   65344       0       0 -----   [ anon ]
+0000fffdbc000000     192     128     128 rw---   [ anon ]
+0000fffdbc030000   65344       0       0 -----   [ anon ]
+0000fffdc0000000   19456   13504   13504 rw---   [ anon ]
+0000fffdc1300000   46080       0       0 -----   [ anon ]
+0000fffdc4000000    1024    1024    1024 rw---   [ anon ]
+0000fffdc4100000   64512       0       0 -----   [ anon ]
+0000fffdc8000000    3648    3520    3520 rw---   [ anon ]
+0000fffdc8390000   61888       0       0 -----   [ anon ]
+0000fffdcc000000    1536    1536    1536 rw---   [ anon ]
+0000fffdcc180000   64000       0       0 -----   [ anon ]
+0000fffdd0000000     192      64      64 rw---   [ anon ]
+0000fffdd0030000   65344       0       0 -----   [ anon ]
+0000fffdd4000000     192      64      64 rw---   [ anon ]
+0000fffdd4030000   65344       0       0 -----   [ anon ]
+0000fffdd8fa0000      64       0       0 -----   [ anon ]
+0000fffdd8fb0000    8192      64      64 rw---   [ anon ]
+0000fffdd97b0000      64       0       0 -----   [ anon ]
+0000fffdd97c0000    8192      64      64 rw---   [ anon ]
+0000fffdd9fc0000      64       0       0 -----   [ anon ]
+0000fffdd9fd0000    8192      64      64 rw---   [ anon ]
+0000fffdda7d0000      64       0       0 -----   [ anon ]
+0000fffdda7e0000    8192      64      64 rw---   [ anon ]
+0000fffddafe0000      64       0       0 -----   [ anon ]
+0000fffddaff0000    8192      64      64 rw---   [ anon ]
+0000fffddb7f0000      64       0       0 -----   [ anon ]
+0000fffddb800000    8192      64      64 rw---   [ anon ]
+0000fffddc000000     192      64      64 rw---   [ anon ]
+0000fffddc030000   65344       0       0 -----   [ anon ]
+0000fffde0000000     192      64      64 rw---   [ anon ]
+0000fffde0030000   65344       0       0 -----   [ anon ]
+0000fffde4000000     192      64      64 rw---   [ anon ]
+0000fffde4030000   65344       0       0 -----   [ anon ]
+0000fffde8000000     192      64      64 rw---   [ anon ]
+0000fffde8030000   65344       0       0 -----   [ anon ]
+0000fffdec000000     192      64      64 rw---   [ anon ]
+0000fffdec030000   65344       0       0 -----   [ anon ]
+0000fffdf0000000     192      64      64 rw---   [ anon ]
+0000fffdf0030000   65344       0       0 -----   [ anon ]
+0000fffdf4000000     192      64      64 rw---   [ anon ]
+0000fffdf4030000   65344       0       0 -----   [ anon ]
+0000fffdf8000000     192      64      64 rw---   [ anon ]
+0000fffdf8030000   65344       0       0 -----   [ anon ]
+0000fffdfc000000     192      64      64 rw---   [ anon ]
+0000fffdfc030000   65344       0       0 -----   [ anon ]
+0000fffe00000000     192      64      64 rw---   [ anon ]
+0000fffe00030000   65344       0       0 -----   [ anon ]
+0000fffe04000000     192      64      64 rw---   [ anon ]
+0000fffe04030000   65344       0       0 -----   [ anon ]
+0000fffe08000000     192      64      64 rw---   [ anon ]
+0000fffe08030000   65344       0       0 -----   [ anon ]
+0000fffe0c000000     192      64      64 rw---   [ anon ]
+0000fffe0c030000   65344       0       0 -----   [ anon ]
+0000fffe10000000     192      64      64 rw---   [ anon ]
+0000fffe10030000   65344       0       0 -----   [ anon ]
+0000fffe14000000     192      64      64 rw---   [ anon ]
+0000fffe14030000   65344       0       0 -----   [ anon ]
+0000fffe18000000     192      64      64 rw---   [ anon ]
+0000fffe18030000   65344       0       0 -----   [ anon ]
+0000fffe1c000000     192      64      64 rw---   [ anon ]
+0000fffe1c030000   65344       0       0 -----   [ anon ]
+0000fffe20790000      64       0       0 -----   [ anon ]
+0000fffe207a0000    8192      64      64 rw---   [ anon ]
+0000fffe20fa0000      64       0       0 -----   [ anon ]
+0000fffe20fb0000    8192      64      64 rw---   [ anon ]
+0000fffe217b0000      64       0       0 -----   [ anon ]
+0000fffe217c0000    8192      64      64 rw---   [ anon ]
+0000fffe21fc0000      64       0       0 -----   [ anon ]
+0000fffe21fd0000    8192      64      64 rw---   [ anon ]
+0000fffe227d0000      64       0       0 -----   [ anon ]
+0000fffe227e0000    8192      64      64 rw---   [ anon ]
+0000fffe22fe0000      64       0       0 -----   [ anon ]
+0000fffe22ff0000    8192      64      64 rw---   [ anon ]
+0000fffe237f0000      64       0       0 -----   [ anon ]
+0000fffe23800000    8192      64      64 rw---   [ anon ]
+0000fffe24000000     192      64      64 rw---   [ anon ]
+0000fffe24030000   65344       0       0 -----   [ anon ]
+0000fffe28790000      64       0       0 -----   [ anon ]
+0000fffe287a0000    8192      64      64 rw---   [ anon ]
+0000fffe28fa0000      64       0       0 -----   [ anon ]
+0000fffe28fb0000    8192      64      64 rw---   [ anon ]
+0000fffe297b0000      64       0       0 -----   [ anon ]
+0000fffe297c0000    8192      64      64 rw---   [ anon ]
+0000fffe29fc0000      64       0       0 -----   [ anon ]
+0000fffe29fd0000    8192      64      64 rw---   [ anon ]
+0000fffe2a7d0000      64       0       0 -----   [ anon ]
+0000fffe2a7e0000    8192      64      64 rw---   [ anon ]
+0000fffe2afe0000      64       0       0 -----   [ anon ]
+0000fffe2aff0000    8192      64      64 rw---   [ anon ]
+0000fffe2b7f0000      64       0       0 -----   [ anon ]
+0000fffe2b800000    8192      64      64 rw---   [ anon ]
+0000fffe2c000000     192      64      64 rw---   [ anon ]
+0000fffe2c030000   65344       0       0 -----   [ anon ]
+0000fffe30000000     192      64      64 rw---   [ anon ]
+0000fffe30030000   65344       0       0 -----   [ anon ]
+0000fffe34000000     192      64      64 rw---   [ anon ]
+0000fffe34030000   65344       0       0 -----   [ anon ]
+0000fffe38000000     192      64      64 rw---   [ anon ]
+0000fffe38030000   65344       0       0 -----   [ anon ]
+0000fffe3c000000     192      64      64 rw---   [ anon ]
+0000fffe3c030000   65344       0       0 -----   [ anon ]
+0000fffe40000000     192      64      64 rw---   [ anon ]
+0000fffe40030000   65344       0       0 -----   [ anon ]
+0000fffe44790000      64       0       0 -----   [ anon ]
+0000fffe447a0000    8192      64      64 rw---   [ anon ]
+0000fffe44fa0000      64       0       0 -----   [ anon ]
+0000fffe44fb0000    8192      64      64 rw---   [ anon ]
+0000fffe457b0000      64       0       0 -----   [ anon ]
+0000fffe457c0000    8192      64      64 rw---   [ anon ]
+0000fffe45fc0000      64       0       0 -----   [ anon ]
+0000fffe45fd0000    8192      64      64 rw---   [ anon ]
+0000fffe467d0000      64       0       0 -----   [ anon ]
+0000fffe467e0000    8192      64      64 rw---   [ anon ]
+0000fffe46fe0000      64       0       0 -----   [ anon ]
+0000fffe46ff0000    8192      64      64 rw---   [ anon ]
+0000fffe477f0000      64       0       0 -----   [ anon ]
+0000fffe47800000    8192      64      64 rw---   [ anon ]
+0000fffe48000000     192      64      64 rw---   [ anon ]
+0000fffe48030000   65344       0       0 -----   [ anon ]
+0000fffe4c790000      64       0       0 -----   [ anon ]
+0000fffe4c7a0000    8192      64      64 rw---   [ anon ]
+0000fffe4cfa0000      64       0       0 -----   [ anon ]
+0000fffe4cfb0000    8192      64      64 rw---   [ anon ]
+0000fffe4d7b0000      64       0       0 -----   [ anon ]
+0000fffe4d7c0000    8192      64      64 rw---   [ anon ]
+0000fffe4dfc0000      64       0       0 -----   [ anon ]
+0000fffe4dfd0000    8192      64      64 rw---   [ anon ]
+0000fffe4e7d0000      64       0       0 -----   [ anon ]
+0000fffe4e7e0000    8192      64      64 rw---   [ anon ]
+0000fffe4efe0000      64       0       0 -----   [ anon ]
+0000fffe4eff0000    8192      64      64 rw---   [ anon ]
+0000fffe4f7f0000      64       0       0 -----   [ anon ]
+0000fffe4f800000    8192      64      64 rw---   [ anon ]
+0000fffe50000000     192      64      64 rw---   [ anon ]
+0000fffe50030000   65344       0       0 -----   [ anon ]
+0000fffe54000000     192      64      64 rw---   [ anon ]
+0000fffe54030000   65344       0       0 -----   [ anon ]
+0000fffe58000000    1600    1600    1600 rw---   [ anon ]
+0000fffe58190000   63936       0       0 -----   [ anon ]
+0000fffe5c150000      64      64       0 r-x-- libnss_files-2.28.so
+0000fffe5c160000      64      64      64 r---- libnss_files-2.28.so
+0000fffe5c170000      64      64      64 rw--- libnss_files-2.28.so
+0000fffe5c180000      64       0       0 -----   [ anon ]
+0000fffe5c190000    8192      64      64 rw---   [ anon ]
+0000fffe5c990000      64       0       0 -----   [ anon ]
+0000fffe5c9a0000    8192      64      64 rw---   [ anon ]
+0000fffe5d1a0000      64       0       0 -----   [ anon ]
+0000fffe5d1b0000    8192      64      64 rw---   [ anon ]
+0000fffe5d9b0000    1472    1216       0 r-x-- libc-2.28.so
+0000fffe5db20000      64      64      64 r---- libc-2.28.so
+0000fffe5db30000      64      64      64 rw--- libc-2.28.so
+0000fffe5db40000     128      64       0 r-x-- libgcc_s-7.3.0.so.1
+0000fffe5db60000      64      64      64 r---- libgcc_s-7.3.0.so.1
+0000fffe5db70000      64      64      64 rw--- libgcc_s-7.3.0.so.1
+0000fffe5db80000     704      64       0 r-x-- libm-2.28.so
+0000fffe5dc30000      64      64      64 r---- libm-2.28.so
+0000fffe5dc40000      64      64      64 rw--- libm-2.28.so
+0000fffe5dc50000    1600    1344       0 r-x-- libstdc++.so.6.0.24
+0000fffe5dde0000      64      64      64 r---- libstdc++.so.6.0.24
+0000fffe5ddf0000      64      64      64 rw--- libstdc++.so.6.0.24
+0000fffe5de00000      64      64       0 r-x-- librt-2.28.so
+0000fffe5de10000      64      64      64 r---- librt-2.28.so
+0000fffe5de20000      64      64      64 rw--- librt-2.28.so
+0000fffe5de30000     128     128       0 r-x-- libpthread-2.28.so
+0000fffe5de50000      64      64      64 r---- libpthread-2.28.so
+0000fffe5de60000      64      64      64 rw--- libpthread-2.28.so
+0000fffe5de70000     192     128       0 r-x-- libgpg-error.so.0.32.0
+0000fffe5dea0000      64      64      64 r---- libgpg-error.so.0.32.0
+0000fffe5deb0000      64      64      64 rw--- libgpg-error.so.0.32.0
+0000fffe5dec0000      64      64       0 r-x-- libdl-2.28.so
+0000fffe5ded0000      64      64      64 r---- libdl-2.28.so
+0000fffe5dee0000      64      64      64 rw--- libdl-2.28.so
+0000fffe5def0000     768     128       0 r-x-- libgcrypt.so.20.2.6
+0000fffe5dfb0000      64      64      64 r---- libgcrypt.so.20.2.6
+0000fffe5dfc0000      64      64      64 rw--- libgcrypt.so.20.2.6
+0000fffe5e000000      64      64       0 r----   [ anon ]
+0000fffe5e010000      64      64       0 r-x--   [ anon ]
+0000fffe5e020000     128     128       0 r-x-- ld-2.28.so
+0000fffe5e040000      64      64      64 r---- ld-2.28.so
+0000fffe5e050000      64      64      64 rw--- ld-2.28.so
+0000fffffaef0000     192     128     128 rw---   [ stack ]
+---------------- ------- ------- -------
+total kB         2740736   33216   27840
+
+
+
+270972:   ./build/bin/yw_app
+Address           Kbytes     RSS   Dirty Mode  Mapping
+0000000000400000    2496    1856       0 r-x-- yw_app (deleted)
+0000000000670000      64      64      64 r---- yw_app (deleted)
+0000000000680000     256     128     128 rw--- yw_app (deleted)
+00000000392b0000     576     448     448 rw---   [ anon ]
+0000fffdb0000000     192      64      64 rw---   [ anon ]
+0000fffdb0030000   65344       0       0 -----   [ anon ]
+0000fffdb8000000     192      64      64 rw---   [ anon ]
+0000fffdb8030000   65344       0       0 -----   [ anon ]
+0000fffdbc000000     192     128     128 rw---   [ anon ]
+0000fffdbc030000   65344       0       0 -----   [ anon ]
+0000fffdc0000000   19456   13504   13504 rw---   [ anon ]
+0000fffdc1300000   46080       0       0 -----   [ anon ]
+0000fffdc4000000    1024    1024    1024 rw---   [ anon ]
+0000fffdc4100000   64512       0       0 -----   [ anon ]
+0000fffdc8000000    6208    5824    5824 rw---   [ anon ]
+0000fffdc8610000   59328       0       0 -----   [ anon ]
+0000fffdcc000000    1536    1536    1536 rw---   [ anon ]
+0000fffdcc180000   64000       0       0 -----   [ anon ]
+0000fffdd0000000     192      64      64 rw---   [ anon ]
+0000fffdd0030000   65344       0       0 -----   [ anon ]
+0000fffdd4000000     192      64      64 rw---   [ anon ]
+0000fffdd4030000   65344       0       0 -----   [ anon ]
+0000fffdd8fa0000      64       0       0 -----   [ anon ]
+0000fffdd8fb0000    8192      64      64 rw---   [ anon ]
+0000fffdd97b0000      64       0       0 -----   [ anon ]
+0000fffdd97c0000    8192      64      64 rw---   [ anon ]
+0000fffdd9fc0000      64       0       0 -----   [ anon ]
+0000fffdd9fd0000    8192      64      64 rw---   [ anon ]
+0000fffdda7d0000      64       0       0 -----   [ anon ]
+0000fffdda7e0000    8192      64      64 rw---   [ anon ]
+0000fffddafe0000      64       0       0 -----   [ anon ]
+0000fffddaff0000    8192      64      64 rw---   [ anon ]
+0000fffddb7f0000      64       0       0 -----   [ anon ]
+0000fffddb800000    8192      64      64 rw---   [ anon ]
+0000fffddc000000     192      64      64 rw---   [ anon ]
+0000fffddc030000   65344       0       0 -----   [ anon ]
+0000fffde0000000     192      64      64 rw---   [ anon ]
+0000fffde0030000   65344       0       0 -----   [ anon ]
+0000fffde4000000     192      64      64 rw---   [ anon ]
+0000fffde4030000   65344       0       0 -----   [ anon ]
+0000fffde8000000     192      64      64 rw---   [ anon ]
+0000fffde8030000   65344       0       0 -----   [ anon ]
+0000fffdec000000     192      64      64 rw---   [ anon ]
+0000fffdec030000   65344       0       0 -----   [ anon ]
+0000fffdf0000000     192      64      64 rw---   [ anon ]
+0000fffdf0030000   65344       0       0 -----   [ anon ]
+0000fffdf4000000     192      64      64 rw---   [ anon ]
+0000fffdf4030000   65344       0       0 -----   [ anon ]
+0000fffdf8000000     192      64      64 rw---   [ anon ]
+0000fffdf8030000   65344       0       0 -----   [ anon ]
+0000fffdfc000000     192      64      64 rw---   [ anon ]
+0000fffdfc030000   65344       0       0 -----   [ anon ]
+0000fffe00000000     192      64      64 rw---   [ anon ]
+0000fffe00030000   65344       0       0 -----   [ anon ]
+0000fffe04000000     192      64      64 rw---   [ anon ]
+0000fffe04030000   65344       0       0 -----   [ anon ]
+0000fffe08000000     192      64      64 rw---   [ anon ]
+0000fffe08030000   65344       0       0 -----   [ anon ]
+0000fffe0c000000     192      64      64 rw---   [ anon ]
+0000fffe0c030000   65344       0       0 -----   [ anon ]
+0000fffe10000000     192      64      64 rw---   [ anon ]
+0000fffe10030000   65344       0       0 -----   [ anon ]
+0000fffe14000000     192      64      64 rw---   [ anon ]
+0000fffe14030000   65344       0       0 -----   [ anon ]
+0000fffe18000000     192      64      64 rw---   [ anon ]
+0000fffe18030000   65344       0       0 -----   [ anon ]
+0000fffe1c000000     192      64      64 rw---   [ anon ]
+0000fffe1c030000   65344       0       0 -----   [ anon ]
+0000fffe20790000      64       0       0 -----   [ anon ]
+0000fffe207a0000    8192      64      64 rw---   [ anon ]
+0000fffe20fa0000      64       0       0 -----   [ anon ]
+0000fffe20fb0000    8192      64      64 rw---   [ anon ]
+0000fffe217b0000      64       0       0 -----   [ anon ]
+0000fffe217c0000    8192      64      64 rw---   [ anon ]
+0000fffe21fc0000      64       0       0 -----   [ anon ]
+0000fffe21fd0000    8192      64      64 rw---   [ anon ]
+0000fffe227d0000      64       0       0 -----   [ anon ]
+0000fffe227e0000    8192      64      64 rw---   [ anon ]
+0000fffe22fe0000      64       0       0 -----   [ anon ]
+0000fffe22ff0000    8192      64      64 rw---   [ anon ]
+0000fffe237f0000      64       0       0 -----   [ anon ]
+0000fffe23800000    8192      64      64 rw---   [ anon ]
+0000fffe24000000     192      64      64 rw---   [ anon ]
+0000fffe24030000   65344       0       0 -----   [ anon ]
+0000fffe28790000      64       0       0 -----   [ anon ]
+0000fffe287a0000    8192      64      64 rw---   [ anon ]
+0000fffe28fa0000      64       0       0 -----   [ anon ]
+0000fffe28fb0000    8192      64      64 rw---   [ anon ]
+0000fffe297b0000      64       0       0 -----   [ anon ]
+0000fffe297c0000    8192      64      64 rw---   [ anon ]
+0000fffe29fc0000      64       0       0 -----   [ anon ]
+0000fffe29fd0000    8192      64      64 rw---   [ anon ]
+0000fffe2a7d0000      64       0       0 -----   [ anon ]
+0000fffe2a7e0000    8192      64      64 rw---   [ anon ]
+0000fffe2afe0000      64       0       0 -----   [ anon ]
+0000fffe2aff0000    8192      64      64 rw---   [ anon ]
+0000fffe2b7f0000      64       0       0 -----   [ anon ]
+0000fffe2b800000    8192      64      64 rw---   [ anon ]
+0000fffe2c000000     192      64      64 rw---   [ anon ]
+0000fffe2c030000   65344       0       0 -----   [ anon ]
+0000fffe30000000     192      64      64 rw---   [ anon ]
+0000fffe30030000   65344       0       0 -----   [ anon ]
+0000fffe34000000     192      64      64 rw---   [ anon ]
+0000fffe34030000   65344       0       0 -----   [ anon ]
+0000fffe38000000     192      64      64 rw---   [ anon ]
+0000fffe38030000   65344       0       0 -----   [ anon ]
+0000fffe3c000000     192      64      64 rw---   [ anon ]
+0000fffe3c030000   65344       0       0 -----   [ anon ]
+0000fffe40000000     192      64      64 rw---   [ anon ]
+0000fffe40030000   65344       0       0 -----   [ anon ]
+0000fffe44790000      64       0       0 -----   [ anon ]
+0000fffe447a0000    8192      64      64 rw---   [ anon ]
+0000fffe44fa0000      64       0       0 -----   [ anon ]
+0000fffe44fb0000    8192      64      64 rw---   [ anon ]
+0000fffe457b0000      64       0       0 -----   [ anon ]
+0000fffe457c0000    8192      64      64 rw---   [ anon ]
+0000fffe45fc0000      64       0       0 -----   [ anon ]
+0000fffe45fd0000    8192      64      64 rw---   [ anon ]
+0000fffe467d0000      64       0       0 -----   [ anon ]
+0000fffe467e0000    8192      64      64 rw---   [ anon ]
+0000fffe46fe0000      64       0       0 -----   [ anon ]
+0000fffe46ff0000    8192      64      64 rw---   [ anon ]
+0000fffe477f0000      64       0       0 -----   [ anon ]
+0000fffe47800000    8192      64      64 rw---   [ anon ]
+0000fffe48000000     192      64      64 rw---   [ anon ]
+0000fffe48030000   65344       0       0 -----   [ anon ]
+0000fffe4c790000      64       0       0 -----   [ anon ]
+0000fffe4c7a0000    8192      64      64 rw---   [ anon ]
+0000fffe4cfa0000      64       0       0 -----   [ anon ]
+0000fffe4cfb0000    8192      64      64 rw---   [ anon ]
+0000fffe4d7b0000      64       0       0 -----   [ anon ]
+0000fffe4d7c0000    8192      64      64 rw---   [ anon ]
+0000fffe4dfc0000      64       0       0 -----   [ anon ]
+0000fffe4dfd0000    8192      64      64 rw---   [ anon ]
+0000fffe4e7d0000      64       0       0 -----   [ anon ]
+0000fffe4e7e0000    8192      64      64 rw---   [ anon ]
+0000fffe4efe0000      64       0       0 -----   [ anon ]
+0000fffe4eff0000    8192      64      64 rw---   [ anon ]
+0000fffe4f7f0000      64       0       0 -----   [ anon ]
+0000fffe4f800000    8192      64      64 rw---   [ anon ]
+0000fffe50000000     192      64      64 rw---   [ anon ]
+0000fffe50030000   65344       0       0 -----   [ anon ]
+0000fffe54000000     192      64      64 rw---   [ anon ]
+0000fffe54030000   65344       0       0 -----   [ anon ]
+0000fffe58000000    1600    1600    1600 rw---   [ anon ]
+0000fffe58190000   63936       0       0 -----   [ anon ]
+0000fffe5c150000      64      64       0 r-x-- libnss_files-2.28.so
+0000fffe5c160000      64      64      64 r---- libnss_files-2.28.so
+0000fffe5c170000      64      64      64 rw--- libnss_files-2.28.so
+0000fffe5c180000      64       0       0 -----   [ anon ]
+0000fffe5c190000    8192      64      64 rw---   [ anon ]
+0000fffe5c990000      64       0       0 -----   [ anon ]
+0000fffe5c9a0000    8192      64      64 rw---   [ anon ]
+0000fffe5d1a0000      64       0       0 -----   [ anon ]
+0000fffe5d1b0000    8192      64      64 rw---   [ anon ]
+0000fffe5d9b0000    1472    1216       0 r-x-- libc-2.28.so
+0000fffe5db20000      64      64      64 r---- libc-2.28.so
+0000fffe5db30000      64      64      64 rw--- libc-2.28.so
+0000fffe5db40000     128      64       0 r-x-- libgcc_s-7.3.0.so.1
+0000fffe5db60000      64      64      64 r---- libgcc_s-7.3.0.so.1
+0000fffe5db70000      64      64      64 rw--- libgcc_s-7.3.0.so.1
+0000fffe5db80000     704      64       0 r-x-- libm-2.28.so
+0000fffe5dc30000      64      64      64 r---- libm-2.28.so
+0000fffe5dc40000      64      64      64 rw--- libm-2.28.so
+0000fffe5dc50000    1600    1344       0 r-x-- libstdc++.so.6.0.24
+0000fffe5dde0000      64      64      64 r---- libstdc++.so.6.0.24
+0000fffe5ddf0000      64      64      64 rw--- libstdc++.so.6.0.24
+0000fffe5de00000      64      64       0 r-x-- librt-2.28.so
+0000fffe5de10000      64      64      64 r---- librt-2.28.so
+0000fffe5de20000      64      64      64 rw--- librt-2.28.so
+0000fffe5de30000     128     128       0 r-x-- libpthread-2.28.so
+0000fffe5de50000      64      64      64 r---- libpthread-2.28.so
+0000fffe5de60000      64      64      64 rw--- libpthread-2.28.so
+0000fffe5de70000     192     128       0 r-x-- libgpg-error.so.0.32.0
+0000fffe5dea0000      64      64      64 r---- libgpg-error.so.0.32.0
+0000fffe5deb0000      64      64      64 rw--- libgpg-error.so.0.32.0
+0000fffe5dec0000      64      64       0 r-x-- libdl-2.28.so
+0000fffe5ded0000      64      64      64 r---- libdl-2.28.so
+0000fffe5dee0000      64      64      64 rw--- libdl-2.28.so
+0000fffe5def0000     768     128       0 r-x-- libgcrypt.so.20.2.6
+0000fffe5dfb0000      64      64      64 r---- libgcrypt.so.20.2.6
+0000fffe5dfc0000      64      64      64 rw--- libgcrypt.so.20.2.6
+0000fffe5e000000      64      64       0 r----   [ anon ]
+0000fffe5e010000      64      64       0 r-x--   [ anon ]
+0000fffe5e020000     128     128       0 r-x-- ld-2.28.so
+0000fffe5e040000      64      64      64 r---- ld-2.28.so
+0000fffe5e050000      64      64      64 rw--- ld-2.28.so
+0000fffffaef0000     192     128     128 rw---   [ stack ]
+---------------- ------- ------- -------
+total kB         2740736   35520   30144
+
+
+
