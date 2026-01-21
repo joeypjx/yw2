@@ -1,0 +1,77 @@
+version: '3.8'
+
+networks:
+  custom-network:
+    driver: bridge
+
+services:
+  nginx:
+    image: nginx:1.26
+    container_name: nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/html:/usr/share/nginx/html
+      - ./nginx/logs:/var/log/nginx
+    networks:
+      - custom-network
+
+  mariadb:
+    image: mariadb:10.11
+    container_name: mariadb
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+      MARIADB_ROOT_PASSWORD: HZ715Net
+      MARIADB_DATABASE: soft_factory
+      MARIADB_USER: soft_factory
+      MARIADB_PASSWORD: zhaochen123
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mariadb/data:/var/lib/mysql
+      - ./mariadb/conf.d:/etc/mysql/conf.d
+    networks:
+      - custom-network
+
+  timescaledb:
+    image: timescale/timescaledb:2.21.2-pg16
+    container_name: timescaledb
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: HZ715Net
+      POSTGRES_DB: yw2
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./timescaledb/data:/var/lib/postgresql/data
+      - ./timescaledb/init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - custom-network
+
+  registry:
+    image: registry:2.8
+    container_name: registry
+    restart: always
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./registry/data:/var/lib/registry
+    networks:
+      - custom-network
+
+  adminer:
+    image: adminer:4.8.1
+    container_name: adminer
+    restart: always
+    ports:
+      - "8089:8080"
+    depends_on:
+      - mariadb
+      - timescaledb
+    networks:
+      - custom-network
