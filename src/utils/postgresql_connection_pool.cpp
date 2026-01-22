@@ -87,6 +87,7 @@ std::shared_ptr<pqxx::connection> PostgreSQLConnectionPool::acquireConnection() 
 
 // 释放连接回连接池
 // 如果连接有效则归还到池中，如果失效则从池中移除并减少总连接数
+// 如果连接失效导致连接数低于最小连接数，会主动创建新连接补充
 void PostgreSQLConnectionPool::releaseConnection(std::shared_ptr<pqxx::connection> conn) {
     if (!conn) {
         return;
@@ -103,6 +104,20 @@ void PostgreSQLConnectionPool::releaseConnection(std::shared_ptr<pqxx::connectio
         spdlog::warn("归还的连接已失效，从池中移除");
         if (totalConnections_ > 0) {
             totalConnections_--;
+        }
+        
+        // 如果当前连接数低于最小连接数，主动补充连接
+        size_t currentTotal = totalConnections_.load();
+        if (currentTotal < minConnections_) {
+            try {
+                auto newConn = createConnection();
+                if (newConn) {
+                    availableConnections_.push(newConn);
+                    spdlog::debug("连接失效后主动补充连接，当前总连接数: {}", totalConnections_.load());
+                }
+            } catch (const std::exception& e) {
+                spdlog::error("连接失效后补充连接失败: {}", e.what());
+            }
         }
     }
     
