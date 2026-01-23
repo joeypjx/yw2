@@ -29,6 +29,11 @@ AlertPusher::AlertPusher(hv::HttpServer* server)
         init();
     }
 
+// 告警推送器析构函数，确保正确清理资源
+AlertPusher::~AlertPusher() {
+    stop();
+}
+
 // 初始化WebSocket服务，注册连接、断开和消息处理回调
 // 返回: 初始化成功返回true
 bool AlertPusher::init() {
@@ -70,10 +75,23 @@ void AlertPusher::pushJson(const nlohmann::json& alertJson) {
 // 停止告警推送器，清理所有连接和WebSocket服务
 void AlertPusher::stop() {
     std::lock_guard<std::mutex> lk(mu_);
+    
+    // 先清空所有回调，防止在清理过程中被调用
+    if (ws_service_) {
+        ws_service_->onopen = nullptr;
+        ws_service_->onclose = nullptr;
+        ws_service_->onmessage = nullptr;
+    }
+    
+    // 清空所有连接
+    channels_.clear();
+    
+    // 从服务器移除 WebSocket 服务
     if (server_) {
         server_->ws = nullptr;
     }
-    channels_.clear();
+    
+    // 最后销毁 WebSocket 服务
     ws_service_.reset();
 }
 

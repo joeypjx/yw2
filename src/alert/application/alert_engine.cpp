@@ -95,7 +95,7 @@ void AlertEngine::stop() {
         return;
     }
     
-    spdlog::debug("正在停止告警引擎...");
+    spdlog::info("正在停止告警引擎...");
     shouldStop_ = true;
     
     // 停止节点存活检查
@@ -103,12 +103,19 @@ void AlertEngine::stop() {
         alertFactory_->stopAliveCheck();
     }
     
+    // 等待工作线程退出
+    // 注意：如果线程正在执行数据库查询，join() 会等待查询完成
+    // 但由于我们在循环和关键点都检查了 shouldStop_，线程应该能尽快退出
     if (workerThread_.joinable()) {
-        workerThread_.join();
+        try {
+            workerThread_.join();
+        } catch (const std::exception& e) {
+            spdlog::warn("等待告警引擎工作线程退出时发生异常: {}", e.what());
+        }
     }
     
     running_ = false;
-    spdlog::debug("告警引擎已停止");
+    spdlog::info("告警引擎已停止");
 }
 
 // 告警引擎工作线程主循环
@@ -152,6 +159,11 @@ void AlertEngine::initialize() {
 }
 
 int AlertEngine::performEvaluation() {
+    // 在开始评估前检查是否应该停止
+    if (shouldStop_) {
+        return 0;
+    }
+    
     auto startTime = std::chrono::system_clock::now();
     
     try {
@@ -159,11 +171,24 @@ int AlertEngine::performEvaluation() {
         
         // 1. 评估所有告警规则，生成当前全量告警
         std::vector<AlertEvent> currentAlerts = evaluateAllRules();
+        
+        // 如果收到停止信号，提前退出
+        if (shouldStop_) {
+            spdlog::debug("收到停止信号，中断告警评估");
+            return 0;
+        }
+        
         spdlog::debug("生成了 {} 个告警", currentAlerts.size());
         
         // 2. 处理告警状态更新
         int processedCount = processAlertStatusUpdates(currentAlerts);
         spdlog::debug("处理了 {} 个告警状态更新", processedCount);
+        
+        // 再次检查停止信号
+        if (shouldStop_) {
+            spdlog::debug("收到停止信号，中断告警评估");
+            return 0;
+        }
         
         // 3. 更新告警到数据库
         int updatedCount = updateAlertsToDatabase(currentAlerts);
@@ -186,11 +211,22 @@ int AlertEngine::performEvaluation() {
 // 返回: 所有规则生成的告警事件列表
 std::vector<AlertEvent> AlertEngine::evaluateAllRules() {
     std::vector<AlertEvent> allAlerts;
+    
+    // 检查是否应该停止
+    if (shouldStop_) {
+        return allAlerts;
+    }
                         
     // 从 AlertRuleService 获取所有启用的规则
     auto rules = alertRuleService_->getEnabledAlertRules();
     
     for (size_t i = 0; i < rules.size(); ++i) {
+        // 在每次循环开始时检查是否应该停止
+        if (shouldStop_) {
+            spdlog::debug("收到停止信号，中断告警规则评估");
+            break;
+        }
+        
         const auto& rule = rules[i];
         
         try {

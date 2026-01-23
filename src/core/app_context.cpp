@@ -18,6 +18,8 @@
 #include "bmc/bmc.h"
 #include "controller/controller.h"
 #include "web/web.h"
+#include <thread>
+#include <chrono>
 
 namespace yw {
 namespace core {
@@ -76,8 +78,28 @@ std::shared_ptr<hv::HttpServer> AppContext::getHttpServer() const {
 void AppContext::cleanup() {
     std::lock_guard<std::mutex> lock(mutex_);
     
-    // 清理所有模块（按依赖顺序）
+    // 首先停止HTTP服务器，确保所有HTTP请求处理完成
+    // 这样可以避免在清理模块时，HTTP线程仍在访问数据库连接池
+    if (http_server_) {
+        spdlog::info("Stopping HTTP server...");
+        // 停止libhv服务器，不再接受新请求
+        http_server_->stop();
+
+        // 等待HTTP服务器线程退出，确保所有正在处理的请求完成
+        if (http_thread_.joinable()) {
+            http_thread_.join();
+        }
+        
+        spdlog::info("HTTP server stopped");
+    }
+    
+    // 等待一小段时间，确保所有HTTP请求处理完成
+    // 注意：这不能完全保证，但可以减少竞态条件
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    
+    // 现在可以安全地清理所有模块（按依赖顺序）
     // 注意：alert_module_ 的析构函数会自动调用 stop()，无需显式调用
+    spdlog::info("Cleaning up modules...");
     web_module_.reset();
     alert_module_.reset();
     node_module_.reset();
@@ -85,20 +107,13 @@ void AppContext::cleanup() {
     bmc_module_.reset();
     controller_module_.reset();
     
+    // 重置HTTP服务器实例
     if (http_server_) {
-        // 停止libhv服务器
-        http_server_->stop();
-
-        if (http_thread_.joinable()) {
-            http_thread_.join();
-        }
-        
-        // 重置HTTP服务器实例
         http_server_.reset();
         http_service_.reset();
-        
-        spdlog::info("HTTP server stopped and AppContext cleaned up");
     }
+    
+    spdlog::info("AppContext cleaned up");
 }
 
 // 在独立线程中运行HTTP服务器

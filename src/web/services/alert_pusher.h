@@ -43,6 +43,9 @@ public:
     // server: HTTP服务器实例
     AlertPusher(hv::HttpServer* server);
 
+    // 析构函数，确保正确清理资源
+    ~AlertPusher();
+
     // 推送告警JSON到所有WebSocket客户端
     // alertJson: 告警的JSON对象
     // 自动清理已断开的连接
