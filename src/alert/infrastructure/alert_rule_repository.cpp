@@ -200,7 +200,6 @@ AlertRule DatabaseAlertRuleRepository::parseRuleFromQueryResult(const QueryRow& 
         
         // 解析enabled字段
         std::string enabledStr = row.getValue("enabled");
-        spdlog::debug("从数据库解析enabled字段: '{}'", enabledStr);
         
         // 更宽松的布尔值解析
         bool enabled = false;
@@ -211,7 +210,6 @@ AlertRule DatabaseAlertRuleRepository::parseRuleFromQueryResult(const QueryRow& 
             enabled = true;
         }
         
-        spdlog::debug("解析后的enabled值: {}", enabled ? "true" : "false");
         rule.setEnabled(enabled);
         
         // 解析expression

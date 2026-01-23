@@ -143,7 +143,7 @@ void AlertEngine::workerLoop() {
 void AlertEngine::initialize() {
     try {
         // 通过 AlertRuleService 重新加载规则
-        alertRuleService_->reloadRules();
+        // alertRuleService_->reloadRules();
         spdlog::debug("告警引擎初始化完成");
         
     } catch (const std::exception& e) {

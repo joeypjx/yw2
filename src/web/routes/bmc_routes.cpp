@@ -210,79 +210,91 @@ void registerBMCRoutes(hv::HttpService* service,
     // 请求体: {"box_id": <int>, "fan_speed": <int>}
     // fan_speed 范围: 0-127，对应实际速度值 128-255
     service->POST("/box/bmc/fan_speed", [](const HttpContextPtr& ctx) {
-        // 1. 解析 JSON 请求体
-        nlohmann::json req;
         try {
-            req = nlohmann::json::parse(ctx->body());
-        } catch (...) {
-            return ResponseBuilder::sendErrorWithReturn(ctx, "invalid json body", HTTP_STATUS_BAD_REQUEST);
-        }
-        
-        // 2. 验证请求参数
-        if (!req.contains("box_id") || !req.contains("fan_speed") || 
-            !req["box_id"].is_number_integer() || !req["fan_speed"].is_number_integer()) {
-            return ResponseBuilder::sendErrorWithReturn(ctx, "box_id and fan_speed are required integers", HTTP_STATUS_BAD_REQUEST);
-        }
-
-        int box_id = req["box_id"].get<int>();
-        int fan_speed = req["fan_speed"].get<int>();
-
-        // 3. 配置 IPMI 连接选项
-        yw::ipmi::Options options;
-        // BMC 主机地址：192.180.0.(180+box_id)，例如 box_id=1 对应 192.180.0.181
-        options.hostname = std::string("192.180.0.") + std::to_string(180 + box_id);
-        options.username = "root";          // IPMI 用户名
-        options.password = "0penBmc";         // IPMI 密码
-        options.privilegeLevel = 0x04;        // 管理员权限级别
-        options.cipherSuiteId = 17;          // 加密套件 ID
-        options.channel = 1;                 // IPMI 通道号
-        options.targetAddress = 0x06;        // 目标地址（BMC 地址）
-        options.lun = 0;                     // 逻辑单元号
-        options.sessionTimeoutMs = 500;      // 会话超时时间（毫秒）
-        options.retransmissionTimeoutMs = 200; // 重传超时时间（毫秒）
-
-        // 4. 创建 IPMI 模块实例
-        auto ipmi_module = yw::ipmi::IPMIFactory::getIPMIModule(options);
-        if (!ipmi_module) {
-            return ResponseBuilder::sendErrorWithReturn(ctx, "IPMI模块初始化失败", HTTP_STATUS_INTERNAL_SERVER_ERROR);
-        }
-        
-        // 5. 计算风扇速度字节值
-        // IPMI 协议中，风扇速度值范围是 128-255
-        // 用户输入范围是 0-127，需要加上 128 进行转换
-        // 小于 0 的值映射到 128（最低速度），大于 127 的值映射到 255（最高速度）
-        uint8_t speed_byte = 128;
-        if (fan_speed < 0) {
-            speed_byte = 128;  // 最低速度
-        } else if (fan_speed > 127) {
-            speed_byte = 255;  // 最高速度
-        } else {
-            speed_byte = static_cast<uint8_t>(fan_speed + 128);  // 正常范围：128-255
-        }
-        
-        // 6. 构造 IPMI 原始命令
-        // 命令格式: [netfn, cmd, data...]
-        // 0x2e: Network Function (OEM/Group Extension)
-        // 0x11: Command (设置风扇速度)
-        // 后续字节: 命令参数，最后一个字节是速度值
-        std::vector<uint8_t> inputs = {0x2e, 0x11, 0x01, 0x68, 0x68, 0x03, 0x00, 0x02, speed_byte};
-        
-        // 7. 发送 IPMI 命令并获取响应
-        std::vector<uint8_t> outputs;
-        std::string errorMessage;
-        bool ok = ipmi_module->sendRaw(inputs, outputs, errorMessage);
-        
-        // 8. 处理响应结果
-        if (ok) {
-            // 成功：将响应字节数组转换为 JSON 数组返回
-            nlohmann::json outputs_json = nlohmann::json::array();
-            for (uint8_t byte : outputs) {
-                outputs_json.push_back(byte);
+            // 1. 解析 JSON 请求体
+            nlohmann::json req;
+            try {
+                req = nlohmann::json::parse(ctx->body());
+            } catch (...) {
+                return ResponseBuilder::sendErrorWithReturn(ctx, "invalid json body", HTTP_STATUS_BAD_REQUEST);
             }
-            return ResponseBuilder::sendSuccessWithReturn(ctx, outputs_json);
-        } else {
-            // 失败：返回空对象（不暴露内部错误信息，避免安全风险）
-            return ResponseBuilder::sendSuccessWithReturn(ctx, nlohmann::json::object());
+            
+            // 2. 验证请求参数
+            if (!req.contains("box_id") || !req.contains("fan_speed") || 
+                !req["box_id"].is_number_integer() || !req["fan_speed"].is_number_integer()) {
+                return ResponseBuilder::sendErrorWithReturn(ctx, "box_id and fan_speed are required integers", HTTP_STATUS_BAD_REQUEST);
+            }
+
+            int box_id = req["box_id"].get<int>();
+            int fan_speed = req["fan_speed"].get<int>();
+
+            // 3. 配置 IPMI 连接选项
+            yw::ipmi::Options options;
+            // BMC 主机地址：192.180.0.(180+box_id)，例如 box_id=1 对应 192.180.0.181
+            options.hostname = std::string("192.180.0.") + std::to_string(180 + box_id);
+            options.username = "root";          // IPMI 用户名
+            options.password = "0penBmc";         // IPMI 密码
+            options.privilegeLevel = 0x04;        // 管理员权限级别
+            options.cipherSuiteId = 17;          // 加密套件 ID
+            options.channel = 1;                 // IPMI 通道号
+            options.targetAddress = 0x06;        // 目标地址（BMC 地址）
+            options.lun = 0;                     // 逻辑单元号
+            options.sessionTimeoutMs = 500;      // 会话超时时间（毫秒）
+            options.retransmissionTimeoutMs = 200; // 重传超时时间（毫秒）
+
+            // 4. 创建 IPMI 模块实例（可能抛出异常）
+            auto ipmi_module = yw::ipmi::IPMIFactory::getIPMIModule(options);
+            if (!ipmi_module) {
+                return ResponseBuilder::sendErrorWithReturn(ctx, "IPMI模块初始化失败", HTTP_STATUS_INTERNAL_SERVER_ERROR);
+            }
+            
+            // 5. 计算风扇速度字节值
+            // IPMI 协议中，风扇速度值范围是 128-255
+            // 用户输入范围是 0-127，需要加上 128 进行转换
+            // 小于 0 的值映射到 128（最低速度），大于 127 的值映射到 255（最高速度）
+            uint8_t speed_byte = 128;
+            if (fan_speed < 0) {
+                speed_byte = 128;  // 最低速度
+            } else if (fan_speed > 127) {
+                speed_byte = 255;  // 最高速度
+            } else {
+                speed_byte = static_cast<uint8_t>(fan_speed + 128);  // 正常范围：128-255
+            }
+            
+            // 6. 构造 IPMI 原始命令
+            // 命令格式: [netfn, cmd, data...]
+            // 0x2e: Network Function (OEM/Group Extension)
+            // 0x11: Command (设置风扇速度)
+            // 后续字节: 命令参数，最后一个字节是速度值
+            std::vector<uint8_t> inputs = {0x2e, 0x11, 0x01, 0x68, 0x68, 0x03, 0x00, 0x02, speed_byte};
+            
+            // 7. 发送 IPMI 命令并获取响应
+            std::vector<uint8_t> outputs;
+            std::string errorMessage;
+            bool ok = ipmi_module->sendRaw(inputs, outputs, errorMessage);
+            
+            // 8. 处理响应结果
+            if (ok) {
+                // 成功：将响应字节数组转换为 JSON 数组返回
+                nlohmann::json outputs_json = nlohmann::json::array();
+                for (uint8_t byte : outputs) {
+                    outputs_json.push_back(byte);
+                }
+                return ResponseBuilder::sendSuccessWithReturn(ctx, outputs_json);
+            } else {
+                // 失败：返回空对象（不暴露内部错误信息，避免安全风险）
+                return ResponseBuilder::sendSuccessWithReturn(ctx, nlohmann::json::object());
+            }
+        } catch (const std::exception& e) {
+            // 捕获所有异常（包括 IPMI 连接失败等），返回友好的错误响应
+            return ResponseBuilder::sendErrorWithReturn(ctx, 
+                std::string("IPMI操作失败: ") + e.what(), 
+                HTTP_STATUS_INTERNAL_SERVER_ERROR);
+        } catch (...) {
+            // 捕获所有其他未知异常
+            return ResponseBuilder::sendErrorWithReturn(ctx, 
+                "IPMI操作失败: 未知错误", 
+                HTTP_STATUS_INTERNAL_SERVER_ERROR);
         }
     });
 }
